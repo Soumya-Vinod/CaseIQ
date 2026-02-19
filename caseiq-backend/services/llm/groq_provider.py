@@ -18,7 +18,7 @@ class GroqProvider(BaseLLMProvider):
             raise ValueError("GROQ_API_KEY not found in settings")
         
         self.client = Groq(api_key=api_key)
-        self.chat_model = "llama-3.1-70b-versatile"
+        self.chat_model = "llama-3.3-70b-versatile"
     
     def generate_response(self, system_prompt: str, user_prompt: str) -> str:
         """
