@@ -1,0 +1,62 @@
+# Python
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+local_settings.py
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Migrations (optional - uncomment if you want to ignore them)
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Docker
+*.env.local
+docker-compose.override.yml
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# PDF uploads (during development - remove in production)
+# media/law_pdfs/
+# media/complaint_docs/

@@ -1,0 +1,11 @@
+-r base.txt
+
+# Development Tools
+pytest==8.3.3
+pytest-django==4.9.0
+pytest-cov==6.0.0
+factory-boy==3.3.1
+black==24.8.0
+flake8==7.1.1
+ipython==8.27.0
+django-debug-toolbar==4.4.6
