@@ -44,6 +44,7 @@ LOCAL_APPS = [
     "apps.queries",
     "apps.complaints",
     "apps.ai_engine",
+    'apps.education.apps.EducationConfig',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
