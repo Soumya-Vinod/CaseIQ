@@ -1,0 +1,19 @@
+New-Item .dockerignore -ItemType File
+```
+
+Open it and paste:
+```
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.git/
+.gitignore
+*.log
+logs/
+media/
+documents/
+*.pdf
+db.sqlite3
+.vscode/
