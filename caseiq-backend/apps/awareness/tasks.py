@@ -1,71 +1,75 @@
-import logging
 from celery import shared_task
-from django.utils import timezone
+import logging
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='awareness.fetch_legal_news')
-def fetch_legal_news_task():
-    """Fetch latest Indian legal news and auto-tag with BNS/BNSS sections."""
+@shared_task(bind=True, max_retries=3)
+def fetch_legal_news_task(self):
     try:
         from services.news_service import news_service
-        from services.groq_service import groq_service
-        from apps.awareness.models import LegalNewsArticle
-
-        articles = news_service.fetch_indian_legal_news(days_back=2, max_articles=15)
-
-        if not articles:
-            logger.info("No new articles fetched")
-            return {'saved': 0, 'skipped': 0}
-
-        saved = 0
-        skipped = 0
-
-        for raw_article in articles:
-            parsed = news_service.parse_article(raw_article)
-
-            if not parsed['title'] or not parsed['source_url']:
-                skipped += 1
-                continue
-
-            if LegalNewsArticle.objects.filter(source_url=parsed['source_url']).exists():
-                skipped += 1
-                continue
-
-            try:
-                related_sections = groq_service.tag_news_with_sections(
-                    parsed['title'],
-                    parsed['summary'][:500]
-                )
-            except Exception:
-                related_sections = []
-
-            legal_keywords = [
-                'law', 'court', 'judgment', 'fir', 'police', 'arrest',
-                'bail', 'criminal', 'legal', 'rights', 'bns', 'bnss',
-            ]
-            title_lower = parsed['title'].lower()
-            keyword_hits = sum(1 for kw in legal_keywords if kw in title_lower)
-            relevance_score = min(keyword_hits / len(legal_keywords), 1.0)
-
-            LegalNewsArticle.objects.create(
-                title=parsed['title'],
-                source=parsed['source'],
-                source_url=parsed['source_url'],
-                summary=parsed['summary'][:2000],
-                published_at=parsed['published_at'],
-                related_sections=related_sections,
-                tags=[s.get('act', '') + ' ' + s.get('section', '') for s in related_sections],
-                language='en',
-                is_featured=relevance_score > 0.3,
-                relevance_score=relevance_score,
-            )
-            saved += 1
-
-        logger.info(f"News fetch task: saved={saved}, skipped={skipped}")
-        return {'saved': saved, 'skipped': skipped}
-
+        saved = news_service.fetch_and_save(count=15)
+        logger.info(f'Celery news task completed: saved {saved} articles')
+        return {'saved': saved, 'status': 'success'}
     except Exception as e:
-        logger.error(f"News fetch task failed: {e}", exc_info=True)
-        raise
+        logger.error(f'News task failed: {e}')
+        try:
+            raise self.retry(countdown=60 * 5)
+        except Exception:
+            return {'saved': 0, 'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def cleanup_old_audit_logs():
+    try:
+        from django.utils import timezone
+        from datetime import timedelta
+        from apps.audit.models import AuditLog
+        cutoff = timezone.now() - timedelta(days=90)
+        deleted, _ = AuditLog.objects.filter(created_at__lt=cutoff).delete()
+        logger.info(f'Deleted {deleted} old audit logs')
+        return deleted
+    except Exception as e:
+        logger.error(f'Audit cleanup failed: {e}')
+        return 0
+
+
+@shared_task
+def flag_suspicious_activity():
+    try:
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.contrib.auth import get_user_model
+        from apps.legal_query.models import LegalQuery
+        from apps.audit.models import AuditLog
+
+        User = get_user_model()
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        threshold = 30
+
+        users = User.objects.filter(is_active=True)
+        flagged = 0
+
+        for user in users:
+            count = LegalQuery.objects.filter(
+                user=user,
+                created_at__gte=one_hour_ago
+            ).count()
+
+            if count > threshold:
+                AuditLog.objects.create(
+                    user=user,
+                    action='suspicious_activity',
+                    details={
+                        'query_count': count,
+                        'threshold': threshold,
+                        'window': '1 hour',
+                    }
+                )
+                flagged += 1
+
+        logger.info(f'Suspicious activity check: {flagged} users flagged')
+        return flagged
+    except Exception as e:
+        logger.error(f'Suspicious activity check failed: {e}')
+        return 0

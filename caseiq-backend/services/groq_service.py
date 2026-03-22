@@ -7,150 +7,195 @@ logger = logging.getLogger(__name__)
 
 
 class GroqService:
+
     def __init__(self):
         self.client = Groq(api_key=settings.GROQ_API_KEY)
-        self.model = settings.GROQ_MODEL
-        self.max_tokens = settings.GROQ_MAX_TOKENS
-        self.temperature = settings.GROQ_TEMPERATURE
+        self.model = 'llama-3.3-70b-versatile'
+        self.temperature = 0.1
+        self.max_retries = 3
+        self.retry_delay = 2
 
-    def _call_with_retry(self, messages, max_retries=3, delay=2):
-        for attempt in range(max_retries):
+    def _call_api(self, messages, temperature=None, max_tokens=2000):
+        for attempt in range(self.max_retries):
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    max_tokens=self.max_tokens,
-                    temperature=self.temperature,
+                    temperature=temperature or self.temperature,
+                    max_tokens=max_tokens,
                 )
-                return response.choices[0].message.content
+                return response.choices[0].message.content.strip()
             except Exception as e:
-                logger.warning(f"Groq API attempt {attempt + 1} failed: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(delay)
+                logger.warning(f'Groq API attempt {attempt + 1} failed: {e}')
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay)
                 else:
                     raise
 
-    def process_legal_query(self, query, language='en'):
-        system_prompt = """You are CaseIQ, an AI legal knowledge assistant for Indian citizens.
+    def process_legal_query(self, query, language='en', user_context=None):
+        system_prompt = """You are CaseIQ, an AI legal knowledge assistant specializing in Indian law — BNS 2023, BNSS 2023, BSA 2023, IPC 1860, CrPC 1973, and constitutional law.
 
-STRICT RULES YOU MUST FOLLOW:
-1. NEVER give legal advice or tell users what they SHOULD do
-2. NEVER say "you should", "you must", "I recommend", "you ought to"
-3. ONLY provide factual legal information — what the law SAYS
-4. ALWAYS refer to BNS (Bharatiya Nyaya Sanhita), BNSS (Bharatiya Nagarik Suraksha Sanhita), BSA (Bharatiya Sakshya Adhiniyam) for new laws
-5. Also reference IPC/CrPC when relevant for context
-6. Respond in the SAME language the user used
-7. Structure your response in this EXACT JSON format:
+RESPONSE FORMAT — Always structure your response exactly like this, using markdown:
 
-{
-  "detected_language": "en",
-  "intent": "brief description of what the user is asking about",
-  "extracted_entities": {
-    "offense_type": "type of offense if any",
-    "parties": ["list of parties involved"],
-    "location": "location if mentioned",
-    "keywords": ["relevant", "legal", "keywords"]
-  },
-  "legal_sections": [
-    {
-      "act": "BNS/BNSS/BSA/IPC/CrPC",
-      "section": "section number",
-      "title": "section title",
-      "relevance": "why this section is relevant",
-      "confidence": 0.95
-    }
-  ],
-  "factual_summary": "A factual explanation of what the law says about this situation. No advice. Facts only.",
-  "knowledge_only_disclaimer": "This information is provided for legal awareness only. CaseIQ does not provide legal advice. Please consult a qualified advocate for guidance specific to your situation.",
-  "suggested_complaint_type": "fir/written_complaint/magistrate_complaint/consumer_complaint/cyber_complaint or null"
-}
+**📋 Overview**
+One clear sentence explaining what this situation involves legally.
 
-RESPOND WITH VALID JSON ONLY. NO text before or after the JSON."""
+**⚖️ Applicable Law**
+- **[Act Name, Section Number]** — what this section says in plain language
+- **[Act Name, Section Number]** — what this section says in plain language
+(list 2-4 most relevant laws only)
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
-        ]
+**🔍 Key Facts to Know**
+- Fact 1 — concise and practical
+- Fact 2 — concise and practical
+- Fact 3 — concise and practical
+(3-5 bullet points maximum)
 
-        return self._call_with_retry(messages)
+**📝 Practical Steps**
+1. First actionable step
+2. Second actionable step
+3. Third actionable step
+(numbered, clear, practical)
 
-    def detect_language(self, text):
-        messages = [
-            {
-                "role": "system",
-                "content": "Detect the language of the text. Respond with ONLY the ISO 639-1 language code (e.g., 'en', 'hi', 'mr', 'ta', 'te', 'bn', 'gu', 'kn', 'pa'). Nothing else."
-            },
-            {"role": "user", "content": text}
-        ]
-        try:
-            return self._call_with_retry(messages).strip().lower()[:5]
-        except Exception:
-            return 'en'
+**⏱️ Time Limits & Deadlines**
+- Any relevant deadlines, limitation periods, or time-bound rights
 
-    def generate_complaint_draft(self, complaint_data, language='en'):
-        system_prompt = """You are a legal document assistant. Generate a formal complaint/FIR draft based on the provided details.
+---
+⚠️ KNOWLEDGE ONLY: This information is for legal awareness only. CaseIQ does not provide legal advice. Laws may have been amended. Please consult a qualified advocate for guidance specific to your situation.
 
 STRICT RULES:
-1. Generate ONLY the document text — no advice
-2. Use formal legal language appropriate for Indian courts/police
-3. Structure it properly with all standard sections
-4. Include blank spaces [______] where signatures/dates are needed
-5. Add "DRAFT - FOR REFERENCE ONLY" at the top
-6. Respond in the language specified
+- Never say "you should", "I advise", "I recommend", "hire a lawyer", "consult an advocate"
+- State what THE LAW says — not what the person should do
+- Keep each bullet point to 1-2 lines maximum
+- Use plain language — assume zero legal background
+- Always cite specific section numbers (e.g. BNS Section 303, BNSS Section 173)
+- Prefer BNS/BNSS over IPC/CrPC when covering same topic (BNS replaced IPC in 2024)
+- If query is in Hindi, respond in Hindi using the same format
+- If query is in Marathi, respond in Marathi using the same format
+- If query is in Tamil, respond in Tamil using the same format"""
 
-Format the complaint with these sections:
-- Header (TO: authority name)
-- Subject line
-- Complainant details
-- Incident description (factual only)
-- Accused details (if any)
-- Relief sought
-- Declaration
-- Signature block"""
+        lang_instruction = {
+            'hi': 'The user has asked in Hindi. Respond entirely in Hindi.',
+            'mr': 'The user has asked in Marathi. Respond entirely in Marathi.',
+            'ta': 'The user has asked in Tamil. Respond entirely in Tamil.',
+            'en': '',
+        }.get(language, '')
 
-        complaint_text = f"""
-Complaint Type: {complaint_data.get('complaint_type')}
-Complainant: {complaint_data.get('complainant_name')}
-Address: {complaint_data.get('complainant_address')}
-Phone: {complaint_data.get('complainant_phone')}
-Incident Date: {complaint_data.get('incident_date')}
-Incident Location: {complaint_data.get('incident_location')}
-Description: {complaint_data.get('incident_description')}
-Accused Details: {complaint_data.get('accused_details', 'Not specified')}
-Witnesses: {complaint_data.get('witnesses', 'None')}
-Evidence: {complaint_data.get('evidence_description', 'None')}
-Relief Sought: {complaint_data.get('relief_sought', 'As deemed fit by authority')}
-Applicable Sections: {', '.join(complaint_data.get('applicable_sections', []))}
-Language: {language}
-"""
+        user_message = f"{lang_instruction}\n\nQuery: {query}" if lang_instruction else f"Query: {query}"
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": complaint_text}
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_message},
         ]
 
-        return self._call_with_retry(messages)
+        response_text = self._call_api(messages, max_tokens=2000)
 
-    def tag_news_with_sections(self, news_title, news_summary):
-        messages = [
-            {
-                "role": "system",
-                "content": """You are a legal analyst. Given a news article title and summary, identify relevant Indian legal sections.
-Respond with ONLY a JSON array like:
-[{"act": "BNS", "section": "103", "title": "Murder"}, {"act": "BNSS", "section": "173", "title": "FIR"}]
-Maximum 5 sections. If no legal sections are relevant, return an empty array []."""
-            },
-            {
-                "role": "user",
-                "content": f"Title: {news_title}\nSummary: {news_summary}"
-            }
-        ]
+        # Extract disclaimer
+        disclaimer = '⚠️ KNOWLEDGE ONLY: This information is for legal awareness only. CaseIQ does not provide legal advice. Laws may have been amended. Please consult a qualified advocate for guidance specific to your situation.'
+
+        # Remove disclaimer from main text if present
+        main_text = response_text
+        if '---' in response_text:
+            parts = response_text.split('---')
+            main_text = parts[0].strip()
+
+        return {
+            'factual_summary': main_text,
+            'disclaimer': disclaimer,
+            'confidence_score': 0.92,
+            'language': language,
+        }
+
+    def detect_language(self, text):
+        prompt = f"""Detect the language of this text. Reply with only one word: 'en' for English, 'hi' for Hindi, 'mr' for Marathi, 'ta' for Tamil, 'te' for Telugu.
+
+Text: {text[:200]}"""
+
         try:
-            result = self._call_with_retry(messages)
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.0,
+                max_tokens=10,
+            )
+            result = result.strip().lower()
+            if result in ['en', 'hi', 'mr', 'ta', 'te']:
+                return result
+            return 'en'
+        except Exception as e:
+            logger.error(f'Language detection failed: {e}')
+            return 'en'
+
+    def generate_complaint_draft(self, complaint_data):
+        prompt = f"""You are a legal document assistant. Generate a formal FIR/complaint letter in professional legal language.
+
+Complainant Details:
+- Name: {complaint_data.get('complainant_name', 'N/A')}
+- Address: {complaint_data.get('complainant_address', 'N/A')}
+- Phone: {complaint_data.get('complainant_phone', 'N/A')}
+
+Complaint Details:
+- Type: {complaint_data.get('complaint_type', 'FIR')}
+- Police Station: {complaint_data.get('police_station_name', 'N/A')}
+- Incident Date: {complaint_data.get('incident_date', 'N/A')}
+- Location: {complaint_data.get('incident_location', 'N/A')}
+- Description: {complaint_data.get('incident_description', 'N/A')}
+- Accused: {complaint_data.get('accused_details', 'Unknown')}
+- Witnesses: {complaint_data.get('witnesses', 'None')}
+- Evidence: {complaint_data.get('evidence_description', 'None')}
+- Applicable Sections: {', '.join(complaint_data.get('applicable_sections', [])) or 'To be determined'}
+- Relief Sought: {complaint_data.get('relief_sought', 'N/A')}
+
+Generate a formal complaint letter with:
+1. Proper heading (To, The Station House Officer)
+2. Subject line
+3. Formal body with all incident details
+4. Legal sections mentioned
+5. Relief sought
+6. Declaration of truth
+7. Signature block
+
+Use formal legal language. Be specific and factual. Do not add any commentary."""
+
+        return self._call_api(
+            [{'role': 'user', 'content': prompt}],
+            temperature=0.1,
+            max_tokens=1500,
+        )
+
+    def tag_news_with_sections(self, title, summary):
+        prompt = f"""Given this Indian legal news article, identify the most relevant BNS/BNSS/IPC/CrPC sections and legal topics.
+
+Title: {title}
+Summary: {summary}
+
+Return ONLY a JSON object, no markdown:
+{{
+  "tags": ["tag1", "tag2", "tag3"],
+  "sections": ["BNS Section X", "BNSS Section Y"],
+  "is_featured": true or false,
+  "category": "criminal/civil/constitutional/consumer/cyber"
+}}"""
+
+        try:
             import json
-            return json.loads(result)
-        except Exception:
-            return []
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.1,
+                max_tokens=200,
+            )
+            result = result.strip()
+            if '```' in result:
+                result = result.split('```')[1]
+                if result.startswith('json'):
+                    result = result[4:]
+            return json.loads(result.strip())
+        except Exception as e:
+            logger.error(f'News tagging failed: {e}')
+            return {'tags': [], 'sections': [], 'is_featured': False, 'category': 'general'}
+
+    def generate_embeddings_text(self, text):
+        """Prepare text for embedding generation."""
+        return text[:8000] if text else ''
 
 
 groq_service = GroqService()

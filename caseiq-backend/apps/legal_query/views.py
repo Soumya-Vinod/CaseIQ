@@ -53,7 +53,11 @@ def process_legal_query(request):
 
         # Parse JSON response
         try:
-            parsed = json.loads(raw_response)
+            # groq_service now returns a dict directly
+            if isinstance(raw_response, dict):
+                parsed = raw_response
+            else:
+                parsed = json.loads(raw_response)
         except json.JSONDecodeError:
             # Try to extract JSON from response
             import re
