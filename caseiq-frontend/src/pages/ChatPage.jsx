@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import AIResponseWindow from '../components/ai/AIResponseWindow';
 import QueryInput from '../components/ai/QueryInput';
@@ -8,8 +9,19 @@ import { legalAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import toast from 'react-hot-toast';
+import { FileText, ChevronRight } from 'lucide-react';
 
-const GUEST_STORAGE_KEY = 'caseiq_chat_guest';
+// Stable session ID — persists for the browser session, resets on new chat
+function getOrCreateSessionId() {
+  let sid = sessionStorage.getItem('caseiq_session_id');
+  if (!sid) {
+    sid = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    sessionStorage.setItem('caseiq_session_id', sid);
+  }
+  return sid;
+}
+
+const STORAGE_KEY = 'caseiq_chat_guest';
 
 const SUGGESTED_QUERIES = [
   { label: '🚨 Rights during arrest', query: 'What are my rights when I am arrested by police in India?' },
@@ -25,15 +37,20 @@ const SUGGESTED_QUERIES = [
 const ChatPage = () => {
   const { isAuthenticated } = useAuth();
   const { language } = useSettings();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [latestLaws, setLatestLaws] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [sessionId] = useState(getOrCreateSessionId);
+  const [lastAIText, setLastAIText] = useState('');
+  const historyRef = useRef([]);
 
   const langMap = { English: 'en', Hindi: 'hi', Marathi: 'mr', Tamil: 'ta' };
 
+  // Load saved messages
   useEffect(() => {
-    const saved = localStorage.getItem(GUEST_STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -41,29 +58,41 @@ const ChatPage = () => {
         if (parsed.length > 1) setShowSuggestions(false);
         const last = parsed[parsed.length - 1];
         if (last?.laws) setLatestLaws(last.laws);
-      } catch {}
+        if (last?.sender === 'ai') setLastAIText(last.text || '');
+        historyRef.current = parsed;
+      } catch { /* ignore */ }
     } else {
-      setMessages([{
+      const welcome = [{
         sender: 'ai',
         text: '👋 Welcome to CaseIQ Legal Assistant.\n\nAsk any legal question about Indian law. I will provide structured, factual information based on BNS, BNSS, IPC, and CrPC.\n\n⚖️ This platform provides legal knowledge, not legal advice.',
-      }]);
+      }];
+      setMessages(welcome);
+      historyRef.current = welcome;
     }
   }, []);
 
+  // Save messages on change
   useEffect(() => {
     if (messages.length > 0) {
-      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(messages));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      historyRef.current = messages;
     }
   }, [messages]);
 
   const handleSend = useCallback(async (text) => {
     if (!text.trim()) return;
     setShowSuggestions(false);
-    setMessages((prev) => [...prev, { sender: 'user', text }]);
+
+    const userMsg = { sender: 'user', text };
+    setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
     try {
-      const res = await legalAPI.submitQuery(text, langMap[language] || 'en');
+      const res = await legalAPI.submitQuery(
+        text,
+        langMap[language] || 'en',
+        sessionId,
+      );
       const data = res.data;
 
       const laws = (data.legal_sections || []).map((s) => ({
@@ -73,15 +102,20 @@ const ChatPage = () => {
         punishment: `Confidence: ${Math.round((s.confidence || 0) * 100)}%`,
       }));
 
-      const aiMessage = {
+      const responseText = `${data.factual_summary}\n\n---\n${data.disclaimer}`;
+
+      const aiMsg = {
         sender: 'ai',
-        text: `${data.factual_summary}\n\n---\n${data.disclaimer}`,
+        text: responseText,
         laws,
         confidence: data.confidence_score,
+        historyDepth: data.history_depth || 0,
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
+      setMessages((prev) => [...prev, aiMsg]);
       setLatestLaws(laws);
+      setLastAIText(responseText);
+
     } catch (err) {
       const errorMsg = err.response?.data?.error || 'Failed to process query. Please try again.';
       toast.error(errorMsg);
@@ -89,8 +123,9 @@ const ChatPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [language]);
+  }, [language, sessionId]);
 
+  // Handle pending query from global search or home page
   useEffect(() => {
     const pending = localStorage.getItem('caseiq_pending_query');
     if (pending) {
@@ -100,14 +135,39 @@ const ChatPage = () => {
   }, [handleSend]);
 
   const clearChat = () => {
-    localStorage.removeItem(GUEST_STORAGE_KEY);
-    setMessages([{
+    // New session on clear
+    const newSid = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    sessionStorage.setItem('caseiq_session_id', newSid);
+    localStorage.removeItem(STORAGE_KEY);
+    const welcome = [{
       sender: 'ai',
       text: '👋 Welcome to CaseIQ Legal Assistant.\n\nAsk any legal question about Indian law.\n\n⚖️ This platform provides legal knowledge, not legal advice.',
-    }]);
+    }];
+    setMessages(welcome);
     setLatestLaws([]);
+    setLastAIText('');
     setShowSuggestions(true);
   };
+
+  // Draft FIR from this conversation
+  const handleDraftFIR = () => {
+    // Extract what we can from the last AI response to pre-fill FIR
+    const userQueries = messages
+      .filter((m) => m.sender === 'user')
+      .map((m) => m.text)
+      .join(' ');
+
+    localStorage.setItem('caseiq_prefill_fir', JSON.stringify({
+      description: userQueries.slice(0, 500),
+      from_chat: true,
+      session_id: sessionId,
+      timestamp: Date.now(),
+    }));
+    navigate('/fir-draft');
+  };
+
+  const hasUserMessages = messages.some((m) => m.sender === 'user');
+  const turnCount = messages.filter((m) => m.sender === 'user').length;
 
   return (
     <PageTransition>
@@ -117,14 +177,21 @@ const ChatPage = () => {
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <h2 className="text-4xl font-bold text-[#443627]">AI Legal Assistant</h2>
-            <p className="text-[#725E54]">Powered by Groq Llama 3.3 — Indian Law Specialist</p>
+            <p className="text-[#725E54]">
+              Powered by Groq Llama 3.3 — Indian Law Specialist
+              {turnCount > 1 && (
+                <span className="ml-3 text-xs bg-[#D5DCF9] text-[#443627] px-2 py-0.5 rounded-full font-medium">
+                  {turnCount} turn conversation
+                </span>
+              )}
+            </p>
           </div>
-          {messages.length > 1 && (
+          {hasUserMessages && (
             <button
               onClick={clearChat}
               className="text-sm text-slate-400 hover:text-red-500 transition border border-slate-200 px-3 py-1.5 rounded-lg hover:border-red-200"
             >
-              Clear Chat
+              New Chat
             </button>
           )}
         </div>
@@ -135,7 +202,7 @@ const ChatPage = () => {
             animate={{ opacity: 1, y: 0 }}
             className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-3 text-sm flex items-center gap-2"
           >
-            💡 Sign in to save your query history and access it from any device
+            💡 Sign in to save your conversation history across devices
           </motion.div>
         )}
 
@@ -176,6 +243,30 @@ const ChatPage = () => {
           </div>
         </div>
 
+        {/* Draft FIR from conversation — appears after first AI response */}
+        <AnimatePresence>
+          {hasUserMessages && !loading && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-2xl p-4 border border-[#D5DCF9] shadow flex items-center justify-between gap-4"
+            >
+              <div>
+                <p className="text-sm font-semibold text-[#443627]">Ready to take action?</p>
+                <p className="text-xs text-[#725E54] mt-0.5">Use this conversation to auto-fill your FIR draft</p>
+              </div>
+              <button
+                onClick={handleDraftFIR}
+                className="flex items-center gap-2 bg-[#443627] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#725E54] transition font-medium shadow shrink-0"
+              >
+                <FileText size={14} />
+                Draft FIR
+                <ChevronRight size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Law References */}
         <AnimatePresence>
           {latestLaws.length > 0 && (
@@ -191,6 +282,7 @@ const ChatPage = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
       </div>
     </PageTransition>
   );

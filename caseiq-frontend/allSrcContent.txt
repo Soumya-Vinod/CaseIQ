@@ -1,0 +1,5239 @@
+﻿
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\App.css =====
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\App.jsx =====
+
+import AppRoutes from "./routes/AppRoutes";
+
+function App() {
+  return <AppRoutes />;
+}
+
+export default App;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\index.css =====
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\main.jsx =====
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+import { BrowserRouter } from 'react-router-dom';
+import { SettingsProvider } from './context/SettingsContext';
+import { AuthProvider } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from './components/ui/ErrorBoundary';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <SettingsProvider>
+              <LanguageProvider>
+                <App />
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    duration: 3000,
+                    style: {
+                      borderRadius: '12px',
+                      background: '#443627',
+                      color: '#fff',
+                      fontSize: '14px',
+                    },
+                    success: { iconTheme: { primary: '#8EDCE6', secondary: '#443627' } },
+                    error: { iconTheme: { primary: '#ff4444', secondary: '#fff' } },
+                  }}
+                />
+              </LanguageProvider>
+            </SettingsProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+  </React.StrictMode>
+);
+
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\assets\react.svg =====
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="35.93" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 228"><path fill="#00D8FF" d="M210.483 73.824a171.49 171.49 0 0 0-8.24-2.597c.465-1.9.893-3.777 1.273-5.621c6.238-30.281 2.16-54.676-11.769-62.708c-13.355-7.7-35.196.329-57.254 19.526a171.23 171.23 0 0 0-6.375 5.848a155.866 155.866 0 0 0-4.241-3.917C100.759 3.829 77.587-4.822 63.673 3.233C50.33 10.957 46.379 33.89 51.995 62.588a170.974 170.974 0 0 0 1.892 8.48c-3.28.932-6.445 1.924-9.474 2.98C17.309 83.498 0 98.307 0 113.668c0 15.865 18.582 31.778 46.812 41.427a145.52 145.52 0 0 0 6.921 2.165a167.467 167.467 0 0 0-2.01 9.138c-5.354 28.2-1.173 50.591 12.134 58.266c13.744 7.926 36.812-.22 59.273-19.855a145.567 145.567 0 0 0 5.342-4.923a168.064 168.064 0 0 0 6.92 6.314c21.758 18.722 43.246 26.282 56.54 18.586c13.731-7.949 18.194-32.003 12.4-61.268a145.016 145.016 0 0 0-1.535-6.842c1.62-.48 3.21-.974 4.76-1.488c29.348-9.723 48.443-25.443 48.443-41.52c0-15.417-17.868-30.326-45.517-39.844Zm-6.365 70.984c-1.4.463-2.836.91-4.3 1.345c-3.24-10.257-7.612-21.163-12.963-32.432c5.106-11 9.31-21.767 12.459-31.957c2.619.758 5.16 1.557 7.61 2.4c23.69 8.156 38.14 20.213 38.14 29.504c0 9.896-15.606 22.743-40.946 31.14Zm-10.514 20.834c2.562 12.94 2.927 24.64 1.23 33.787c-1.524 8.219-4.59 13.698-8.382 15.893c-8.067 4.67-25.32-1.4-43.927-17.412a156.726 156.726 0 0 1-6.437-5.87c7.214-7.889 14.423-17.06 21.459-27.246c12.376-1.098 24.068-2.894 34.671-5.345a134.17 134.17 0 0 1 1.386 6.193ZM87.276 214.515c-7.882 2.783-14.16 2.863-17.955.675c-8.075-4.657-11.432-22.636-6.853-46.752a156.923 156.923 0 0 1 1.869-8.499c10.486 2.32 22.093 3.988 34.498 4.994c7.084 9.967 14.501 19.128 21.976 27.15a134.668 134.668 0 0 1-4.877 4.492c-9.933 8.682-19.886 14.842-28.658 17.94ZM50.35 144.747c-12.483-4.267-22.792-9.812-29.858-15.863c-6.35-5.437-9.555-10.836-9.555-15.216c0-9.322 13.897-21.212 37.076-29.293c2.813-.98 5.757-1.905 8.812-2.773c3.204 10.42 7.406 21.315 12.477 32.332c-5.137 11.18-9.399 22.249-12.634 32.792a134.718 134.718 0 0 1-6.318-1.979Zm12.378-84.26c-4.811-24.587-1.616-43.134 6.425-47.789c8.564-4.958 27.502 2.111 47.463 19.835a144.318 144.318 0 0 1 3.841 3.545c-7.438 7.987-14.787 17.08-21.808 26.988c-12.04 1.116-23.565 2.908-34.161 5.309a160.342 160.342 0 0 1-1.76-7.887Zm110.427 27.268a347.8 347.8 0 0 0-7.785-12.803c8.168 1.033 15.994 2.404 23.343 4.08c-2.206 7.072-4.956 14.465-8.193 22.045a381.151 381.151 0 0 0-7.365-13.322Zm-45.032-43.861c5.044 5.465 10.096 11.566 15.065 18.186a322.04 322.04 0 0 0-30.257-.006c4.974-6.559 10.069-12.652 15.192-18.18ZM82.802 87.83a323.167 323.167 0 0 0-7.227 13.238c-3.184-7.553-5.909-14.98-8.134-22.152c7.304-1.634 15.093-2.97 23.209-3.984a321.524 321.524 0 0 0-7.848 12.897Zm8.081 65.352c-8.385-.936-16.291-2.203-23.593-3.793c2.26-7.3 5.045-14.885 8.298-22.6a321.187 321.187 0 0 0 7.257 13.246c2.594 4.48 5.28 8.868 8.038 13.147Zm37.542 31.03c-5.184-5.592-10.354-11.779-15.403-18.433c4.902.192 9.899.29 14.978.29c5.218 0 10.376-.117 15.453-.343c-4.985 6.774-10.018 12.97-15.028 18.486Zm52.198-57.817c3.422 7.8 6.306 15.345 8.596 22.52c-7.422 1.694-15.436 3.058-23.88 4.071a382.417 382.417 0 0 0 7.859-13.026a347.403 347.403 0 0 0 7.425-13.565Zm-16.898 8.101a358.557 358.557 0 0 1-12.281 19.815a329.4 329.4 0 0 1-23.444.823c-7.967 0-15.716-.248-23.178-.732a310.202 310.202 0 0 1-12.513-19.846h.001a307.41 307.41 0 0 1-10.923-20.627a310.278 310.278 0 0 1 10.89-20.637l-.001.001a307.318 307.318 0 0 1 12.413-19.761c7.613-.576 15.42-.876 23.31-.876H128c7.926 0 15.743.303 23.354.883a329.357 329.357 0 0 1 12.335 19.695a358.489 358.489 0 0 1 11.036 20.54a329.472 329.472 0 0 1-11 20.722Zm22.56-122.124c8.572 4.944 11.906 24.881 6.52 51.026c-.344 1.668-.73 3.367-1.15 5.09c-10.622-2.452-22.155-4.275-34.23-5.408c-7.034-10.017-14.323-19.124-21.64-27.008a160.789 160.789 0 0 1 5.888-5.4c18.9-16.447 36.564-22.941 44.612-18.3ZM128 90.808c12.625 0 22.86 10.235 22.86 22.86s-10.235 22.86-22.86 22.86s-22.86-10.235-22.86-22.86s10.235-22.86 22.86-22.86Z"></path></svg>
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ai\AIResponseWindow.jsx =====
+
+import { useEffect, useRef, useState } from 'react';
+import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import ReactMarkdown from 'react-markdown';
+import { Copy, Check } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const CopyButton = ({ text }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast.success('Copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-400 hover:text-slate-600"
+      title="Copy response"
+    >
+      {copied
+        ? <Check size={13} className="text-green-500" />
+        : <Copy size={13} />
+      }
+    </button>
+  );
+};
+
+const AIResponseWindow = ({ messages = [], loading }) => {
+  const { darkMode } = useSettings();
+  const { user } = useAuth();
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const userInitial = (user?.full_name || user?.email || 'U')[0].toUpperCase();
+
+  return (
+    <div className={`h-[560px] overflow-y-auto rounded-2xl p-5 transition-colors duration-300 border ${
+      darkMode
+        ? 'bg-slate-800/80 border-slate-700'
+        : 'bg-white/90 border-slate-200'
+    }`}>
+
+      {/* Empty State */}
+      {messages.length === 0 && !loading && (
+        <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow-lg text-2xl">
+            âš–ï¸
+          </div>
+          <h3 className={`text-lg font-semibold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+            CaseIQ Legal Assistant
+          </h3>
+          <p className={`text-sm max-w-sm leading-relaxed ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Ask any question about Indian criminal law, your rights, FIR filing, or BNS/BNSS sections. I will explain clearly with exact laws and steps.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {messages.map((msg, index) => (
+          <div
+            key={index}
+            className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            {/* AI Avatar */}
+            {msg.sender === 'ai' && (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center text-sm shrink-0 mt-1 shadow-md">
+                âš–
+              </div>
+            )}
+
+            <div className={`max-w-[85%] flex flex-col gap-1 ${
+              msg.sender === 'user' ? 'items-end' : 'items-start'
+            }`}>
+              <div className={`rounded-2xl px-4 py-3.5 text-sm shadow-sm ${
+                msg.sender === 'user'
+                  ? 'bg-[#443627] text-white rounded-tr-sm'
+                  : darkMode
+                  ? 'bg-slate-700/80 text-slate-200 rounded-tl-sm border border-slate-600/50'
+                  : 'bg-[#F8FAFC] text-slate-800 rounded-tl-sm border border-[#D5DCF9]'
+              }`}>
+
+                {msg.sender === 'user' ? (
+                  <p className="leading-relaxed">{msg.text}</p>
+                ) : (
+                  <div className={`prose prose-sm max-w-none ${darkMode ? 'prose-invert' : ''}`}>
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => (
+                          <h1 className={`text-sm font-bold mt-4 mb-2 first:mt-0 ${
+                            darkMode ? 'text-slate-100' : 'text-[#443627]'
+                          }`}>
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className={`text-sm font-bold mt-4 mb-2 first:mt-0 ${
+                            darkMode ? 'text-slate-100' : 'text-[#443627]'
+                          }`}>
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className={`text-sm font-semibold mt-3 mb-1 ${
+                            darkMode ? 'text-slate-200' : 'text-[#443627]'
+                          }`}>
+                            {children}
+                          </h3>
+                        ),
+                        p: ({ children }) => (
+                          <p className="mb-2 last:mb-0 leading-relaxed text-sm">
+                            {children}
+                          </p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="space-y-2 my-2">{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="space-y-2 my-2 pl-2 list-none">{children}</ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className="flex items-start gap-2 text-sm leading-relaxed list-none">
+                            <span className="text-[#8EDCE6] shrink-0 mt-0.5 font-bold text-base leading-none">
+                              â€¢
+                            </span>
+                            <span className="flex-1">{children}</span>
+                          </li>
+                        ),
+                        strong: ({ children }) => (
+                          <strong className={`font-semibold ${
+                            darkMode ? 'text-[#8EDCE6]' : 'text-[#443627]'
+                          }`}>
+                            {children}
+                          </strong>
+                        ),
+                        em: ({ children }) => (
+                          <em className="not-italic text-xs text-slate-400 italic">
+                            {children}
+                          </em>
+                        ),
+                        hr: () => (
+                          <div className={`my-3 border-t ${
+                            darkMode ? 'border-slate-600/50' : 'border-[#D5DCF9]'
+                          }`} />
+                        ),
+                        code: ({ children }) => (
+                          <code className={`px-1.5 py-0.5 rounded text-xs font-mono ${
+                            darkMode
+                              ? 'bg-slate-600 text-[#8EDCE6]'
+                              : 'bg-[#D5DCF9]/60 text-[#443627]'
+                          }`}>
+                            {children}
+                          </code>
+                        ),
+                        blockquote: ({ children }) => (
+                          <blockquote className={`border-l-4 border-[#8EDCE6] pl-3 my-2 text-xs ${
+                            darkMode ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
+                            {children}
+                          </blockquote>
+                        ),
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
+                )}
+
+                {/* Confidence Score */}
+                {msg.confidence && msg.sender === 'ai' && (
+                  <div className={`mt-3 pt-3 border-t ${
+                    darkMode ? 'border-slate-600' : 'border-[#D5DCF9]'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">Confidence</span>
+                      <div className={`flex-1 rounded-full h-1.5 ${
+                        darkMode ? 'bg-slate-600' : 'bg-slate-200'
+                      }`}>
+                        <div
+                          className="bg-gradient-to-r from-[#8EDCE6] to-[#443627] h-1.5 rounded-full transition-all duration-700"
+                          style={{ width: `${Math.round(msg.confidence * 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-xs font-semibold ${
+                        darkMode ? 'text-slate-300' : 'text-[#443627]'
+                      }`}>
+                        {Math.round(msg.confidence * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions row for AI messages */}
+              {msg.sender === 'ai' && (
+                <div className="flex items-center gap-1 px-1">
+                  <CopyButton text={msg.text} />
+                  <span className="text-xs text-slate-400">
+                    {new Date().toLocaleTimeString('en-IN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* User Avatar */}
+            {msg.sender === 'user' && (
+              <div className="w-8 h-8 rounded-full bg-[#443627] flex items-center justify-center text-xs font-bold text-white shrink-0 mt-1 shadow-md">
+                {userInitial}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex gap-3 justify-start">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center text-sm shrink-0 shadow-md">
+              âš–
+            </div>
+            <div className={`rounded-2xl rounded-tl-sm px-5 py-4 border shadow-sm ${
+              darkMode
+                ? 'bg-slate-700/80 border-slate-600/50'
+                : 'bg-[#F8FAFC] border-[#D5DCF9]'
+            }`}>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-2 h-2 bg-[#8EDCE6] rounded-full animate-bounce"
+                  style={{ animationDelay: '0ms' }}
+                />
+                <div
+                  className="w-2 h-2 bg-[#A7B0CA] rounded-full animate-bounce"
+                  style={{ animationDelay: '150ms' }}
+                />
+                <div
+                  className="w-2 h-2 bg-[#D5DCF9] rounded-full animate-bounce"
+                  style={{ animationDelay: '300ms' }}
+                />
+                <span className="text-xs text-slate-400 ml-1">
+                  Analysing your query...
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+};
+
+export default AIResponseWindow;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ai\ComplianceBadge.jsx =====
+
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ai\CopyShareButton.jsx =====
+
+import { useState } from 'react';
+import { Copy, Check, Share2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const CopyShareButton = ({ text, title = 'CaseIQ Legal Information' }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success('Copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Copy failed');
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text: text.slice(0, 300) + '...',
+          url: window.location.href,
+        });
+      } catch {}
+    } else {
+      handleCopy();
+    }
+  };
+
+  return (
+    <div className="flex gap-1">
+      <button
+        onClick={handleCopy}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-[#443627] px-2 py-1 rounded-lg hover:bg-[#D5DCF9]/40 transition"
+        title="Copy response"
+      >
+        {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+      <button
+        onClick={handleShare}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-[#443627] px-2 py-1 rounded-lg hover:bg-[#D5DCF9]/40 transition"
+        title="Share response"
+      >
+        <Share2 size={12} />
+        Share
+      </button>
+    </div>
+  );
+};
+
+export default CopyShareButton;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ai\QueryInput.jsx =====
+
+import { useState, useCallback } from 'react';
+import { Mic, MicOff, Send } from 'lucide-react';
+import { useSettings } from '../../context/SettingsContext';
+import useSpeechInput from '../../hooks/useSpeechInput';
+
+const QueryInput = ({ onSend, disabled }) => {
+  const [query, setQuery] = useState('');
+  const { language } = useSettings();
+
+  const langMap = { English: 'en', Hindi: 'hi', Marathi: 'mr', Tamil: 'ta' };
+
+  const handleResult = useCallback((transcript) => {
+    setQuery(transcript);
+  }, []);
+
+  const { listening, supported, startListening, stopListening } = useSpeechInput(handleResult);
+
+  const handleSubmit = () => {
+    if (!query.trim() || disabled) return;
+    onSend(query);
+    setQuery('');
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const toggleVoice = () => {
+    if (listening) {
+      stopListening();
+    } else {
+      startListening(langMap[language] || 'en');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2 items-end">
+        <div className="flex-1 relative">
+          <textarea
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            placeholder={listening ? 'ðŸŽ¤ Listening... speak now' : 'Type your legal question... (Enter to send, Shift+Enter for new line)'}
+            rows={2}
+            className={`w-full rounded-xl px-4 py-3 pr-12 border focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] transition resize-none text-sm disabled:opacity-50 ${
+              listening
+                ? 'border-red-400 bg-red-50 text-red-700'
+                : 'border-[#A7B0CA] bg-white text-[#443627]'
+            }`}
+          />
+          {listening && (
+            <div className="absolute right-3 top-3 flex gap-1">
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {supported && (
+            <button
+              onClick={toggleVoice}
+              disabled={disabled}
+              title={listening ? 'Stop listening' : `Speak in ${language}`}
+              className={`p-3 rounded-xl transition disabled:opacity-50 ${
+                listening
+                  ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg'
+                  : 'bg-white border border-[#A7B0CA] text-[#443627] hover:bg-[#D5DCF9]'
+              }`}
+            >
+              {listening ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={disabled || !query.trim()}
+            className="p-3 rounded-xl bg-[#443627] text-white hover:bg-[#725E54] transition disabled:opacity-40 shadow-md"
+          >
+            <Send size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center px-1">
+        <p className="text-xs text-slate-400">
+          {supported
+            ? `ðŸŽ¤ Voice input available in ${language}`
+            : 'Voice input not supported in this browser'}
+        </p>
+        <p className="text-xs text-slate-400">Enter to send Â· Shift+Enter for new line</p>
+      </div>
+    </div>
+  );
+};
+
+export default QueryInput;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\dashboard\HistoryPanel.jsx =====
+
+import { useEffect, useState } from "react";
+
+const HistoryPanel = () => {
+  const [history, setHistory] = useState([]);
+
+ useEffect(() => {
+  const chats = JSON.parse(localStorage.getItem("caseiq_chat")) || [];
+  const firs = JSON.parse(localStorage.getItem("caseiq_fir")) || [];
+
+  // ðŸ”¥ Only user messages
+  const userChats = chats.filter(
+    (msg) => msg.sender === "user"
+  );
+
+  const combinedHistory = [
+    ...userChats.map((msg) => ({
+      type: "Chat",
+      text: msg.text,
+    })),
+    ...firs.map((fir) => ({
+      type: "FIR",
+      text: `FIR drafted for ${fir.fullName}`,
+    })),
+  ];
+
+  setHistory(combinedHistory.slice(-8).reverse());
+}, []);
+
+  return (
+    <div className="bg-white shadow-md rounded-xl p-6 border">
+      <h3 className="text-lg font-semibold mb-4">
+        Activity History
+      </h3>
+
+      {history.length === 0 ? (
+        <p className="text-slate-500 text-sm">
+          No history available.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {history.map((item, index) => (
+            <li
+              key={index}
+              className="text-sm flex justify-between bg-slate-50 p-2 rounded-lg"
+            >
+              <span className="font-medium">{item.type}</span>
+              <span className="text-slate-600 truncate max-w-[200px]">
+                {item.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+export default HistoryPanel;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\dashboard\RecentSearches.jsx =====
+
+import { useEffect, useState } from "react";
+
+const RecentSearches = () => {
+  const [recentQueries, setRecentQueries] = useState([]);
+
+  useEffect(() => {
+    const chats = JSON.parse(localStorage.getItem("caseiq_chat")) || [];
+
+    // Filter only user messages
+    const userMessages = chats.filter(
+      (msg) => msg.sender === "user"
+    );
+
+    // Get last 5 queries
+    setRecentQueries(userMessages.slice(-5).reverse());
+  }, []);
+
+  return (
+    <div className="bg-white shadow-md rounded-xl p-6 border">
+      <h3 className="text-lg font-semibold mb-4">
+        Recent Searches
+      </h3>
+
+      {recentQueries.length === 0 ? (
+        <p className="text-slate-500 text-sm">
+          No recent searches.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {recentQueries.map((query, index) => (
+            <li
+              key={index}
+              className="text-sm text-slate-700 bg-slate-50 p-2 rounded-lg"
+            >
+              {query.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+export default RecentSearches;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\education\AwarenessCards.jsx =====
+
+const legalTopics = [
+  {
+    title: "Right to File an FIR",
+    content:
+      "Every citizen has the right to file an FIR at any police station, including Zero FIR in case of jurisdiction issues.",
+  },
+  {
+    title: "Rights of an Arrested Person",
+    content:
+      "An arrested person has the right to remain silent and the right to legal representation.",
+  },
+  {
+    title: "Zero FIR",
+    content:
+      "Zero FIR can be filed at any police station regardless of jurisdiction and later transferred.",
+  },
+  {
+    title: "Protection for Women",
+    content:
+      "Women have special legal protections under various provisions including mandatory presence of female officers.",
+  },
+];
+
+const AwarenessCards = () => {
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      {legalTopics.map((topic, index) => (
+        <div
+          key={index}
+          className="bg-white shadow-md rounded-xl p-6 border hover:shadow-lg transition"
+        >
+          <h3
+            className="font-semibold text-indigo-600 dark:text-indigo-400
+ mb-2"
+          >
+            {topic.title}
+          </h3>
+          <p className="text-sm text-slate-600">{topic.content}</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default AwarenessCards;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\education\RightsSection.jsx =====
+
+const RightsSection = () => {
+  return (
+    <div className="bg-white shadow-md rounded-xl p-6 border space-y-4">
+      <h2
+        className="text-xl font-semibold text-indigo-600 dark:text-indigo-400
+"
+      >
+        Know Your Fundamental Rights
+      </h2>
+
+      <ul className="list-disc pl-5 space-y-2 text-slate-700 text-sm">
+        <li>Right to Equality</li>
+        <li>Right to Freedom</li>
+        <li>Right against Exploitation</li>
+        <li>Right to Constitutional Remedies</li>
+      </ul>
+    </div>
+  );
+};
+
+export default RightsSection;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\fir\FIRDownload.jsx =====
+
+import jsPDF from "jspdf";
+
+const FIRDownload = ({ data }) => {
+  if (!data) return null;
+
+  const handleDownload = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(12);
+
+    doc.text("To,", 10, 20);
+    doc.text("The Station House Officer,", 10, 30);
+    doc.text("[Police Station Name]", 10, 40);
+
+    doc.text(
+      `Subject: Complaint regarding incident at ${data.location}`,
+      10,
+      60
+    );
+
+    doc.text(
+      `I, ${data.name}, would like to report an incident that occurred on ${data.incidentDate} at ${data.location}.`,
+      10,
+      80,
+      { maxWidth: 180 }
+    );
+
+    doc.text("Incident Description:", 10, 100);
+    doc.text(data.description, 10, 110, { maxWidth: 180 });
+
+    doc.text("Kindly take necessary legal action.", 10, 150);
+    doc.text(`Contact: ${data.contact}`, 10, 170);
+
+    doc.save("FIR_Draft.pdf");
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+    >
+      Download as PDF
+    </button>
+  );
+};
+
+export default FIRDownload;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\fir\FIRForm.jsx =====
+
+import { useState } from "react";
+
+const FIRForm = ({ onGenerate }) => {
+  const [formData, setFormData] = useState({
+    fullName: "",
+    contact: "",
+    email: "",
+    address: "",
+    policeStation: "",
+    incidentDate: "",
+    incidentTime: "",
+    incidentLocation: "",
+    description: "",
+    suspectName: "",
+    suspectDescription: "",
+    witnessName: "",
+    witnessContact: "",
+    firType: "Cognizable",
+    applicableSection: "",
+    idProofType: "",
+    idProofNumber: "",
+    evidenceDetails: "",
+  });
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onGenerate(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-8">
+      {/* ---------------- COMPLAINANT INFO ---------------- */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Complainant Information</h3>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            name="fullName"
+            placeholder="Full Name *"
+            value={formData.fullName}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            required
+          />
+
+          <input
+            type="text"
+            name="contact"
+            placeholder="Contact Number *"
+            value={formData.contact}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            required
+          />
+
+          <input
+            type="email"
+            name="email"
+            placeholder="Email Address *"
+            value={formData.email}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            required
+          />
+
+          <input
+            type="text"
+            name="policeStation"
+            placeholder="Police Station *"
+            value={formData.policeStation}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            required
+          />
+        </div>
+
+        <textarea
+          name="address"
+          placeholder="Complete Address *"
+          value={formData.address}
+          onChange={handleChange}
+          className="w-full border rounded-lg p-3 mt-4"
+          rows="3"
+          required
+        />
+      </div>
+
+      {/* ---------------- INCIDENT DETAILS ---------------- */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Incident Details</h3>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <input
+            type="date"
+            name="incidentDate"
+            value={formData.incidentDate}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            required
+          />
+
+          <input
+            type="time"
+            name="incidentTime"
+            value={formData.incidentTime}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            required
+          />
+        </div>
+
+        <input
+          type="text"
+          name="incidentLocation"
+          placeholder="Location of Incident *"
+          value={formData.incidentLocation}
+          onChange={handleChange}
+          className="w-full border rounded-lg p-3 mt-4"
+          required
+        />
+
+        <textarea
+          name="description"
+          placeholder="Detailed Description of Incident *"
+          value={formData.description}
+          onChange={handleChange}
+          className="w-full border rounded-lg p-3 mt-4"
+          rows="4"
+          required
+        />
+      </div>
+
+      {/* ---------------- LEGAL DETAILS ---------------- */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Legal Details</h3>
+
+        <select
+          name="firType"
+          value={formData.firType}
+          onChange={handleChange}
+          className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+        >
+          <option value="Cognizable">Cognizable Offence</option>
+          <option value="Non-Cognizable">Non-Cognizable Offence</option>
+        </select>
+
+        <input
+          type="text"
+          name="applicableSection"
+          placeholder="Applicable BNS Section (if known)"
+          value={formData.applicableSection}
+          onChange={handleChange}
+          className="w-full border rounded-lg p-3 mt-4"
+        />
+      </div>
+
+      {/* ---------------- SUSPECT INFO ---------------- */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Suspect Information</h3>
+
+        <input
+          type="text"
+          name="suspectName"
+          placeholder="Suspect Name (if known)"
+          value={formData.suspectName}
+          onChange={handleChange}
+          className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+        />
+
+        <textarea
+          name="suspectDescription"
+          placeholder="Suspect Description (appearance, clothing, etc.)"
+          value={formData.suspectDescription}
+          onChange={handleChange}
+          className="w-full border rounded-lg p-3 mt-4"
+          rows="3"
+        />
+      </div>
+
+      {/* ---------------- WITNESS INFO ---------------- */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Witness Information</h3>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            name="witnessName"
+            placeholder="Witness Name"
+            value={formData.witnessName}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          />
+
+          <input
+            type="text"
+            name="witnessContact"
+            placeholder="Witness Contact"
+            value={formData.witnessContact}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          />
+        </div>
+      </div>
+
+      {/* ---------------- ID & EVIDENCE ---------------- */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">
+          Identification & Evidence
+        </h3>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            name="idProofType"
+            placeholder="ID Proof Type (Aadhar / PAN / DL)"
+            value={formData.idProofType}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          />
+
+          <input
+            type="text"
+            name="idProofNumber"
+            placeholder="ID Proof Number"
+            value={formData.idProofNumber}
+            onChange={handleChange}
+            className="w-full rounded-lg p-3 border border-slate-300 dark:border-slate-600 
+bg-white dark:bg-slate-900 
+text-slate-800 dark:text-slate-200 
+placeholder-slate-400 dark:placeholder-slate-500 
+focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          />
+        </div>
+
+        <textarea
+          name="evidenceDetails"
+          placeholder="Evidence attached (CCTV, photos, documents...)"
+          value={formData.evidenceDetails}
+          onChange={handleChange}
+          className="w-full border rounded-lg p-3 mt-4"
+          rows="3"
+        />
+      </div>
+
+      {/* Submit Button */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
+        >
+          Generate FIR Draft
+        </button>
+      </div>
+    </form>
+  );
+};
+
+export default FIRForm;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\fir\FIRPreview.jsx =====
+
+const FIRPreview = ({ data }) => {
+  if (!data) return null;
+
+  return (
+    <div className="bg-white shadow-md rounded-xl p-8 border space-y-6 text-sm">
+
+      <h3 className="text-lg font-semibold text-center">
+        FIRST INFORMATION REPORT (FIR)
+      </h3>
+
+      <div className="space-y-2">
+        <p><strong>Police Station:</strong> {data.policeStation}</p>
+        <p><strong>Type of Offence:</strong> {data.firType}</p>
+        <p><strong>Applicable Section:</strong> {data.applicableSection || "To be determined by authority"}</p>
+      </div>
+
+      <hr />
+
+      <div className="space-y-2">
+        <p><strong>Complainant Name:</strong> {data.fullName}</p>
+        <p><strong>Contact:</strong> {data.contact}</p>
+        <p><strong>Email:</strong> {data.email}</p>
+        <p><strong>Address:</strong> {data.address}</p>
+        <p><strong>ID Proof:</strong> {data.idProofType} - {data.idProofNumber}</p>
+      </div>
+
+      <hr />
+
+      <div className="space-y-2">
+        <p><strong>Date of Incident:</strong> {data.incidentDate}</p>
+        <p><strong>Time of Incident:</strong> {data.incidentTime}</p>
+        <p><strong>Location:</strong> {data.incidentLocation}</p>
+      </div>
+
+      <hr />
+
+      <div>
+        <p><strong>Incident Description:</strong></p>
+        <p className="mt-2">{data.description}</p>
+      </div>
+
+      <hr />
+
+      <div className="space-y-2">
+        <p><strong>Suspect Name:</strong> {data.suspectName || "Unknown"}</p>
+        <p><strong>Suspect Description:</strong> {data.suspectDescription || "Not Provided"}</p>
+      </div>
+
+      <hr />
+
+      <div className="space-y-2">
+        <p><strong>Witness Name:</strong> {data.witnessName || "None"}</p>
+        <p><strong>Witness Contact:</strong> {data.witnessContact || "None"}</p>
+      </div>
+
+      <hr />
+
+      <div>
+        <p><strong>Evidence Attached:</strong></p>
+        <p>{data.evidenceDetails || "No additional evidence mentioned."}</p>
+      </div>
+
+      <hr />
+
+      <div className="mt-6 space-y-4">
+        <p>
+          I hereby declare that the above information is true to the best of my knowledge.
+        </p>
+
+        <div className="flex justify-between mt-10">
+          <div>
+            <p><strong>Date:</strong> {new Date().toLocaleDateString()}</p>
+            <p><strong>Place:</strong> {data.incidentLocation}</p>
+          </div>
+
+          <div>
+            <p><strong>Signature:</strong></p>
+            <p>{data.fullName}</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+export default FIRPreview;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\fir\FIRWizard.jsx =====
+
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Check } from 'lucide-react';
+
+const STEPS = [
+  { id: 1, title: 'Complainant', icon: 'ðŸ‘¤' },
+  { id: 2, title: 'Incident', icon: 'ðŸ“' },
+  { id: 3, title: 'Legal', icon: 'âš–ï¸' },
+  { id: 4, title: 'Suspect', icon: 'ðŸ”' },
+  { id: 5, title: 'Evidence', icon: 'ðŸ“Ž' },
+];
+
+const inputClass = 'w-full rounded-xl p-3 border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] transition text-[#443627] placeholder-slate-400';
+const labelClass = 'block text-sm font-medium text-[#443627] mb-1';
+
+const FIRWizard = ({ onGenerate }) => {
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({
+    fullName: '', contact: '', email: '', address: '', policeStation: '',
+    incidentDate: '', incidentTime: '', incidentLocation: '', description: '',
+    firType: 'Cognizable', applicableSection: '',
+    suspectName: '', suspectDescription: '',
+    witnessName: '', witnessContact: '',
+    idProofType: '', idProofNumber: '', evidenceDetails: '',
+  });
+
+  const update = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  const next = () => setStep((s) => Math.min(STEPS.length, s + 1));
+  const prev = () => setStep((s) => Math.max(1, s - 1));
+
+  const handleSubmit = () => onGenerate(formData);
+
+  return (
+    <div className="space-y-8">
+
+      {/* Step Progress */}
+      <div className="flex items-center justify-between relative">
+        <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-200 z-0" />
+        <div
+          className="absolute top-5 left-0 h-0.5 bg-gradient-to-r from-[#8EDCE6] to-[#D5DCF9] z-0 transition-all duration-500"
+          style={{ width: `${((step - 1) / (STEPS.length - 1)) * 100}%` }}
+        />
+        {STEPS.map((s) => (
+          <div key={s.id} className="flex flex-col items-center gap-2 z-10">
+            <motion.div
+              animate={{
+                scale: step === s.id ? 1.15 : 1,
+                backgroundColor: step > s.id ? '#443627' : step === s.id ? '#8EDCE6' : '#fff',
+              }}
+              className={`w-10 h-10 rounded-full border-2 flex items-center justify-center text-sm font-bold transition-colors ${
+                step > s.id
+                  ? 'border-[#443627] text-white'
+                  : step === s.id
+                  ? 'border-[#8EDCE6] text-[#443627]'
+                  : 'border-slate-300 text-slate-400'
+              }`}
+            >
+              {step > s.id ? <Check size={16} className="text-white" /> : s.icon}
+            </motion.div>
+            <span className={`text-xs font-medium hidden sm:block ${
+              step === s.id ? 'text-[#443627]' : 'text-slate-400'
+            }`}>
+              {s.title}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Step Content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.25 }}
+          className="space-y-4"
+        >
+          {step === 1 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-[#443627]">ðŸ‘¤ Complainant Information</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Full Name *</label>
+                  <input name="fullName" value={formData.fullName} onChange={update} placeholder="Enter full name" required className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Contact Number *</label>
+                  <input name="contact" value={formData.contact} onChange={update} placeholder="10-digit mobile number" required className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Email Address *</label>
+                  <input name="email" type="email" value={formData.email} onChange={update} placeholder="your@email.com" required className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Police Station *</label>
+                  <input name="policeStation" value={formData.policeStation} onChange={update} placeholder="Nearest police station" required className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Complete Address *</label>
+                <textarea name="address" value={formData.address} onChange={update} placeholder="House/Flat No, Street, City, State, PIN" rows="3" required className={inputClass} />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-[#443627]">ðŸ“ Incident Details</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Date of Incident *</label>
+                  <input name="incidentDate" type="date" value={formData.incidentDate} onChange={update} required className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Time of Incident *</label>
+                  <input name="incidentTime" type="time" value={formData.incidentTime} onChange={update} required className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Location of Incident *</label>
+                <input name="incidentLocation" value={formData.incidentLocation} onChange={update} placeholder="Exact location where incident occurred" required className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Detailed Description *</label>
+                <textarea name="description" value={formData.description} onChange={update} placeholder="Describe the incident in detail â€” what happened, how it happened, sequence of events..." rows="5" required className={inputClass} />
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-[#443627]">âš–ï¸ Legal Details</h3>
+              <div>
+                <label className={labelClass}>Type of Offence</label>
+                <select name="firType" value={formData.firType} onChange={update} className={inputClass}>
+                  <option value="Cognizable">Cognizable Offence (Police can arrest without warrant)</option>
+                  <option value="Non-Cognizable">Non-Cognizable Offence (Requires magistrate order)</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Applicable BNS Section (if known)</label>
+                <input name="applicableSection" value={formData.applicableSection} onChange={update} placeholder="e.g. BNS Section 103 (Murder)" className={inputClass} />
+              </div>
+              <div className="bg-[#D5DCF9]/50 rounded-2xl p-4 text-sm text-[#443627] space-y-2">
+                <p className="font-semibold">ðŸ’¡ Common Sections</p>
+                <div className="grid grid-cols-2 gap-2 text-xs text-[#725E54]">
+                  <span>BNS 103 â€” Murder</span>
+                  <span>BNS 115 â€” Assault</span>
+                  <span>BNS 303 â€” Theft</span>
+                  <span>BNS 308 â€” Robbery</span>
+                  <span>BNS 316 â€” Cheating</span>
+                  <span>BNS 351 â€” Criminal intimidation</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-[#443627]">ðŸ” Suspect & Witness</h3>
+              <div>
+                <label className={labelClass}>Suspect Name (if known)</label>
+                <input name="suspectName" value={formData.suspectName} onChange={update} placeholder="Full name of suspect" className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Suspect Description</label>
+                <textarea name="suspectDescription" value={formData.suspectDescription} onChange={update} placeholder="Physical description â€” age, height, clothing, identifying marks..." rows="3" className={inputClass} />
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Witness Name</label>
+                  <input name="witnessName" value={formData.witnessName} onChange={update} placeholder="Witness full name" className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Witness Contact</label>
+                  <input name="witnessContact" value={formData.witnessContact} onChange={update} placeholder="Witness phone number" className={inputClass} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-[#443627]">ðŸ“Ž Identity & Evidence</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>ID Proof Type</label>
+                  <select name="idProofType" value={formData.idProofType} onChange={update} className={inputClass}>
+                    <option value="">Select ID type</option>
+                    <option value="Aadhar">Aadhar Card</option>
+                    <option value="PAN">PAN Card</option>
+                    <option value="Voter ID">Voter ID</option>
+                    <option value="Passport">Passport</option>
+                    <option value="Driving License">Driving License</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>ID Proof Number</label>
+                  <input name="idProofNumber" value={formData.idProofNumber} onChange={update} placeholder="ID number" className={inputClass} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Evidence Details</label>
+                <textarea name="evidenceDetails" value={formData.evidenceDetails} onChange={update} placeholder="List all evidence â€” CCTV footage, photographs, documents, medical reports, screenshots..." rows="4" className={inputClass} />
+              </div>
+
+              {/* Summary before submit */}
+              <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-[#D5DCF9] space-y-2 text-sm">
+                <p className="font-semibold text-[#443627] mb-3">ðŸ“‹ Summary</p>
+                <div className="grid grid-cols-2 gap-2 text-[#725E54]">
+                  <span>Complainant: <strong className="text-[#443627]">{formData.fullName || 'â€”'}</strong></span>
+                  <span>Station: <strong className="text-[#443627]">{formData.policeStation || 'â€”'}</strong></span>
+                  <span>Date: <strong className="text-[#443627]">{formData.incidentDate || 'â€”'}</strong></span>
+                  <span>Type: <strong className="text-[#443627]">{formData.firType}</strong></span>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Navigation */}
+      <div className="flex justify-between items-center pt-4 border-t border-[#D5DCF9]">
+        <button
+          onClick={prev}
+          disabled={step === 1}
+          className="px-6 py-3 rounded-xl border border-[#A7B0CA] text-[#443627] hover:bg-[#D5DCF9]/40 transition disabled:opacity-30 disabled:cursor-not-allowed font-medium"
+        >
+          â† Previous
+        </button>
+
+        <span className="text-sm text-[#725E54]">
+          Step {step} of {STEPS.length}
+        </span>
+
+        {step < STEPS.length ? (
+          <button
+            onClick={next}
+            className="px-6 py-3 rounded-xl bg-[#443627] text-white hover:bg-[#725E54] transition font-medium shadow-md"
+          >
+            Next â†’
+          </button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#443627] to-[#725E54] text-white hover:opacity-90 transition font-medium shadow-md"
+          >
+            ðŸ¤– Generate FIR Draft
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default FIRWizard;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\law\LawCard.jsx =====
+
+const LawCard = ({ section, title, description, punishment }) => {
+  return (
+    <div className="bg-white shadow-md rounded-xl p-5 border space-y-2">
+      <h4
+        className="font-semibold text-indigo-600 dark:text-indigo-400
+"
+      >
+        {section} - {title}
+      </h4>
+
+      <p className="text-sm text-slate-700">{description}</p>
+
+      <p className="text-sm font-medium text-red-600">
+        Punishment: {punishment}
+      </p>
+    </div>
+  );
+};
+
+export default LawCard;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\law\LawReferenceViewer.jsx =====
+
+import LawCard from "./LawCard";
+
+const LawReferenceViewer = ({ laws }) => {
+  if (!laws || laws.length === 0) return null;
+
+  return (
+    <div className="space-y-4 mt-6">
+      <h3 className="text-lg font-semibold">
+        Relevant Legal Sections
+      </h3>
+
+      {laws.map((law, index) => (
+        <LawCard
+          key={index}
+          section={law.section}
+          title={law.title}
+          description={law.description}
+          punishment={law.punishment}
+        />
+      ))}
+    </div>
+  );
+};
+
+export default LawReferenceViewer;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\layout\DisclaimerBar.jsx =====
+
+const DisclaimerBar = () => {
+  return (
+    <div className="bg-yellow-100 text-yellow-800 text-sm text-center py-2">
+      CaseIQ provides verified legal knowledge only. It does not offer legal advice.
+    </div>
+  );
+};
+
+export default DisclaimerBar;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\layout\Footer.jsx =====
+
+const Footer = () => {
+  return (
+    <footer className="bg-white border-t text-center text-sm py-3 text-slate-500">
+      Â© 2026 CaseIQ â€” AI-Powered Legal Knowledge System
+    </footer>
+  );
+};
+
+export default Footer;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\layout\Header.jsx =====
+
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
+import { Settings, LogOut } from 'lucide-react';
+import GlobalSearch from '../ui/GlobalSearch';
+import logo from '../../assets/logo.png';
+
+const Header = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { darkMode } = useSettings();
+
+  return (
+    <header className={`sticky top-0 z-40 transition-all duration-300 ${
+      darkMode
+        ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700'
+        : 'bg-gradient-to-r from-[#D5DCF9] via-[#A7B0CA] to-[#D5DCF9] border-b border-[#A7B0CA]'
+    }`}>
+      <div className="px-6 py-2 flex justify-between items-center gap-4">
+
+        {/* Logo */}
+        <div
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 cursor-pointer group shrink-0"
+        >
+          <img
+            src={logo}
+            alt="CaseIQ"
+            className="h-16 w-auto object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+          />
+        </div>
+
+        {/* Global Search â€” center */}
+        <div className="flex-1 flex justify-center max-w-md">
+          <GlobalSearch />
+        </div>
+
+        {/* Right Side */}
+        <div className="flex items-center gap-2 shrink-0">
+          {user && (
+            <div
+              onClick={() => navigate('/profile')}
+              className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow text-[#443627] font-bold text-xs">
+                {(user.full_name || user.email || 'U')[0].toUpperCase()}
+              </div>
+              <span className={`text-sm hidden md:block font-medium ${
+                darkMode ? 'text-slate-300' : 'text-[#443627]'
+              }`}>
+                {user.full_name || user.email}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={() => navigate('/settings')}
+            className="p-2 rounded-lg hover:bg-white/30 transition"
+          >
+            <Settings size={16} className={darkMode ? 'text-white' : 'text-[#443627]'} />
+          </button>
+
+          {user && (
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg hover:bg-red-200/40 transition"
+            >
+              <LogOut size={16} className="text-red-500" />
+            </button>
+          )}
+
+          {!user && (
+            <button
+              onClick={() => navigate('/login')}
+              className="bg-[#443627] text-white px-4 py-1.5 rounded-xl text-sm hover:bg-[#725E54] transition font-medium shadow"
+            >
+              Sign In
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className={`h-px ${
+        darkMode
+          ? 'bg-gradient-to-r from-transparent via-slate-500 to-transparent opacity-40'
+          : 'bg-gradient-to-r from-transparent via-[#725E54] to-transparent opacity-20'
+      }`} />
+    </header>
+  );
+};
+
+export default Header;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\layout\Layout.jsx =====
+
+import Header from "./Header";
+import Sidebar from "./Sidebar";
+import Footer from "./Footer";
+import DisclaimerBar from "./DisclaimerBar";
+import { useSettings } from "../../context/SettingsContext";
+
+const Layout = ({ children }) => {
+  const { darkMode, fontSize } = useSettings();
+
+  return (
+    <div
+      style={{ fontSize: `${fontSize}px` }}
+      className={`
+        min-h-screen
+        flex flex-col
+        transition-colors duration-300
+        ${darkMode ? "bg-slate-900 text-slate-200" : "bg-slate-50 text-slate-800"}
+      `}
+    >
+      {/* HEADER */}
+      <Header />
+
+      {/* MAIN LAYOUT AREA */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* SIDEBAR */}
+        <Sidebar />
+
+        {/* SCROLLABLE CONTENT AREA */}
+        <main
+          className={`
+            flex-1
+            overflow-y-auto
+            p-8
+            transition-colors duration-300
+            ${darkMode ? "bg-slate-800" : "bg-slate-100"}
+          `}
+        >
+          {children}
+        </main>
+
+      </div>
+
+      {/* Optional Footer / Disclaimer */}
+      <DisclaimerBar />
+      <Footer />
+    </div>
+  );
+};
+
+export default Layout;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\layout\Sidebar.jsx =====
+
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import {
+  Home, MessageCircle, FileText, LayoutDashboard,
+  BookOpen, History, Newspaper, Scale, Settings,
+  LogOut, ChevronRight, MapPin,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
+
+const Sidebar = () => {
+  const { darkMode } = useSettings();
+  const { user, logout, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const baseStyle = 'flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm w-full';
+  const iconStyle = 'w-4 h-4 shrink-0';
+
+  const navClass = ({ isActive }) =>
+    `${baseStyle} ${isActive
+      ? 'bg-gradient-to-r from-[#8EDCE6] to-[#D5DCF9] text-[#443627] shadow-md font-semibold'
+      : darkMode
+      ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+      : 'text-slate-600 hover:bg-[#D5DCF9]/50 hover:text-[#443627]'
+    }`;
+
+  const navItems = [
+    { to: '/', icon: Home, label: 'Home' },
+    { to: '/chat', icon: MessageCircle, label: 'AI Assistant' },
+    { to: '/fir-draft', icon: FileText, label: 'FIR Draft' },
+    { to: '/laws', icon: Scale, label: 'Law Explorer' },
+    { to: '/news', icon: Newspaper, label: 'Legal News' },
+    { to: '/education', icon: BookOpen, label: 'Education' },
+    { to: '/stations', icon: MapPin, label: 'Find Stations' },
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/history', icon: History, label: 'History' },
+  ];
+
+  return (
+    <aside className={`w-64 min-h-screen sticky top-0 flex flex-col py-6 px-4 border-r transition-all duration-300 ${
+      darkMode
+        ? 'bg-slate-900/95 border-slate-700/60'
+        : 'bg-white/90 border-slate-200/60'
+    } backdrop-blur-xl`}>
+
+      {/* Nav Section */}
+      <div className="flex-1 space-y-1">
+        <p className={`text-xs uppercase tracking-widest px-4 mb-4 font-semibold ${
+          darkMode ? 'text-slate-500' : 'text-slate-400'
+        }`}>
+          Navigation
+        </p>
+
+        {navItems.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to} end={to === '/'} className={navClass}>
+            {({ isActive }) => (
+              <>
+                <Icon className={iconStyle} />
+                <span className="flex-1">{label}</span>
+                {isActive && <ChevronRight className="w-3 h-3 opacity-50" />}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
+
+      {/* Divider */}
+      <div className={`my-4 border-t ${darkMode ? 'border-slate-700/60' : 'border-slate-200'}`} />
+
+      {/* Bottom Section */}
+      {isAuthenticated ? (
+        <div className="space-y-1">
+
+          {/* User Card */}
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={() => navigate('/profile')}
+            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition mb-2 ${
+              darkMode
+                ? 'hover:bg-slate-800 bg-slate-800/50'
+                : 'hover:bg-[#D5DCF9]/40 bg-[#F8FAFC]'
+            }`}
+          >
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow-md shrink-0">
+              <span className="text-[#443627] font-bold text-sm">
+                {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <p className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-[#443627]'}`}>
+                {user?.full_name || 'My Account'}
+              </p>
+              <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+            </div>
+          </motion.button>
+
+          <NavLink to="/settings" className={navClass}>
+            <Settings className={iconStyle} />
+            <span className="flex-1">Settings</span>
+          </NavLink>
+
+          <button
+            onClick={logout}
+            className={`${baseStyle} text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600`}
+          >
+            <LogOut className={iconStyle} />
+            <span className="flex-1">Sign Out</span>
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className={`text-xs text-center mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Sign in to save your history
+          </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full bg-[#443627] text-white px-4 py-2.5 rounded-xl hover:bg-[#725E54] transition text-sm font-medium shadow"
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => navigate('/register')}
+            className={`w-full border px-4 py-2.5 rounded-xl transition text-sm font-medium ${
+              darkMode
+                ? 'border-slate-600 text-slate-300 hover:bg-slate-800'
+                : 'border-[#A7B0CA] text-[#443627] hover:bg-[#D5DCF9]/40'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+      )}
+    </aside>
+  );
+};
+
+export default Sidebar;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Button.jsx =====
+
+const Button = ({
+  children,
+  onClick,
+  type = "button",
+  variant = "primary",
+  disabled = false,
+  className = "",
+  ...props
+}) => {
+  const baseStyle =
+    "px-5 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+
+  const variants = {
+    primary:
+      "bg-indigo-600 text-white hover:bg-indigo-500 focus:ring-indigo-500",
+
+    secondary:
+      "bg-slate-200 text-slate-800 hover:bg-slate-300 focus:ring-slate-400 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600",
+
+    danger:
+      "bg-red-600 text-white hover:bg-red-500 focus:ring-red-500",
+
+    success:
+      "bg-green-600 text-white hover:bg-green-500 focus:ring-green-500",
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+      className={`${baseStyle} ${variants[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+export default Button;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Card.jsx =====
+
+const Card = ({ children, className = "", variant = "default" }) => {
+  const variants = {
+    default: "bg-white border border-slate-200 shadow-md",
+    lavender: "bg-[#D5DCF9] border border-[#A7B0CA] shadow-lg",
+    teal: "bg-[#8EDCE6] border border-[#A7B0CA] shadow-lg",
+    powder: "bg-[#A7B0CA] border border-[#8EDCE6] shadow-lg",
+    warm: "bg-[#725E54] text-white border border-[#443627] shadow-lg",
+  };
+
+  return (
+    <div
+      className={`rounded-2xl p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${variants[variant]} ${className}`}
+    >
+      {children}
+    </div>
+  );
+};
+
+export default Card;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\ErrorBoundary.jsx =====
+
+import { Component } from 'react';
+
+class ErrorBoundary extends Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6]">
+          <div className="bg-white rounded-3xl shadow-2xl p-12 max-w-md text-center space-y-6">
+            <div className="text-6xl">âš–ï¸</div>
+            <h1 className="text-2xl font-bold text-[#443627]">Something went wrong</h1>
+            <p className="text-[#725E54] text-sm">{this.state.error?.message}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-[#443627] text-white px-8 py-3 rounded-xl hover:bg-[#725E54] transition"
+            >
+              Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default ErrorBoundary;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\GlobalSearch.jsx =====
+
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, X, BookOpen, Newspaper, GraduationCap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { legalAPI, awarenessAPI, knowledgeAPI } from '../../services/api';
+
+const GlobalSearch = () => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState({ laws: [], news: [], education: [] });
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+  const navigate = useNavigate();
+
+  // Keyboard shortcut â€” press / to open
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        setOpen(true);
+      }
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [open]);
+
+  useEffect(() => {
+    if (!query.trim() || query.length < 2) {
+      setResults({ laws: [], news: [], education: [] });
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const [lawsRes, newsRes, eduRes] = await Promise.allSettled([
+          legalAPI.getSections({ search: query, page_size: 3 }),
+          awarenessAPI.getNews({ search: query, page_size: 3 }),
+          awarenessAPI.getEducation({ search: query, page_size: 3 }),
+        ]);
+
+        setResults({
+          laws: lawsRes.status === 'fulfilled' ? lawsRes.value.data.results || [] : [],
+          news: newsRes.status === 'fulfilled' ? newsRes.value.data.results || [] : [],
+          education: eduRes.status === 'fulfilled' ? eduRes.value.data.results || [] : [],
+        });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const hasResults = results.laws.length + results.news.length + results.education.length > 0;
+
+  const handleLawClick = (section) => {
+    navigate(`/laws?search=${encodeURIComponent(section.section_title || '')}`);
+    setOpen(false);
+    setQuery('');
+  };
+
+  const handleAskAI = () => {
+    if (!query.trim()) return;
+    localStorage.setItem('caseiq_pending_query', query);
+    navigate('/chat');
+    setOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <>
+      {/* Search Trigger Button */}
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#A7B0CA]/40 text-slate-500 hover:border-[#8EDCE6] hover:text-[#443627] transition text-sm bg-white/50 backdrop-blur-sm"
+      >
+        <Search size={14} />
+        <span className="hidden sm:block text-xs">Search laws, news...</span>
+        <kbd className="hidden sm:block text-xs bg-slate-100 px-1.5 py-0.5 rounded font-mono">/</kbd>
+      </button>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+            />
+
+            {/* Search Panel */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -20 }}
+              transition={{ duration: 0.2 }}
+              className="fixed top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl z-50 px-4"
+            >
+              <div className="bg-white rounded-2xl shadow-2xl border border-[#D5DCF9] overflow-hidden">
+
+                {/* Input */}
+                <div className="flex items-center gap-3 p-4 border-b border-[#D5DCF9]">
+                  <Search size={18} className="text-[#725E54] shrink-0" />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAskAI()}
+                    placeholder="Search laws, news, rights... or press Enter to ask AI"
+                    className="flex-1 outline-none text-[#443627] placeholder-slate-400 text-sm"
+                  />
+                  {query && (
+                    <button onClick={() => setQuery('')}>
+                      <X size={16} className="text-slate-400 hover:text-slate-600" />
+                    </button>
+                  )}
+                  <kbd className="text-xs bg-slate-100 px-2 py-1 rounded font-mono text-slate-400">Esc</kbd>
+                </div>
+
+                {/* Results */}
+                <div className="max-h-96 overflow-y-auto">
+
+                  {loading && (
+                    <div className="p-6 text-center text-sm text-slate-400">Searching...</div>
+                  )}
+
+                  {!loading && query.length >= 2 && !hasResults && (
+                    <div className="p-6 text-center space-y-3">
+                      <p className="text-sm text-slate-400">No results found for "{query}"</p>
+                      <button
+                        onClick={handleAskAI}
+                        className="bg-[#443627] text-white px-5 py-2 rounded-xl text-sm hover:bg-[#725E54] transition"
+                      >
+                        Ask AI about "{query}" â†’
+                      </button>
+                    </div>
+                  )}
+
+                  {!loading && hasResults && (
+                    <div className="divide-y divide-[#F0F2F8]">
+
+                      {/* Laws */}
+                      {results.laws.length > 0 && (
+                        <div className="p-3">
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1">
+                            <BookOpen size={10} /> Legal Sections
+                          </p>
+                          {results.laws.map((law) => (
+                            <button
+                              key={law.id}
+                              onClick={() => handleLawClick(law)}
+                              className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#D5DCF9]/40 transition"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold bg-[#D5DCF9] text-[#443627] px-2 py-0.5 rounded-lg">{law.act}</span>
+                                <span className="text-xs text-[#725E54]">Â§{law.section_number}</span>
+                                <span className="text-sm text-[#443627] truncate">{law.section_title}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* News */}
+                      {results.news.length > 0 && (
+                        <div className="p-3">
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1">
+                            <Newspaper size={10} /> Legal News
+                          </p>
+                          {results.news.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => { navigate('/news'); setOpen(false); setQuery(''); }}
+                              className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#D5DCF9]/40 transition"
+                            >
+                              <p className="text-sm text-[#443627] truncate">{item.title}</p>
+                              <p className="text-xs text-slate-400">{item.source}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Education */}
+                      {results.education.length > 0 && (
+                        <div className="p-3">
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1">
+                            <GraduationCap size={10} /> Education
+                          </p>
+                          {results.education.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => { navigate('/education'); setOpen(false); setQuery(''); }}
+                              className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#D5DCF9]/40 transition"
+                            >
+                              <p className="text-sm text-[#443627] truncate">{item.title}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Quick Actions */}
+                  {!query && (
+                    <div className="p-4 space-y-2">
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Quick Actions</p>
+                      {[
+                        { label: 'ðŸš¨ Rights when arrested', query: 'What are my rights when arrested by police?' },
+                        { label: 'ðŸ“„ How to file FIR', query: 'How to file an FIR at police station?' },
+                        { label: 'ðŸ’» Report cybercrime', query: 'How to report cybercrime in India?' },
+                        { label: 'âš–ï¸ Get bail', query: 'How to apply for bail in India?' },
+                      ].map((item, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setQuery(item.query)}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#D5DCF9]/40 transition text-sm text-[#443627]"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                {query && (
+                  <div className="px-4 py-3 border-t border-[#D5DCF9] bg-[#F8FAFC]">
+                    <button
+                      onClick={handleAskAI}
+                      className="w-full text-sm text-[#443627] font-medium hover:text-[#725E54] transition flex items-center justify-center gap-2"
+                    >
+                      Press Enter to ask AI about "{query.slice(0, 40)}{query.length > 40 ? '...' : ''}" â†’
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
+export default GlobalSearch;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Input.jsx =====
+
+const Input = ({
+  type = "text",
+  name,
+  value,
+  onChange,
+  placeholder,
+  required = false,
+  disabled = false,
+  error = false,
+  className = "",
+  ...props
+}) => {
+  return (
+    <input
+      type={type}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      required={required}
+      disabled={disabled}
+      {...props}
+      className={`
+        w-full rounded-lg px-4 py-2 
+        border
+        bg-white dark:bg-slate-900
+        text-slate-800 dark:text-slate-200
+        placeholder-slate-400 dark:placeholder-slate-500
+        border-slate-300 dark:border-slate-600
+        focus:outline-none focus:ring-2 focus:ring-indigo-500
+        transition-colors duration-200
+        disabled:opacity-50 disabled:cursor-not-allowed
+        ${error ? "border-red-500 focus:ring-red-500" : ""}
+        ${className}
+      `}
+    />
+  );
+};
+
+export default Input;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Loader.jsx =====
+
+const Loader = () => {
+  return (
+    <div className="flex justify-center items-center py-4">
+      <div className="w-6 h-6 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+};
+
+export default Loader;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Modal.jsx =====
+
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+      <div className="bg-white rounded-xl p-6 w-[400px] shadow-lg relative">
+        
+        <h3 className="text-lg font-semibold mb-4">
+          {title}
+        </h3>
+
+        <div>{children}</div>
+
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-slate-500 hover:text-red-500"
+        >
+          âœ•
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default Modal;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\PageTransition.jsx =====
+
+import { motion } from 'framer-motion';
+
+const PageTransition = ({ children }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 16 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -16 }}
+    transition={{ duration: 0.3, ease: 'easeOut' }}
+  >
+    {children}
+  </motion.div>
+);
+
+export default PageTransition;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Skeleton.jsx =====
+
+const Skeleton = ({ className = '' }) => (
+  <div className={`animate-pulse bg-slate-200 rounded-xl ${className}`} />
+);
+
+export const SkeletonCard = () => (
+  <div className="bg-white rounded-2xl p-6 shadow border border-[#D5DCF9] space-y-3">
+    <Skeleton className="h-4 w-1/3" />
+    <Skeleton className="h-3 w-full" />
+    <Skeleton className="h-3 w-4/5" />
+    <Skeleton className="h-3 w-2/3" />
+  </div>
+);
+
+export const SkeletonList = ({ count = 5 }) => (
+  <div className="space-y-4">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="bg-white rounded-2xl p-5 shadow border border-[#D5DCF9] space-y-3">
+        <div className="flex gap-3">
+          <Skeleton className="h-6 w-16" />
+          <Skeleton className="h-6 w-24" />
+        </div>
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    ))}
+  </div>
+);
+
+export default Skeleton;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\Textarea.jsx =====
+
+const Textarea = ({ className = "", ...props }) => {
+  return (
+    <textarea
+      {...props}
+      className={`w-full rounded-lg p-3 
+      bg-white dark:bg-slate-900 
+      border border-slate-300 dark:border-slate-600 
+      text-slate-800 dark:text-slate-200 
+      placeholder-slate-400 dark:placeholder-slate-500 
+      focus:outline-none focus:ring-2 focus:ring-indigo-500 
+      transition-colors duration-200 
+      ${className}`}
+    />
+  );
+};
+
+export default Textarea;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\components\ui\ToggleSwitch.jsx =====
+
+const ToggleSwitch = ({ checked, onChange }) => {
+  return (
+    <label className="inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="sr-only"
+      />
+      <div
+        className={`w-11 h-6 rounded-full transition ${
+          checked ? "bg-indigo-600" : "bg-slate-300"
+        }`}
+      >
+        <div
+          className={`h-5 w-5 bg-white rounded-full shadow transform transition ${
+            checked ? "translate-x-5" : "translate-x-0"
+          }`}
+        ></div>
+      </div>
+    </label>
+  );
+};
+
+export default ToggleSwitch;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\context\AuthContext.jsx =====
+
+import { createContext, useContext, useState, useEffect } from 'react';
+import { authAPI } from '../services/api';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('caseiq_access_token');
+    const savedUser = localStorage.getItem('caseiq_user');
+    if (token && savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+        // Verify token is still valid
+        authAPI.getProfile()
+          .then((res) => setUser(res.data))
+          .catch(() => {
+            localStorage.removeItem('caseiq_access_token');
+            localStorage.removeItem('caseiq_refresh_token');
+            localStorage.removeItem('caseiq_user');
+            setUser(null);
+          });
+      } catch {
+        setUser(null);
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  const login = async (email, password) => {
+    const data = await authAPI.login(email, password);
+    setUser(data.user);
+    return data;
+  };
+
+  const register = async (formData) => {
+    const res = await authAPI.register(formData);
+    localStorage.setItem('caseiq_access_token', res.data.tokens.access);
+    localStorage.setItem('caseiq_refresh_token', res.data.tokens.refresh);
+    localStorage.setItem('caseiq_user', JSON.stringify(res.data.user));
+    setUser(res.data.user);
+    return res.data;
+  };
+
+  const logout = async () => {
+    await authAPI.logout();
+    setUser(null);
+  };
+
+  const updateUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('caseiq_user', JSON.stringify(userData));
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout, register, updateUser, isAuthenticated: !!user }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\context\LanguageContext.jsx =====
+
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const translations = {
+  en: {
+    appName: 'CaseIQ',
+    tagline: 'AI-Powered Legal Knowledge',
+    home: 'Home',
+    aiAssistant: 'AI Assistant',
+    firDraft: 'FIR Draft',
+    lawExplorer: 'Law Explorer',
+    legalNews: 'Legal News',
+    education: 'Education',
+    dashboard: 'Dashboard',
+    history: 'History',
+    settings: 'Settings',
+    signIn: 'Sign In',
+    signOut: 'Sign Out',
+    createAccount: 'Create Account',
+    askQuery: 'Ask a Legal Question',
+    queryPlaceholder: 'Type your legal question...',
+    sendButton: 'Send',
+    generateFIR: 'Generate FIR Draft',
+    downloadPDF: 'Download PDF',
+    clearChat: 'Clear Chat',
+    noHistory: 'No history yet',
+    loading: 'Loading...',
+    disclaimer: 'âš ï¸ CaseIQ provides legal knowledge only, not legal advice.',
+    welcomeMessage: 'ðŸ‘‹ Welcome to CaseIQ. Ask any legal question about Indian law.',
+  },
+  hi: {
+    appName: 'à¤•à¥‡à¤¸à¤†à¤ˆà¤•à¥à¤¯à¥‚',
+    tagline: 'AI-à¤¸à¤‚à¤šà¤¾à¤²à¤¿à¤¤ à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤œà¥à¤žà¤¾à¤¨',
+    home: 'à¤¹à¥‹à¤®',
+    aiAssistant: 'AI à¤¸à¤¹à¤¾à¤¯à¤•',
+    firDraft: 'FIR à¤¡à¥à¤°à¤¾à¤«à¥à¤Ÿ',
+    lawExplorer: 'à¤•à¤¾à¤¨à¥‚à¤¨ à¤–à¥‹à¤œà¤•',
+    legalNews: 'à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤¸à¤®à¤¾à¤šà¤¾à¤°',
+    education: 'à¤¶à¤¿à¤•à¥à¤·à¤¾',
+    dashboard: 'à¤¡à¥ˆà¤¶à¤¬à¥‹à¤°à¥à¤¡',
+    history: 'à¤‡à¤¤à¤¿à¤¹à¤¾à¤¸',
+    settings: 'à¤¸à¥‡à¤Ÿà¤¿à¤‚à¤—à¥à¤¸',
+    signIn: 'à¤¸à¤¾à¤‡à¤¨ à¤‡à¤¨',
+    signOut: 'à¤¸à¤¾à¤‡à¤¨ à¤†à¤‰à¤Ÿ',
+    createAccount: 'à¤–à¤¾à¤¤à¤¾ à¤¬à¤¨à¤¾à¤à¤‚',
+    askQuery: 'à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤ªà¥‚à¤›à¥‡à¤‚',
+    queryPlaceholder: 'à¤…à¤ªà¤¨à¤¾ à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤Ÿà¤¾à¤‡à¤ª à¤•à¤°à¥‡à¤‚...',
+    sendButton: 'à¤­à¥‡à¤œà¥‡à¤‚',
+    generateFIR: 'FIR à¤¡à¥à¤°à¤¾à¤«à¥à¤Ÿ à¤¬à¤¨à¤¾à¤à¤‚',
+    downloadPDF: 'PDF à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚',
+    clearChat: 'à¤šà¥ˆà¤Ÿ à¤¸à¤¾à¤« à¤•à¤°à¥‡à¤‚',
+    noHistory: 'à¤…à¤­à¥€ à¤¤à¤• à¤•à¥‹à¤ˆ à¤‡à¤¤à¤¿à¤¹à¤¾à¤¸ à¤¨à¤¹à¥€à¤‚',
+    loading: 'à¤²à¥‹à¤¡ à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ...',
+    disclaimer: 'âš ï¸ à¤•à¥‡à¤¸à¤†à¤ˆà¤•à¥à¤¯à¥‚ à¤•à¥‡à¤µà¤² à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤ªà¥à¤°à¤¦à¤¾à¤¨ à¤•à¤°à¤¤à¤¾ à¤¹à¥ˆ, à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤¸à¤²à¤¾à¤¹ à¤¨à¤¹à¥€à¤‚à¥¤',
+    welcomeMessage: 'ðŸ‘‹ à¤•à¥‡à¤¸à¤†à¤ˆà¤•à¥à¤¯à¥‚ à¤®à¥‡à¤‚ à¤†à¤ªà¤•à¤¾ à¤¸à¥à¤µà¤¾à¤—à¤¤ à¤¹à¥ˆà¥¤ à¤­à¤¾à¤°à¤¤à¥€à¤¯ à¤•à¤¾à¤¨à¥‚à¤¨ à¤•à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚ à¤•à¥‹à¤ˆ à¤­à¥€ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤ªà¥‚à¤›à¥‡à¤‚à¥¤',
+  },
+  mr: {
+    appName: 'à¤•à¥‡à¤¸à¤†à¤¯à¤•à¥à¤¯à¥‚',
+    tagline: 'AI-à¤šà¤¾à¤²à¤¿à¤¤ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤œà¥à¤žà¤¾à¤¨',
+    home: 'à¤®à¥à¤–à¤ªà¥ƒà¤·à¥à¤ ',
+    aiAssistant: 'AI à¤¸à¤¹à¤¾à¤¯à¥à¤¯à¤•',
+    firDraft: 'FIR à¤®à¤¸à¥à¤¦à¤¾',
+    lawExplorer: 'à¤•à¤¾à¤¯à¤¦à¤¾ à¤¶à¥‹à¤§à¤•',
+    legalNews: 'à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤¬à¤¾à¤¤à¤®à¥à¤¯à¤¾',
+    education: 'à¤¶à¤¿à¤•à¥à¤·à¤£',
+    dashboard: 'à¤¡à¥…à¤¶à¤¬à¥‹à¤°à¥à¤¡',
+    history: 'à¤‡à¤¤à¤¿à¤¹à¤¾à¤¸',
+    settings: 'à¤¸à¥‡à¤Ÿà¤¿à¤‚à¤—à¥à¤œ',
+    signIn: 'à¤¸à¤¾à¤‡à¤¨ à¤‡à¤¨',
+    signOut: 'à¤¸à¤¾à¤‡à¤¨ à¤†à¤‰à¤Ÿ',
+    createAccount: 'à¤–à¤¾à¤¤à¥‡ à¤¤à¤¯à¤¾à¤° à¤•à¤°à¤¾',
+    askQuery: 'à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤ªà¥à¤°à¤¶à¥à¤¨ à¤µà¤¿à¤šà¤¾à¤°à¤¾',
+    queryPlaceholder: 'à¤¤à¥à¤®à¤šà¤¾ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤ªà¥à¤°à¤¶à¥à¤¨ à¤Ÿà¤¾à¤‡à¤ª à¤•à¤°à¤¾...',
+    sendButton: 'à¤ªà¤¾à¤ à¤µà¤¾',
+    generateFIR: 'FIR à¤®à¤¸à¥à¤¦à¤¾ à¤¤à¤¯à¤¾à¤° à¤•à¤°à¤¾',
+    downloadPDF: 'PDF à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¤¾',
+    clearChat: 'à¤šà¥…à¤Ÿ à¤¸à¤¾à¤« à¤•à¤°à¤¾',
+    noHistory: 'à¤…à¤¦à¥à¤¯à¤¾à¤ª à¤‡à¤¤à¤¿à¤¹à¤¾à¤¸ à¤¨à¤¾à¤¹à¥€',
+    loading: 'à¤²à¥‹à¤¡ à¤¹à¥‹à¤¤ à¤†à¤¹à¥‡...',
+    disclaimer: 'âš ï¸ à¤•à¥‡à¤¸à¤†à¤¯à¤•à¥à¤¯à¥‚ à¤«à¤•à¥à¤¤ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤®à¤¾à¤¹à¤¿à¤¤à¥€ à¤¦à¥‡à¤¤à¥‡, à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤¸à¤²à¥à¤²à¤¾ à¤¨à¤¾à¤¹à¥€à¥¤',
+    welcomeMessage: 'ðŸ‘‹ à¤•à¥‡à¤¸à¤†à¤¯à¤•à¥à¤¯à¥‚à¤®à¤§à¥à¤¯à¥‡ à¤†à¤ªà¤²à¥‡ à¤¸à¥à¤µà¤¾à¤—à¤¤ à¤†à¤¹à¥‡à¥¤ à¤­à¤¾à¤°à¤¤à¥€à¤¯ à¤•à¤¾à¤¯à¤¦à¥à¤¯à¤¾à¤¬à¤¦à¥à¤¦à¤² à¤•à¥‹à¤£à¤¤à¤¾à¤¹à¥€ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤µà¤¿à¤šà¤¾à¤°à¤¾à¥¤',
+  },
+};
+
+const LanguageContext = createContext();
+
+export const LanguageProvider = ({ children }) => {
+  const [uiLanguage, setUiLanguage] = useState(() => {
+    return localStorage.getItem('caseiq_ui_language') || 'en';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('caseiq_ui_language', uiLanguage);
+  }, [uiLanguage]);
+
+  const t = (key) => translations[uiLanguage]?.[key] || translations.en[key] || key;
+
+  return (
+    <LanguageContext.Provider value={{ uiLanguage, setUiLanguage, t, translations }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = () => useContext(LanguageContext);
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\context\QueryContext.jsx =====
+
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\context\SettingsContext.jsx =====
+
+import { createContext, useContext, useState } from "react";
+
+const SettingsContext = createContext();
+
+export const SettingsProvider = ({ children }) => {
+  const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState("English");
+  const [fontSize, setFontSize] = useState(16);
+
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => !prev);
+  };
+
+  return (
+    <SettingsContext.Provider
+      value={{
+        darkMode,
+        toggleDarkMode,
+        language,
+        setLanguage,
+        fontSize,
+        setFontSize,
+      }}
+    >
+      {children}
+    </SettingsContext.Provider>
+  );
+};
+
+export const useSettings = () => useContext(SettingsContext);
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\hooks\useAccessibility.js =====
+
+import { useState, useEffect } from "react";
+
+const useAccessibility = () => {
+  const [darkMode, setDarkMode] = useState(false);
+  const [fontSize, setFontSize] = useState(16);
+
+  useEffect(() => {
+    const savedDark = localStorage.getItem("caseiq_dark");
+    const savedFont = localStorage.getItem("caseiq_font");
+
+    if (savedDark) setDarkMode(JSON.parse(savedDark));
+    if (savedFont) setFontSize(Number(savedFont));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("caseiq_dark", darkMode);
+  }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem("caseiq_font", fontSize);
+  }, [fontSize]);
+
+  return {
+    darkMode,
+    setDarkMode,
+    fontSize,
+    setFontSize,
+  };
+};
+
+export default useAccessibility;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\hooks\useLanguage.js =====
+
+import { useState, useEffect } from "react";
+
+const useLanguage = () => {
+  const [language, setLanguage] = useState("English");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("caseiq_language");
+    if (saved) setLanguage(saved);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("caseiq_language", language);
+  }, [language]);
+
+  return { language, setLanguage };
+};
+
+export default useLanguage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\hooks\useQuery.js =====
+
+import { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+
+const useQuery = () => {
+  const { user } = useAuth();
+  const storageKey = user
+    ? `caseiq_chat_${user.email}`
+    : "caseiq_chat";
+
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load messages
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      setMessages(JSON.parse(saved));
+    } else {
+      setMessages([
+        {
+          sender: "ai",
+          text: "Welcome to CaseIQ AI Assistant.",
+        },
+      ]);
+    }
+  }, [storageKey]);
+
+  // Save messages
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(messages));
+  }, [messages, storageKey]);
+
+  const sendQuery = (text) => {
+    const userMessage = { sender: "user", text };
+    setMessages((prev) => [...prev, userMessage]);
+    setLoading(true);
+
+    // Simulated AI
+    setTimeout(() => {
+      const aiMessage = {
+        sender: "ai",
+        text:
+          "This is a simulated legal knowledge response.",
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+      setLoading(false);
+    }, 1000);
+  };
+
+  return { messages, loading, sendQuery };
+};
+
+export default useQuery;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\hooks\useSpeechInput.js =====
+
+import { useState, useEffect, useRef } from 'react';
+
+const useSpeechInput = (onResult) => {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setSupported(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-IN';
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        onResult(transcript);
+        setListening(false);
+      };
+
+      recognition.onerror = () => setListening(false);
+      recognition.onend = () => setListening(false);
+      recognitionRef.current = recognition;
+    }
+  }, [onResult]);
+
+  const startListening = (language = 'en') => {
+    if (!recognitionRef.current) return;
+    const langMap = { en: 'en-IN', hi: 'hi-IN', mr: 'mr-IN', ta: 'ta-IN' };
+    recognitionRef.current.lang = langMap[language] || 'en-IN';
+    recognitionRef.current.start();
+    setListening(true);
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
+
+  return { listening, supported, startListening, stopListening };
+};
+
+export default useSpeechInput;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\ChatPage.jsx =====
+
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import AIResponseWindow from '../components/ai/AIResponseWindow';
+import QueryInput from '../components/ai/QueryInput';
+import LawReferenceViewer from '../components/law/LawReferenceViewer';
+import PageTransition from '../components/ui/PageTransition';
+import { legalAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
+import toast from 'react-hot-toast';
+
+const GUEST_STORAGE_KEY = 'caseiq_chat_guest';
+
+const SUGGESTED_QUERIES = [
+  { label: 'ðŸš¨ Rights during arrest', query: 'What are my rights when I am arrested by police in India?' },
+  { label: 'ðŸ“„ How to file FIR', query: 'What is the procedure to file an FIR at a police station?' },
+  { label: 'ðŸ’¼ Employer not paying salary', query: 'My employer has not paid salary for 3 months. What legal action can I take?' },
+  { label: 'ðŸ  Property dispute', query: 'My landlord is refusing to return my security deposit. What are my legal options?' },
+  { label: 'ðŸ“± Cybercrime victim', query: 'I was cheated online and lost money. How do I report cybercrime in India?' },
+  { label: 'âš–ï¸ Bail process', query: 'How does bail work in India and what are the types of bail available?' },
+  { label: 'ðŸ‘© Domestic violence', query: 'What legal protections are available for women facing domestic violence in India?' },
+  { label: 'ðŸš— Road accident rights', query: 'I was injured in a road accident. What compensation am I entitled to under Indian law?' },
+];
+
+const ChatPage = () => {
+  const { isAuthenticated } = useAuth();
+  const { language } = useSettings();
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [latestLaws, setLatestLaws] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  const langMap = { English: 'en', Hindi: 'hi', Marathi: 'mr', Tamil: 'ta' };
+
+  useEffect(() => {
+    const saved = localStorage.getItem(GUEST_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setMessages(parsed);
+        if (parsed.length > 1) setShowSuggestions(false);
+        const last = parsed[parsed.length - 1];
+        if (last?.laws) setLatestLaws(last.laws);
+      } catch {}
+    } else {
+      setMessages([{
+        sender: 'ai',
+        text: 'ðŸ‘‹ Welcome to CaseIQ Legal Assistant.\n\nAsk any legal question about Indian law. I will provide structured, factual information based on BNS, BNSS, IPC, and CrPC.\n\nâš–ï¸ This platform provides legal knowledge, not legal advice.',
+      }]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  const handleSend = useCallback(async (text) => {
+    if (!text.trim()) return;
+    setShowSuggestions(false);
+    setMessages((prev) => [...prev, { sender: 'user', text }]);
+    setLoading(true);
+
+    try {
+      const res = await legalAPI.submitQuery(text, langMap[language] || 'en');
+      const data = res.data;
+
+      const laws = (data.legal_sections || []).map((s) => ({
+        section: `${s.act} ${s.section}`,
+        title: s.title,
+        description: s.relevance,
+        punishment: `Confidence: ${Math.round((s.confidence || 0) * 100)}%`,
+      }));
+
+      const aiMessage = {
+        sender: 'ai',
+        text: `${data.factual_summary}\n\n---\n${data.disclaimer}`,
+        laws,
+        confidence: data.confidence_score,
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+      setLatestLaws(laws);
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || 'Failed to process query. Please try again.';
+      toast.error(errorMsg);
+      setMessages((prev) => [...prev, { sender: 'ai', text: `âŒ ${errorMsg}` }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [language]);
+
+  useEffect(() => {
+    const pending = localStorage.getItem('caseiq_pending_query');
+    if (pending) {
+      handleSend(pending);
+      localStorage.removeItem('caseiq_pending_query');
+    }
+  }, [handleSend]);
+
+  const clearChat = () => {
+    localStorage.removeItem(GUEST_STORAGE_KEY);
+    setMessages([{
+      sender: 'ai',
+      text: 'ðŸ‘‹ Welcome to CaseIQ Legal Assistant.\n\nAsk any legal question about Indian law.\n\nâš–ï¸ This platform provides legal knowledge, not legal advice.',
+    }]);
+    setLatestLaws([]);
+    setShowSuggestions(true);
+  };
+
+  return (
+    <PageTransition>
+      <div className="max-w-5xl mx-auto space-y-8 pb-12">
+
+        {/* Header */}
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <h2 className="text-4xl font-bold text-[#443627]">AI Legal Assistant</h2>
+            <p className="text-[#725E54]">Powered by Groq Llama 3.3 â€” Indian Law Specialist</p>
+          </div>
+          {messages.length > 1 && (
+            <button
+              onClick={clearChat}
+              className="text-sm text-slate-400 hover:text-red-500 transition border border-slate-200 px-3 py-1.5 rounded-lg hover:border-red-200"
+            >
+              Clear Chat
+            </button>
+          )}
+        </div>
+
+        {!isAuthenticated && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-3 text-sm flex items-center gap-2"
+          >
+            ðŸ’¡ Sign in to save your query history and access it from any device
+          </motion.div>
+        )}
+
+        {/* Suggested Queries */}
+        <AnimatePresence>
+          {showSuggestions && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-3"
+            >
+              <p className="text-sm font-medium text-[#725E54]">ðŸ’¡ Common legal questions:</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {SUGGESTED_QUERIES.map((sq, i) => (
+                  <motion.button
+                    key={i}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => handleSend(sq.query)}
+                    disabled={loading}
+                    className="text-left text-xs bg-white border border-[#D5DCF9] text-[#443627] px-3 py-2.5 rounded-xl hover:bg-[#D5DCF9] hover:border-[#A7B0CA] transition shadow-sm disabled:opacity-50"
+                  >
+                    {sq.label}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Chat Window */}
+        <div className="bg-gradient-to-br from-[#D5DCF9]/60 to-[#8EDCE6]/60 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/40">
+          <AIResponseWindow messages={messages} loading={loading} />
+          <div className="mt-4">
+            <QueryInput onSend={handleSend} disabled={loading} />
+          </div>
+        </div>
+
+        {/* Law References */}
+        <AnimatePresence>
+          {latestLaws.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-br from-[#A7B0CA]/60 to-[#D5DCF9]/60 backdrop-blur-md rounded-3xl shadow-lg p-6 border border-white/40"
+            >
+              <h3 className="text-xl font-semibold text-[#443627] mb-4">
+                ðŸ“š Relevant Legal Sections
+              </h3>
+              <LawReferenceViewer laws={latestLaws} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </PageTransition>
+  );
+};
+
+export default ChatPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\DashboardPage.jsx =====
+
+import { useEffect, useState } from 'react';
+import RecentSearches from '../components/dashboard/RecentSearches';
+import HistoryPanel from '../components/dashboard/HistoryPanel';
+import { legalAPI, complaintsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+const DashboardPage = () => {
+  const { isAuthenticated, user } = useAuth();
+  const [chatCount, setChatCount] = useState(0);
+  const [firCount, setFirCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setLoading(true);
+      Promise.allSettled([
+        legalAPI.getHistory(),
+        complaintsAPI.getHistory(),
+      ]).then(([chatRes, firRes]) => {
+        if (chatRes.status === 'fulfilled') setChatCount(chatRes.value.data.count || 0);
+        if (firRes.status === 'fulfilled') setFirCount(firRes.value.data.count || 0);
+      }).finally(() => setLoading(false));
+    } else {
+      const chats = JSON.parse(localStorage.getItem('caseiq_chat_guest')) || [];
+      const firs = JSON.parse(localStorage.getItem('caseiq_fir')) || [];
+      setChatCount(chats.filter((m) => m.sender === 'user').length);
+      setFirCount(firs.length);
+    }
+  }, [isAuthenticated]);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-14 pb-16">
+
+      <div className="space-y-3">
+        <h2 className="text-4xl font-bold text-[#443627]">Dashboard Overview</h2>
+        <p className="text-[#725E54] text-lg">
+          {isAuthenticated
+            ? `Welcome back, ${user?.full_name || user?.email}`
+            : 'Track your legal queries and FIR drafting activity.'}
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="relative overflow-hidden bg-[#D5DCF9] rounded-3xl p-8 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <div className="absolute -top-6 -right-6 w-32 h-32 bg-[#8EDCE6] opacity-30 rounded-full blur-2xl" />
+          <h3 className="text-sm uppercase tracking-wide text-[#725E54] font-medium">Total Queries</h3>
+          <p className="text-5xl font-bold text-[#443627] mt-4">
+            {loading ? 'â€”' : chatCount}
+          </p>
+          <p className="text-sm text-[#725E54] mt-2">Legal questions asked</p>
+        </div>
+
+        <div className="relative overflow-hidden bg-[#8EDCE6] rounded-3xl p-8 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+          <div className="absolute -top-6 -right-6 w-32 h-32 bg-[#D5DCF9] opacity-30 rounded-full blur-2xl" />
+          <h3 className="text-sm uppercase tracking-wide text-[#443627] font-medium">FIR Drafts</h3>
+          <p className="text-5xl font-bold text-[#443627] mt-4">
+            {loading ? 'â€”' : firCount}
+          </p>
+          <p className="text-sm text-[#443627]/80 mt-2">FIR documents generated</p>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="bg-white rounded-3xl p-6 shadow-md border border-[#D5DCF9] hover:shadow-lg transition">
+          <RecentSearches />
+        </div>
+        <div className="bg-white rounded-3xl p-6 shadow-md border border-[#D5DCF9] hover:shadow-lg transition">
+          <HistoryPanel />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\EducationPage.jsx =====
+
+import { useEffect, useState } from 'react';
+import { awarenessAPI } from '../services/api';
+
+const EducationPage = () => {
+  const [apiContent, setApiContent] = useState([]);
+
+  useEffect(() => {
+    awarenessAPI.getEducation()
+      .then((res) => setApiContent(res.data.results || []))
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-16 pb-20">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold text-[#443627]">Legal Awareness & Education</h1>
+        <p className="text-lg text-[#725E54] max-w-3xl mx-auto">
+          Understand your rights, procedures, and protections in clear and practical language.
+        </p>
+      </div>
+
+      {apiContent.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-2xl font-semibold text-[#443627]">ðŸ“° Latest Legal Guides</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            {apiContent.map((item) => (
+              <div key={item.id} className="bg-white rounded-2xl p-6 shadow border border-[#D5DCF9] hover:shadow-lg transition">
+                <span className="text-xs bg-[#D5DCF9] text-[#443627] px-2 py-1 rounded-full font-medium">{item.content_type}</span>
+                <h3 className="font-semibold text-[#443627] text-lg mt-3 mb-2">{item.title}</h3>
+                <p className="text-sm text-[#725E54]">{item.summary}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-10">
+        <SectionCard title="Know Your Fundamental Rights" bg="bg-gradient-to-br from-[#D5DCF9] to-[#A7B0CA]" icon="âš–ï¸">
+          <ul className="space-y-2">
+            <li><strong>Right to Equality:</strong> Equal protection under law.</li>
+            <li><strong>Right to Freedom:</strong> Speech, expression, movement.</li>
+            <li><strong>Right Against Exploitation:</strong> Protection from forced labour.</li>
+            <li><strong>Right to Constitutional Remedies:</strong> Approach courts if violated.</li>
+          </ul>
+        </SectionCard>
+        <SectionCard title="Rights During Arrest" bg="bg-gradient-to-br from-[#8EDCE6] to-[#A7B0CA]" icon="ðŸš¨">
+          <ul className="space-y-2">
+            <li>Be informed of reason for arrest.</li>
+            <li>Right to remain silent.</li>
+            <li>Right to consult a lawyer.</li>
+            <li>Produced before magistrate within 24 hours.</li>
+          </ul>
+        </SectionCard>
+        <SectionCard title="FIR Filing Process" bg="bg-gradient-to-br from-[#A7B0CA] to-[#D5DCF9]" icon="ðŸ“„">
+          <ol className="space-y-2 list-decimal pl-5">
+            <li>Visit nearest police station.</li>
+            <li>Explain incident clearly.</li>
+            <li>Ensure FIR is read before signing.</li>
+            <li>Request free FIR copy.</li>
+          </ol>
+        </SectionCard>
+        <SectionCard title="What is Zero FIR?" bg="bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6]" icon="ðŸ“">
+          <p>Zero FIR allows filing a complaint at any police station regardless of jurisdiction.</p>
+        </SectionCard>
+        <SectionCard title="Bail Basics" bg="bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9]" icon="ðŸ”“">
+          <ul className="space-y-2">
+            <li><strong>Bailable:</strong> Bail is a right.</li>
+            <li><strong>Non-Bailable:</strong> Court decides.</li>
+            <li>Anticipatory bail before arrest.</li>
+          </ul>
+        </SectionCard>
+        <SectionCard title="Protection for Women & Children" bg="bg-gradient-to-br from-[#A7B0CA] to-[#8EDCE6]" icon="ðŸ›¡ï¸">
+          <ul className="space-y-2">
+            <li>Female officer mandatory for arrest of women.</li>
+            <li>POCSO for child protection.</li>
+            <li>Protection against domestic violence.</li>
+          </ul>
+        </SectionCard>
+        <SectionCard title="Key Concepts in BNS / BNSS" bg="bg-gradient-to-br from-[#D5DCF9] to-[#A7B0CA]" icon="ðŸ“š">
+          <ul className="space-y-2">
+            <li>Cognizable vs Non-Cognizable</li>
+            <li>Compoundable vs Non-Compoundable</li>
+            <li>Investigation & Charge Sheet</li>
+            <li>Trial & Appeal Structure</li>
+          </ul>
+        </SectionCard>
+        <SectionCard title="Emergency Contacts" bg="bg-gradient-to-br from-[#8EDCE6] to-[#A7B0CA]" icon="ðŸ“ž">
+          <ul className="space-y-2">
+            <li><strong>Police:</strong> 100</li>
+            <li><strong>Women Helpline:</strong> 181</li>
+            <li><strong>Child Helpline:</strong> 1098</li>
+            <li><strong>National Emergency:</strong> 112</li>
+          </ul>
+        </SectionCard>
+      </div>
+    </div>
+  );
+};
+
+const SectionCard = ({ title, children, bg, icon }) => (
+  <div className={`${bg} rounded-3xl p-8 shadow-lg hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 text-[#443627]`}>
+    <div className="flex items-center gap-3 mb-4">
+      <span className="text-3xl">{icon}</span>
+      <h2 className="text-xl font-semibold tracking-wide">{title}</h2>
+    </div>
+    <div className="text-[#443627]/90 leading-relaxed">{children}</div>
+  </div>
+);
+
+export default EducationPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\FIRDraftPage.jsx =====
+
+import { useState, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
+import { motion, AnimatePresence } from 'framer-motion';
+import FIRWizard from '../components/fir/FIRWizard';
+import FIRPreview from '../components/fir/FIRPreview';
+import FIRDownload from '../components/fir/FIRDownload';
+import PageTransition from '../components/ui/PageTransition';
+import { complaintsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
+
+const FIRDraftPage = () => {
+  const { isAuthenticated } = useAuth();
+  const [generatedFIR, setGeneratedFIR] = useState(null);
+  const [backendDraft, setBackendDraft] = useState(null);
+  const [complaintId, setComplaintId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const printRef = useRef();
+
+  const handlePrint = useReactToPrint({ content: () => printRef.current });
+
+  const handleGenerate = async (formData) => {
+    setGeneratedFIR(formData);
+    setError('');
+    setLoading(true);
+
+    const existing = JSON.parse(localStorage.getItem('caseiq_fir')) || [];
+    localStorage.setItem('caseiq_fir', JSON.stringify([...existing, formData]));
+
+    try {
+      const res = await complaintsAPI.generateDraft({
+        complaint_type: 'fir',
+        complainant_name: formData.fullName,
+        complainant_address: formData.address,
+        complainant_phone: formData.contact,
+        police_station_name: formData.policeStation,
+        incident_date: formData.incidentDate,
+        incident_location: formData.incidentLocation,
+        incident_description: formData.description,
+        accused_details: `${formData.suspectName || ''} â€” ${formData.suspectDescription || ''}`.trim(),
+        witnesses: formData.witnessName ? `${formData.witnessName} (${formData.witnessContact || 'No contact'})` : '',
+        evidence_description: formData.evidenceDetails || '',
+        relief_sought: 'Registration of FIR, arrest of accused, and necessary legal action.',
+        applicable_sections: formData.applicableSection ? [formData.applicableSection] : [],
+        language: 'en',
+      });
+      setBackendDraft(res.data.generated_draft);
+      setComplaintId(res.data.complaint_id);
+      toast.success('FIR draft generated successfully!');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'AI draft generation failed. Basic PDF still available.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <PageTransition>
+      <div className="max-w-5xl mx-auto space-y-12 pb-16">
+
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <h2 className="text-4xl font-bold text-[#443627]">FIR / Complaint Draft Generator</h2>
+          <p className="text-lg text-[#725E54] max-w-2xl mx-auto">
+            Complete the step-by-step form below. Our AI will generate a legally structured FIR draft.
+          </p>
+        </div>
+
+        {/* Wizard Form */}
+        {!generatedFIR && (
+          <div className="bg-white rounded-3xl p-10 shadow-xl border border-[#D5DCF9]">
+            <FIRWizard onGenerate={handleGenerate} />
+          </div>
+        )}
+
+        {/* Loading */}
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-4 py-12"
+            >
+              <div className="w-14 h-14 border-4 border-[#443627] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[#725E54] font-medium">AI is generating your FIR draft...</p>
+              <p className="text-sm text-slate-400">Analysing incident details and mapping to applicable BNS sections</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Error */}
+        {error && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 text-sm">
+            âš ï¸ {error}
+          </div>
+        )}
+
+        {/* Preview */}
+        <AnimatePresence>
+          {generatedFIR && !loading && (
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* AI Draft */}
+              {backendDraft && (
+                <div className="bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6]/40 rounded-3xl p-8 border border-[#A7B0CA] shadow-lg">
+                  <h4 className="font-bold text-[#443627] mb-4 text-lg flex items-center gap-2">
+                    ðŸ¤– AI-Generated Legal Draft
+                  </h4>
+                  <div className="bg-white/70 rounded-2xl p-6 whitespace-pre-wrap text-sm text-[#443627] leading-relaxed font-mono">
+                    {backendDraft}
+                  </div>
+                </div>
+              )}
+
+              {/* Print View */}
+              <div ref={printRef} className="bg-white rounded-3xl p-10 shadow-xl border border-[#D5DCF9] print:shadow-none print:border-none">
+                <div className="hidden print:flex items-center justify-center gap-3 mb-8 pb-6 border-b">
+                  <span className="text-2xl font-bold text-[#443627]">CaseIQ</span>
+                  <span className="text-slate-400">|</span>
+                  <span className="text-slate-500 text-sm">AI-Powered Legal Knowledge Platform</span>
+                </div>
+                <FIRPreview data={generatedFIR} />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap justify-between items-center gap-4 bg-white rounded-2xl p-5 border border-[#D5DCF9] shadow">
+                <button
+                  onClick={() => { setGeneratedFIR(null); setBackendDraft(null); setComplaintId(null); }}
+                  className="border border-[#A7B0CA] text-[#443627] px-5 py-2.5 rounded-xl hover:bg-[#D5DCF9]/40 transition text-sm font-medium"
+                >
+                  â† Start New Draft
+                </button>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={handlePrint}
+                    className="bg-[#A7B0CA] text-white px-5 py-2.5 rounded-xl hover:opacity-90 transition text-sm font-medium shadow"
+                  >
+                    ðŸ–¨ï¸ Print
+                  </button>
+
+                  <FIRDownload data={generatedFIR} />
+
+                  {complaintId && (
+                    <button
+                      onClick={() => complaintsAPI.downloadPDF(complaintId, generatedFIR.fullName)}
+                      className="bg-[#443627] text-white px-5 py-2.5 rounded-xl hover:bg-[#725E54] transition text-sm font-medium shadow"
+                    >
+                      â¬‡ï¸ Professional PDF
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!isAuthenticated && (
+                <p className="text-center text-sm text-amber-600">
+                  ðŸ’¡ Sign in to save and access your FIR drafts from any device
+                </p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </PageTransition>
+  );
+};
+
+export default FIRDraftPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\HistoryPage.jsx =====
+
+import { useEffect, useState } from 'react';
+import { legalAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+const HistoryPage = () => {
+  const { isAuthenticated } = useAuth();
+  const [chatHistory, setChatHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setLoading(true);
+      legalAPI.getHistory()
+        .then((res) => setChatHistory(res.data.results || []))
+        .catch(() => loadFromLocal())
+        .finally(() => setLoading(false));
+    } else {
+      loadFromLocal();
+    }
+  }, [isAuthenticated]);
+
+  const loadFromLocal = () => {
+    const saved = localStorage.getItem('caseiq_chat_guest');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const userMsgs = parsed.filter((m) => m.sender === 'user');
+        setChatHistory(userMsgs.map((m, i) => ({
+          id: i,
+          original_query: m.text,
+          created_at: new Date().toISOString(),
+          status: 'local',
+        })));
+      } catch {}
+    }
+  };
+
+  const clearLocalHistory = () => {
+    localStorage.removeItem('caseiq_chat_guest');
+    setChatHistory([]);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 pb-16">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold text-[#443627]">Query History</h2>
+        {!isAuthenticated && chatHistory.length > 0 && (
+          <button onClick={clearLocalHistory}
+            className="bg-red-100 text-red-700 px-4 py-2 rounded-xl hover:bg-red-200 transition text-sm">
+            Clear History
+          </button>
+        )}
+      </div>
+
+      {!isAuthenticated && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 text-sm">
+          ðŸ’¡ Sign in to access your full query history across all devices.
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <div className="w-8 h-8 border-4 border-[#443627] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : chatHistory.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center text-[#725E54] shadow border border-[#D5DCF9]">
+          No query history yet. Ask your first legal question!
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {chatHistory.map((item, index) => (
+            <div key={item.id || index}
+              className="bg-white rounded-2xl p-5 shadow border border-[#D5DCF9] hover:shadow-md transition">
+              <p className="text-[#443627] font-medium">{item.original_query}</p>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-xs text-[#725E54]">
+                  {new Date(item.created_at).toLocaleDateString('en-IN', {
+                    day: 'numeric', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                  })}
+                </span>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  item.status === 'processed'
+                    ? 'bg-green-100 text-green-700'
+                    : item.status === 'local'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {item.status === 'local' ? 'Guest' : item.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default HistoryPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\HomePage.jsx =====
+
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const HomePage = () => {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [recentQueries, setRecentQueries] = useState([]);
+
+  useEffect(() => {
+    const savedChat = JSON.parse(localStorage.getItem("caseiq_chat")) || [];
+    const userMessages = savedChat
+      .filter((msg) => msg.sender === "user")
+      .map((msg) => msg.text)
+      .slice(-4)
+      .reverse();
+
+    setRecentQueries(userMessages);
+  }, []);
+
+  const handleSubmit = () => {
+    if (!query.trim()) return;
+    localStorage.setItem("caseiq_pending_query", query);
+    setQuery("");
+    navigate("/chat");
+  };
+
+  const handleRecentClick = (text) => {
+    localStorage.setItem("caseiq_pending_query", text);
+    navigate("/chat");
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-16 pb-20">
+
+      {/* HERO */}
+      <div className="text-center space-y-6">
+        <h1 className="text-4xl md:text-5xl font-bold text-[#443627]">
+          Welcome to CaseIQ
+        </h1>
+
+        <p className="text-lg text-[#725E54] max-w-2xl mx-auto">
+          A calm and intelligent legal companion helping you understand your
+          rights, draft FIRs, and explore Indian criminal law.
+        </p>
+      </div>
+
+      {/* FEATURE CARDS */}
+      <div className="grid md:grid-cols-4 gap-6">
+
+        <div
+          onClick={() => navigate("/chat")}
+          className="bg-[#8EDCE6] hover:scale-[1.03] transition-transform duration-300 rounded-2xl p-6 cursor-pointer shadow-md"
+        >
+          <div className="text-3xl mb-3">ðŸ’¬</div>
+          <h3 className="font-semibold text-[#443627]">Ask a Query</h3>
+          <p className="text-sm text-[#443627]/80 mt-2">
+            Instant legal explanations powered by AI.
+          </p>
+        </div>
+
+        <div
+          onClick={() => navigate("/fir-draft")}
+          className="bg-[#D5DCF9] hover:scale-[1.03] transition-transform duration-300 rounded-2xl p-6 cursor-pointer shadow-md"
+        >
+          <div className="text-3xl mb-3">ðŸ“„</div>
+          <h3 className="font-semibold text-[#443627]">Draft FIR</h3>
+          <p className="text-sm text-[#443627]/80 mt-2">
+            Generate structured FIR drafts easily.
+          </p>
+        </div>
+
+        <div
+          onClick={() => navigate("/education")}
+          className="bg-[#A7B0CA] hover:scale-[1.03] transition-transform duration-300 rounded-2xl p-6 cursor-pointer shadow-md"
+        >
+          <div className="text-3xl mb-3">ðŸ›¡ï¸</div>
+          <h3 className="font-semibold text-white">Know Your Rights</h3>
+          <p className="text-sm text-white/90 mt-2">
+            Understand your constitutional protections.
+          </p>
+        </div>
+
+        <div
+          onClick={() => navigate("/education")}
+          className="bg-[#725E54] hover:scale-[1.03] transition-transform duration-300 rounded-2xl p-6 cursor-pointer shadow-md"
+        >
+          <div className="text-3xl mb-3">ðŸ“š</div>
+          <h3 className="font-semibold text-white">Legal Learning</h3>
+          <p className="text-sm text-white/90 mt-2">
+            Learn BNS / BNSS concepts simply.
+          </p>
+        </div>
+      </div>
+
+      {/* QUERY SECTION */}
+      <div className="bg-white rounded-3xl p-8 shadow-lg border border-[#D5DCF9]">
+        <h2 className="text-xl font-semibold text-[#443627] mb-4">
+          Ask Your Legal Query
+        </h2>
+
+        <textarea
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Type your legal question here..."
+          rows="4"
+          className="w-full rounded-xl border border-[#A7B0CA] focus:ring-2 focus:ring-[#8EDCE6] focus:outline-none p-4 bg-[#F8FAFC] transition"
+        />
+
+        <div className="flex justify-between items-center mt-4">
+          <button
+            onClick={handleSubmit}
+            className="bg-[#443627] text-white px-6 py-2 rounded-xl hover:bg-[#725E54] transition"
+          >
+            Submit Query
+          </button>
+
+          <span className="text-sm text-[#725E54]">
+            Language: English
+          </span>
+        </div>
+      </div>
+
+      {/* BOTTOM SECTION */}
+      <div className="grid md:grid-cols-2 gap-8">
+
+        {/* RECENT QUERIES */}
+        <div className="bg-[#F4F6FA] rounded-2xl p-6 shadow-md border border-[#D5DCF9]">
+          <h3 className="font-semibold text-[#443627] mb-4">
+            Recent Queries
+          </h3>
+
+          {recentQueries.length === 0 ? (
+            <p className="text-sm text-[#725E54]">
+              No recent queries yet.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {recentQueries.map((item, index) => (
+                <li
+                  key={index}
+                  onClick={() => handleRecentClick(item)}
+                  className="p-3 rounded-lg bg-white hover:bg-[#D5DCF9] transition cursor-pointer text-[#443627]"
+                >
+                  {item}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* QUICK ACTIONS */}
+        <div className="bg-[#F4F6FA] rounded-2xl p-6 shadow-md border border-[#D5DCF9] space-y-4">
+          <h3 className="font-semibold text-[#443627]">
+            Quick Actions
+          </h3>
+
+          <button
+            onClick={() => navigate("/fir-draft")}
+            className="w-full bg-[#8EDCE6] text-[#443627] py-2 rounded-xl hover:opacity-90 transition"
+          >
+            Draft a New FIR
+          </button>
+
+          <button
+            onClick={() => navigate("/education")}
+            className="w-full bg-[#A7B0CA] text-white py-2 rounded-xl hover:opacity-90 transition"
+          >
+            Learn About Your Rights
+          </button>
+
+          <button
+            onClick={() => navigate("/education")}
+            className="w-full bg-[#443627] text-white py-2 rounded-xl hover:bg-[#725E54] transition"
+          >
+            Understand BNS / BNSS Basics
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\LawExplorerPage.jsx =====
+
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { legalAPI } from '../services/api';
+import { SkeletonList } from '../components/ui/Skeleton';
+import { Search, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
+
+const ACTS = [
+  { value: '', label: 'All Acts' },
+  { value: 'BNS', label: 'BNS 2023' },
+  { value: 'BNSS', label: 'BNSS 2023' },
+  { value: 'BSA', label: 'BSA 2023' },
+  { value: 'IPC', label: 'IPC 1860' },
+  { value: 'CrPC', label: 'CrPC 1973' },
+];
+
+const ACT_COLORS = {
+  BNS: 'bg-[#D5DCF9] text-[#443627]',
+  BNSS: 'bg-[#8EDCE6] text-[#443627]',
+  BSA: 'bg-[#A7B0CA] text-white',
+  IPC: 'bg-[#725E54] text-white',
+  CrPC: 'bg-[#443627] text-white',
+};
+
+const LawExplorerPage = () => {
+  const [search, setSearch] = useState('');
+  const [selectedAct, setSelectedAct] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['law-sections', selectedAct, search, page],
+    queryFn: () => legalAPI.getSections({
+      act: selectedAct || undefined,
+      search: search || undefined,
+      page,
+      page_size: 20,
+    }),
+    select: (res) => res.data,
+    keepPreviousData: true,
+  });
+
+  const sections = data?.results || [];
+  const totalCount = data?.count || 0;
+  const totalPages = Math.ceil(totalCount / 20);
+
+  const handleSearch = (e) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
+
+  const handleActChange = (act) => {
+    setSelectedAct(act);
+    setPage(1);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 pb-16">
+
+      {/* Header */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <BookOpen className="text-[#443627]" size={28} />
+          <h1 className="text-4xl font-bold text-[#443627]">Law Explorer</h1>
+        </div>
+        <p className="text-[#725E54]">
+          Browse all {totalCount > 0 ? totalCount.toLocaleString() : '1,641'} sections from BNS, BNSS, BSA, IPC and CrPC.
+        </p>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-2xl p-5 shadow border border-[#D5DCF9] space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search sections by title, number, or keyword..."
+              value={search}
+              onChange={handleSearch}
+              className="w-full pl-9 pr-4 py-3 rounded-xl border border-[#A7B0CA] focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] bg-[#F8FAFC]"
+            />
+          </div>
+        </div>
+
+        {/* Act Filter Pills */}
+        <div className="flex flex-wrap gap-2">
+          {ACTS.map((act) => (
+            <button
+              key={act.value}
+              onClick={() => handleActChange(act.value)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+                selectedAct === act.value
+                  ? 'bg-[#443627] text-white shadow-md'
+                  : 'bg-slate-100 text-slate-600 hover:bg-[#D5DCF9] hover:text-[#443627]'
+              }`}
+            >
+              {act.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Results count */}
+      {!isLoading && (
+        <p className="text-sm text-[#725E54]">
+          Showing {sections.length} of {totalCount} sections
+          {search && ` matching "${search}"`}
+          {selectedAct && ` in ${selectedAct}`}
+        </p>
+      )}
+
+      {/* Sections List */}
+      {isLoading ? (
+        <SkeletonList count={8} />
+      ) : sections.length === 0 ? (
+        <div className="bg-white rounded-2xl p-10 text-center border border-[#D5DCF9] shadow">
+          <p className="text-4xl mb-3">ðŸ”</p>
+          <p className="text-[#443627] font-semibold">No sections found</p>
+          <p className="text-[#725E54] text-sm mt-1">Try a different search term or act filter.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sections.map((section) => (
+            <SectionCard
+              key={section.id}
+              section={section}
+              expanded={expandedId === section.id}
+              onToggle={() => setExpandedId(expandedId === section.id ? null : section.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-3 pt-4">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-4 py-2 rounded-xl bg-white border border-[#D5DCF9] text-[#443627] disabled:opacity-40 hover:bg-[#D5DCF9] transition"
+          >
+            â† Previous
+          </button>
+          <span className="px-4 py-2 rounded-xl bg-[#443627] text-white text-sm">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-4 py-2 rounded-xl bg-white border border-[#D5DCF9] text-[#443627] disabled:opacity-40 hover:bg-[#D5DCF9] transition"
+          >
+            Next â†’
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SectionCard = ({ section, expanded, onToggle }) => (
+  <div className="bg-white rounded-2xl shadow border border-[#D5DCF9] overflow-hidden hover:shadow-md transition">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between p-5 text-left"
+    >
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <span className={`text-xs font-bold px-2 py-1 rounded-lg shrink-0 ${ACT_COLORS[section.act] || 'bg-slate-100 text-slate-600'}`}>
+          {section.act}
+        </span>
+        <span className="font-semibold text-[#443627] shrink-0">Â§ {section.section_number}</span>
+        <span className="text-[#725E54] text-sm truncate">{section.section_title}</span>
+      </div>
+      {expanded
+        ? <ChevronUp size={16} className="text-[#725E54] shrink-0" />
+        : <ChevronDown size={16} className="text-[#725E54] shrink-0" />
+      }
+    </button>
+
+    {expanded && (
+      <div className="px-5 pb-5 border-t border-[#D5DCF9] pt-4 space-y-3">
+        <p className="text-sm text-[#443627] leading-relaxed whitespace-pre-wrap">
+          {section.section_text}
+        </p>
+        {section.keywords?.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-2">
+            {section.keywords.map((kw, i) => (
+              <span key={i} className="text-xs bg-[#D5DCF9] text-[#443627] px-2 py-1 rounded-full">
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
+        {section.category && (
+          <p className="text-xs text-[#725E54]">Category: {section.category}</p>
+        )}
+      </div>
+    )}
+  </div>
+);
+
+export default LawExplorerPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\LoginPage.jsx =====
+
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate, Link } from 'react-router-dom';
+
+const LoginPage = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, password);
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Invalid email or password.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6]">
+      <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md space-y-6">
+
+        {/* Logo */}
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold text-[#443627]">CaseIQ</h1>
+          <p className="text-[#725E54] text-sm">AI-Powered Legal Knowledge Platform</p>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">
+            {error}
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input
+            type="email"
+            placeholder="Email Address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] transition"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] transition"
+          />
+
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-sm text-[#725E54] hover:text-[#443627]">
+              Forgot password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#443627] text-white py-3 rounded-xl hover:bg-[#725E54] transition disabled:opacity-50"
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <hr className="flex-1 border-slate-200" />
+          <span className="text-slate-400 text-sm">or</span>
+          <hr className="flex-1 border-slate-200" />
+        </div>
+
+        {/* Guest */}
+        <button
+          onClick={() => navigate('/')}
+          className="w-full border border-[#A7B0CA] text-[#443627] py-3 rounded-xl hover:bg-[#D5DCF9]/40 transition"
+        >
+          Continue as Guest
+        </button>
+
+        {/* Register */}
+        <p className="text-center text-sm text-[#725E54]">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-[#443627] font-semibold hover:underline">
+            Create one
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default LoginPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\NearbyStationsPage.jsx =====
+
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { MapPin, Phone, Navigation, AlertCircle } from 'lucide-react';
+import PageTransition from '../components/ui/PageTransition';
+
+const NearbyStationsPage = () => {
+  const [location, setLocation] = useState(null);
+  const [stations, setStations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [permissionDenied, setPermissionDenied] = useState(false);
+
+  const getLocation = () => {
+    setLoading(true);
+    setError('');
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.');
+      setLoading(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation({ lat: latitude, lng: longitude });
+        fetchNearbyStations(latitude, longitude);
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setPermissionDenied(true);
+          setError('Location permission denied. Please enable location access.');
+        } else {
+          setError('Could not get your location. Please try again.');
+        }
+        setLoading(false);
+        loadMockStations();
+      },
+      { timeout: 10000, maximumAge: 300000 }
+    );
+  };
+
+  const fetchNearbyStations = async (lat, lng) => {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+
+    if (!apiKey) {
+      loadMockStations();
+      return;
+    }
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=5000&type=police&key=${apiKey}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (data.results?.length > 0) {
+        setStations(data.results.map((place) => ({
+          id: place.place_id,
+          name: place.name,
+          address: place.vicinity,
+          distance: getDistance(
+            lat, lng,
+            place.geometry.location.lat,
+            place.geometry.location.lng
+          ),
+          rating: place.rating,
+          open: place.opening_hours?.open_now,
+          lat: place.geometry.location.lat,
+          lng: place.geometry.location.lng,
+          phone: null,
+        })));
+      } else {
+        loadMockStations();
+      }
+    } catch {
+      loadMockStations();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMockStations = () => {
+    setStations([
+      {
+        id: 1,
+        name: 'Local Police Station',
+        address: 'Based on your area',
+        distance: '< 2 km',
+        phone: '100',
+        open: true,
+        lat: null,
+        lng: null,
+      },
+      {
+        id: 2,
+        name: 'District Police Headquarters',
+        address: 'District HQ',
+        distance: '< 5 km',
+        phone: '100',
+        open: true,
+        lat: null,
+        lng: null,
+      },
+      {
+        id: 3,
+        name: 'Cyber Crime Cell',
+        address: 'Cyber Police Station',
+        distance: 'Varies',
+        phone: '1930',
+        open: true,
+        lat: null,
+        lng: null,
+      },
+      {
+        id: 4,
+        name: 'Women Police Station',
+        address: 'Women & Child Division',
+        distance: 'Varies',
+        phone: '181',
+        open: true,
+        lat: null,
+        lng: null,
+      },
+    ]);
+    setLoading(false);
+  };
+
+  const getDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return `${dist.toFixed(1)} km`;
+  };
+
+  const openDirections = (station) => {
+    if (station.lat && station.lng) {
+      window.open(
+        `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`,
+        '_blank'
+      );
+    } else if (location) {
+      window.open(
+        `https://www.google.com/maps/search/police+station/@${location.lat},${location.lng},14z`,
+        '_blank'
+      );
+    } else {
+      window.open(
+        'https://www.google.com/maps/search/police+station+near+me',
+        '_blank'
+      );
+    }
+  };
+
+  return (
+    <PageTransition>
+      <div className="max-w-4xl mx-auto space-y-8 pb-16">
+
+        {/* Header */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <MapPin className="text-[#443627]" size={28} />
+            <h1 className="text-4xl font-bold text-[#443627]">Nearby Police Stations</h1>
+          </div>
+          <p className="text-[#725E54]">
+            Find the nearest police station to file your FIR or report a crime.
+          </p>
+        </div>
+
+        {/* Emergency Banner */}
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-4">
+          <div className="text-3xl">ðŸš¨</div>
+          <div className="flex-1">
+            <p className="font-semibold text-red-800">Emergency? Call immediately</p>
+            <p className="text-sm text-red-600">
+              Police: 100 Â· Emergency: 112 Â· Women Helpline: 181
+            </p>
+          </div>
+          <a
+            href="tel:112"
+            className="bg-red-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-red-700 transition text-sm"
+          >
+            Call 112
+          </a>
+        </div>
+
+        {/* Location Button */}
+        {!location && !loading && stations.length === 0 && (
+          <div className="bg-white rounded-3xl p-10 text-center border border-[#D5DCF9] shadow space-y-5">
+            <div className="text-5xl">ðŸ“</div>
+            <h2 className="text-xl font-semibold text-[#443627]">Find Stations Near You</h2>
+            <p className="text-[#725E54] text-sm max-w-md mx-auto">
+              Allow location access to find police stations within 5km of your current location.
+            </p>
+            <button
+              onClick={getLocation}
+              className="bg-[#443627] text-white px-8 py-3 rounded-xl hover:bg-[#725E54] transition shadow-lg font-medium"
+            >
+              ðŸ“ Use My Location
+            </button>
+            <button
+              onClick={loadMockStations}
+              className="block w-full text-sm text-slate-400 hover:text-[#443627] transition mt-2"
+            >
+              Skip â€” show general information
+            </button>
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex flex-col items-center gap-4 py-12">
+            <div className="w-12 h-12 border-4 border-[#443627] border-t-transparent rounded-full animate-spin" />
+            <p className="text-[#725E54]">Finding nearby police stations...</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+            <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-amber-800 text-sm font-medium">{error}</p>
+              {permissionDenied && (
+                <p className="text-amber-600 text-xs mt-1">
+                  Showing general police contact information instead.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Stations List */}
+        {stations.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-[#443627]">
+                {location ? 'Stations near you' : 'Police Contacts'}
+              </h2>
+              {location && (
+                <button
+                  onClick={getLocation}
+                  className="text-sm text-[#725E54] hover:text-[#443627] transition"
+                >
+                  Refresh
+                </button>
+              )}
+            </div>
+
+            {stations.map((station, index) => (
+              <motion.div
+                key={station.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.08 }}
+                className="bg-white rounded-2xl p-5 shadow border border-[#D5DCF9] hover:shadow-md transition"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-[#443627]">{station.name}</h3>
+                      {station.open && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          Open
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-[#725E54] flex items-center gap-1">
+                      <MapPin size={12} /> {station.address}
+                    </p>
+                    {station.distance && (
+                      <p className="text-xs text-slate-400 mt-1">{station.distance} away</p>
+                    )}
+                    {station.rating && (
+                      <p className="text-xs text-slate-400">â­ {station.rating}</p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 shrink-0 ml-4">
+                    {station.phone && (
+                    <a
+                        href={`tel:${station.phone}`}
+                        className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-2 rounded-xl text-sm hover:bg-green-200 transition font-medium"
+                    >
+                        <Phone size={14} /> {station.phone}
+                    </a>
+                    )}
+                    <button
+                      onClick={() => openDirections(station)}
+                      className="flex items-center gap-1 bg-[#D5DCF9] text-[#443627] px-3 py-2 rounded-xl text-sm hover:bg-[#A7B0CA] transition font-medium"
+                    >
+                      <Navigation size={14} /> Directions
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Tips */}
+        <div className="bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6]/40 rounded-3xl p-6 space-y-3">
+          <h3 className="font-semibold text-[#443627]">ðŸ’¡ Before You Go</h3>
+          <ul className="space-y-2 text-sm text-[#443627]/80">
+            <li>â€¢ Carry a government-issued ID (Aadhar, PAN, Voter ID)</li>
+            <li>â€¢ Bring any evidence â€” photos, screenshots, documents</li>
+            <li>â€¢ Note down witness names and contact numbers</li>
+            <li>â€¢ You can file a Zero FIR at any station regardless of jurisdiction</li>
+            <li>â€¢ Request a free copy of your FIR after registration</li>
+            <li>â€¢ If refused, contact the SP/DCP of your district</li>
+          </ul>
+        </div>
+
+      </div>
+    </PageTransition>
+  );
+};
+
+export default NearbyStationsPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\NewsPage.jsx =====
+
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { awarenessAPI } from '../services/api';
+import { SkeletonCard } from '../components/ui/Skeleton';
+import { ExternalLink, Tag, TrendingUp } from 'lucide-react';
+
+const NewsPage = () => {
+  const [search, setSearch] = useState('');
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['legal-news'],
+    queryFn: () => awarenessAPI.getNews({ page_size: 20 }),
+    select: (res) => res.data.results || [],
+  });
+
+  const filtered = (data || []).filter((item) =>
+    item.title.toLowerCase().includes(search.toLowerCase()) ||
+    item.summary.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const featured = filtered.filter((item) => item.is_featured);
+  const regular = filtered.filter((item) => !item.is_featured);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-10 pb-16">
+
+      {/* Header */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <TrendingUp className="text-[#443627]" size={28} />
+          <h1 className="text-4xl font-bold text-[#443627]">Legal News</h1>
+        </div>
+        <p className="text-[#725E54]">
+          Stay updated with the latest Indian legal developments, court judgments, and law changes.
+        </p>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Search legal news..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full max-w-lg rounded-xl border border-[#A7B0CA] p-3 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] bg-white"
+        />
+      </div>
+
+      {isLoading && (
+        <div className="grid md:grid-cols-2 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-6 text-center">
+          <p className="font-semibold">Could not load news</p>
+          <p className="text-sm mt-1">Make sure your NewsAPI key is configured in the backend.</p>
+        </div>
+      )}
+
+      {!isLoading && !error && filtered.length === 0 && (
+        <div className="bg-white rounded-2xl p-10 text-center border border-[#D5DCF9] shadow">
+          <p className="text-4xl mb-3">ðŸ“°</p>
+          <p className="text-[#443627] font-semibold">No news articles found</p>
+          <p className="text-[#725E54] text-sm mt-1">
+            Ask your admin to fetch news using the backend API.
+          </p>
+        </div>
+      )}
+
+      {/* Featured */}
+      {featured.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-[#443627] flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#8EDCE6] inline-block" />
+            Featured
+          </h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            {featured.map((item) => <NewsCard key={item.id} item={item} featured />)}
+          </div>
+        </div>
+      )}
+
+      {/* All News */}
+      {regular.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-[#443627]">All Articles</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            {regular.map((item) => <NewsCard key={item.id} item={item} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const NewsCard = ({ item, featured }) => (
+  <div className={`rounded-2xl p-6 shadow border transition hover:shadow-lg hover:-translate-y-1 duration-300 ${
+    featured
+      ? 'bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6] border-[#A7B0CA]'
+      : 'bg-white border-[#D5DCF9]'
+  }`}>
+    <div className="flex justify-between items-start mb-3">
+      <span className="text-xs bg-white/60 text-[#443627] px-2 py-1 rounded-full font-medium">
+        {item.source}
+      </span>
+      <span className="text-xs text-[#725E54]">
+        {new Date(item.published_at).toLocaleDateString('en-IN', {
+          day: 'numeric', month: 'short', year: 'numeric'
+        })}
+      </span>
+    </div>
+
+    <h3 className="font-semibold text-[#443627] text-base mb-2 leading-snug">{item.title}</h3>
+    <p className="text-sm text-[#725E54] line-clamp-3">{item.summary}</p>
+
+    {item.tags?.length > 0 && (
+      <div className="flex flex-wrap gap-2 mt-3">
+        {item.tags.slice(0, 3).map((tag, i) => (
+          <span key={i} className="flex items-center gap-1 text-xs bg-white/50 text-[#443627] px-2 py-1 rounded-full">
+            <Tag size={10} /> {tag}
+          </span>
+        ))}
+      </div>
+    )}
+
+    <a href={item.source_url} target="_blank" rel="noopener noreferrer"
+      className="flex items-center gap-1 text-xs text-[#443627] font-medium mt-4 hover:underline">
+      Read full article <ExternalLink size={12} />
+    </a>
+  </div>
+);
+
+export default NewsPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\NotFoundPage.jsx =====
+
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+
+const NotFoundPage = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center space-y-6 max-w-md"
+      >
+        <div className="text-8xl font-black text-[#D5DCF9]">404</div>
+        <div className="text-5xl">âš–ï¸</div>
+        <h1 className="text-2xl font-bold text-[#443627]">Page Not Found</h1>
+        <p className="text-[#725E54]">
+          The page you are looking for does not exist or has been moved.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          className="bg-[#443627] text-white px-8 py-3 rounded-xl hover:bg-[#725E54] transition shadow-lg"
+        >
+          Back to Home
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
+export default NotFoundPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\ProfilePage.jsx =====
+
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
+import PageTransition from '../components/ui/PageTransition';
+import toast from 'react-hot-toast';
+
+const ProfilePage = () => {
+  const { user, updateUser } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: user?.full_name || '',
+    phone: user?.phone || '',
+    state: user?.state || '',
+    district: user?.district || '',
+    preferred_language: user?.preferred_language || 'en',
+  });
+  const [passwords, setPasswords] = useState({ old_password: '', new_password: '', confirm: '' });
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await authAPI.updateProfile(formData);
+      updateUser(res.data);
+      toast.success('Profile updated successfully!');
+      setEditing(false);
+    } catch {
+      toast.error('Failed to update profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (passwords.new_password !== passwords.confirm) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await authAPI.changePassword({
+        old_password: passwords.old_password,
+        new_password: passwords.new_password,
+      });
+      toast.success('Password changed successfully!');
+      setPasswords({ old_password: '', new_password: '', confirm: '' });
+    } catch {
+      toast.error('Incorrect current password.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputClass = 'w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] bg-white transition';
+
+  return (
+    <PageTransition>
+      <div className="max-w-3xl mx-auto space-y-8 pb-16">
+
+        {/* Header */}
+        <div className="flex items-center gap-5">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow-xl">
+            <span className="text-3xl font-bold text-[#443627]">
+              {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-[#443627]">{user?.full_name || 'Your Profile'}</h1>
+            <p className="text-[#725E54]">{user?.email}</p>
+            <span className="text-xs bg-[#D5DCF9] text-[#443627] px-2 py-1 rounded-full font-medium mt-1 inline-block capitalize">
+              {user?.role || 'citizen'}
+            </span>
+          </div>
+        </div>
+
+        {/* Profile Form */}
+        <div className="bg-white rounded-3xl p-8 shadow border border-[#D5DCF9] space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-[#443627]">Personal Information</h2>
+            <button
+              onClick={() => setEditing(!editing)}
+              className="text-sm text-[#725E54] hover:text-[#443627] border border-[#A7B0CA] px-4 py-1.5 rounded-xl transition"
+            >
+              {editing ? 'Cancel' : 'âœï¸ Edit'}
+            </button>
+          </div>
+
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[#443627] mb-1">Full Name</label>
+                <input
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  disabled={!editing}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#443627] mb-1">Phone</label>
+                <input
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  disabled={!editing}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#443627] mb-1">State</label>
+                <input
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  disabled={!editing}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#443627] mb-1">District</label>
+                <input
+                  value={formData.district}
+                  onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                  disabled={!editing}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[#443627] mb-1">Preferred Language</label>
+              <select
+                value={formData.preferred_language}
+                onChange={(e) => setFormData({ ...formData, preferred_language: e.target.value })}
+                disabled={!editing}
+                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+              >
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="mr">Marathi</option>
+                <option value="ta">Tamil</option>
+                <option value="te">Telugu</option>
+              </select>
+            </div>
+
+            {editing && (
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#443627] text-white py-3 rounded-xl hover:bg-[#725E54] transition font-medium shadow disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : 'Save Changes'}
+              </motion.button>
+            )}
+          </form>
+        </div>
+
+        {/* Change Password */}
+        <div className="bg-white rounded-3xl p-8 shadow border border-[#D5DCF9] space-y-5">
+          <h2 className="text-xl font-semibold text-[#443627]">Change Password</h2>
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <input
+              type="password"
+              placeholder="Current Password"
+              value={passwords.old_password}
+              onChange={(e) => setPasswords({ ...passwords, old_password: e.target.value })}
+              required
+              className={inputClass}
+            />
+            <input
+              type="password"
+              placeholder="New Password"
+              value={passwords.new_password}
+              onChange={(e) => setPasswords({ ...passwords, new_password: e.target.value })}
+              required
+              className={inputClass}
+            />
+            <input
+              type="password"
+              placeholder="Confirm New Password"
+              value={passwords.confirm}
+              onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+              required
+              className={inputClass}
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-[#443627] text-white px-8 py-3 rounded-xl hover:bg-[#725E54] transition font-medium shadow disabled:opacity-50"
+            >
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </PageTransition>
+  );
+};
+
+export default ProfilePage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\RegisterPage.jsx =====
+
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate, Link } from 'react-router-dom';
+
+const RegisterPage = () => {
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    password: '',
+    password2: '',
+    preferred_language: 'en',
+    state: '',
+    district: '',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (formData.password !== formData.password2) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await register(formData);
+      navigate('/');
+    } catch (err) {
+      const data = err.response?.data;
+      const msg = data
+        ? Object.values(data).flat().join(' ')
+        : 'Registration failed. Please try again.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6] py-10">
+      <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-lg space-y-6">
+
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold text-[#443627]">Create Account</h1>
+          <p className="text-[#725E54] text-sm">Join CaseIQ â€” Free Legal Knowledge for All</p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <input name="full_name" placeholder="Full Name *" value={formData.full_name} onChange={handleChange} required
+              className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+            <input name="phone" placeholder="Phone Number" value={formData.phone} onChange={handleChange}
+              className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+          </div>
+
+          <input name="email" type="email" placeholder="Email Address *" value={formData.email} onChange={handleChange} required
+            className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+
+          <div className="grid grid-cols-2 gap-4">
+            <input name="password" type="password" placeholder="Password *" value={formData.password} onChange={handleChange} required
+              className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+            <input name="password2" type="password" placeholder="Confirm Password *" value={formData.password2} onChange={handleChange} required
+              className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <input name="state" placeholder="State" value={formData.state} onChange={handleChange}
+              className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+            <input name="district" placeholder="District" value={formData.district} onChange={handleChange}
+              className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]" />
+          </div>
+
+          <select name="preferred_language" value={formData.preferred_language} onChange={handleChange}
+            className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6]">
+            <option value="en">English</option>
+            <option value="hi">Hindi</option>
+            <option value="mr">Marathi</option>
+            <option value="ta">Tamil</option>
+            <option value="te">Telugu</option>
+          </select>
+
+          <button type="submit" disabled={loading}
+            className="w-full bg-[#443627] text-white py-3 rounded-xl hover:bg-[#725E54] transition disabled:opacity-50">
+            {loading ? 'Creating account...' : 'Create Account'}
+          </button>
+        </form>
+
+        <p className="text-center text-sm text-[#725E54]">
+          Already have an account?{' '}
+          <Link to="/login" className="text-[#443627] font-semibold hover:underline">Sign in</Link>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default RegisterPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\pages\SettingsPage.jsx =====
+
+import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
+import PageTransition from '../components/ui/PageTransition';
+import { Moon, Sun, Type, Globe, Bell, Shield, Info } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+const SettingsSection = ({ title, icon: Icon, children, darkMode }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    className={`rounded-2xl p-6 border shadow-sm ${
+      darkMode
+        ? 'bg-slate-800/60 border-slate-700/60'
+        : 'bg-white border-[#D5DCF9]'
+    }`}
+  >
+    <div className="flex items-center gap-3 mb-5">
+      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center">
+        <Icon size={15} className="text-[#443627]" />
+      </div>
+      <h2 className={`font-semibold text-base ${darkMode ? 'text-white' : 'text-[#443627]'}`}>
+        {title}
+      </h2>
+    </div>
+    {children}
+  </motion.div>
+);
+
+const ToggleRow = ({ label, description, checked, onChange, darkMode }) => (
+  <div className="flex items-center justify-between py-3">
+    <div>
+      <p className={`text-sm font-medium ${darkMode ? 'text-slate-200' : 'text-[#443627]'}`}>
+        {label}
+      </p>
+      {description && (
+        <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          {description}
+        </p>
+      )}
+    </div>
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="sr-only peer"
+      />
+      <div className={`w-11 h-6 rounded-full transition-colors duration-200 peer-checked:bg-[#443627] ${
+        darkMode ? 'bg-slate-600' : 'bg-slate-300'
+      }`}>
+        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+          checked ? 'translate-x-5' : 'translate-x-0'
+        }`} />
+      </div>
+    </label>
+  </div>
+);
+
+const SettingsPage = () => {
+  const {
+    darkMode, toggleDarkMode,
+    language, setLanguage,
+    fontSize, setFontSize,
+  } = useSettings();
+  const { user } = useAuth();
+
+  const languages = [
+    { value: 'English', label: 'English', native: 'English' },
+    { value: 'Hindi', label: 'Hindi', native: 'à¤¹à¤¿à¤‚à¤¦à¥€' },
+    { value: 'Marathi', label: 'Marathi', native: 'à¤®à¤°à¤¾à¤ à¥€' },
+    { value: 'Tamil', label: 'Tamil', native: 'à®¤à®®à®¿à®´à¯' },
+    { value: 'Telugu', label: 'Telugu', native: 'à°¤à±†à°²à±à°—à±' },
+  ];
+
+  const fontSizes = [
+    { value: 14, label: 'Small' },
+    { value: 16, label: 'Medium' },
+    { value: 18, label: 'Large' },
+    { value: 20, label: 'Extra Large' },
+  ];
+
+  return (
+    <PageTransition>
+      <div className="max-w-2xl mx-auto space-y-5 pb-16">
+
+        {/* Header */}
+        <div className="space-y-1 mb-2">
+          <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-[#443627]'}`}>
+            Settings
+          </h1>
+          <p className={darkMode ? 'text-slate-400' : 'text-[#725E54]'}>
+            Customize your CaseIQ experience
+          </p>
+        </div>
+
+        {/* Appearance */}
+        <SettingsSection title="Appearance" icon={Sun} darkMode={darkMode}>
+          <ToggleRow
+            label="Dark Mode"
+            description="Switch to a darker interface for low-light usage"
+            checked={darkMode}
+            onChange={toggleDarkMode}
+            darkMode={darkMode}
+          />
+
+          <div className={`pt-3 border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+            <p className={`text-sm font-medium mb-3 ${darkMode ? 'text-slate-200' : 'text-[#443627]'}`}>
+              Font Size
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {fontSizes.map((size) => (
+                <button
+                  key={size.value}
+                  onClick={() => setFontSize(size.value)}
+                  className={`py-2 rounded-xl text-sm font-medium transition border ${
+                    fontSize === size.value
+                      ? 'bg-[#443627] text-white border-[#443627] shadow'
+                      : darkMode
+                      ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-[#D5DCF9]/40'
+                  }`}
+                >
+                  {size.label}
+                </button>
+              ))}
+            </div>
+            <p className={`text-xs mt-2 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>
+              Preview: <span style={{ fontSize: `${fontSize}px` }}>The quick brown fox</span>
+            </p>
+          </div>
+        </SettingsSection>
+
+        {/* Language */}
+        <SettingsSection title="Language" icon={Globe} darkMode={darkMode}>
+          <p className={`text-xs mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Select your preferred language for AI responses
+          </p>
+          <div className="space-y-2">
+            {languages.map((lang) => (
+              <button
+                key={lang.value}
+                onClick={() => setLanguage(lang.value)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition ${
+                  language === lang.value
+                    ? 'bg-gradient-to-r from-[#8EDCE6]/30 to-[#D5DCF9]/30 border-[#A7B0CA] text-[#443627]'
+                    : darkMode
+                    ? 'bg-slate-700/40 border-slate-600 text-slate-300 hover:bg-slate-700'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <span className="text-sm font-medium">{lang.label}</span>
+                <span className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>
+                  {lang.native}
+                </span>
+                {language === lang.value && (
+                  <span className="ml-2 w-2 h-2 rounded-full bg-[#443627]" />
+                )}
+              </button>
+            ))}
+          </div>
+        </SettingsSection>
+
+        {/* Privacy */}
+        <SettingsSection title="Privacy & Data" icon={Shield} darkMode={darkMode}>
+          <ToggleRow
+            label="Save Query History"
+            description="Store your legal queries locally for quick access"
+            checked={true}
+            onChange={() => {}}
+            darkMode={darkMode}
+          />
+          <div className={`pt-3 border-t ${darkMode ? 'border-slate-700' : 'border-slate-100'}`}>
+            <button
+              onClick={() => {
+                localStorage.removeItem('caseiq_chat_guest');
+                localStorage.removeItem('caseiq_fir');
+              }}
+              className="text-sm text-red-500 hover:text-red-600 font-medium transition"
+            >
+              Clear all local data
+            </button>
+          </div>
+        </SettingsSection>
+
+        {/* About */}
+        <SettingsSection title="About CaseIQ" icon={Info} darkMode={darkMode}>
+          <div className={`space-y-3 text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+            <div className="flex justify-between">
+              <span>Version</span>
+              <span className="font-medium text-[#443627] dark:text-slate-200">1.0.0</span>
+            </div>
+            <div className="flex justify-between">
+              <span>AI Model</span>
+              <span className="font-medium text-[#443627] dark:text-slate-200">Groq Llama 3.3 70B</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Legal Sections</span>
+              <span className="font-medium text-[#443627] dark:text-slate-200">1,641</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Acts Covered</span>
+              <span className="font-medium text-[#443627] dark:text-slate-200">BNS, BNSS, BSA, IPC, CrPC</span>
+            </div>
+            {user && (
+              <div className="flex justify-between">
+                <span>Signed in as</span>
+                <span className="font-medium text-[#443627] dark:text-slate-200 truncate max-w-[160px]">
+                  {user.email}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className={`mt-4 pt-4 border-t text-xs ${
+            darkMode ? 'border-slate-700 text-slate-500' : 'border-slate-100 text-slate-400'
+          }`}>
+            CaseIQ provides legal information for awareness only. It does not constitute legal advice.
+            Always consult a qualified advocate for your specific situation.
+          </div>
+        </SettingsSection>
+
+      </div>
+    </PageTransition>
+  );
+};
+
+export default SettingsPage;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\routes\AppRoutes.jsx =====
+
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import Layout from '../components/layout/Layout';
+import HomePage from '../pages/HomePage';
+import ChatPage from '../pages/ChatPage';
+import FIRDraftPage from '../pages/FIRDraftPage';
+import DashboardPage from '../pages/DashboardPage';
+import EducationPage from '../pages/EducationPage';
+import HistoryPage from '../pages/HistoryPage';
+import SettingsPage from '../pages/SettingsPage';
+import LoginPage from '../pages/LoginPage';
+import RegisterPage from '../pages/RegisterPage';
+import NewsPage from '../pages/NewsPage';
+import LawExplorerPage from '../pages/LawExplorerPage';
+import ProfilePage from '../pages/ProfilePage';
+import NotFoundPage from '../pages/NotFoundPage';
+import NearbyStationsPage from '../pages/NearbyStationsPage';
+
+const ProtectedRoute = ({ children }) => {
+  const { user } = useAuth();
+  return user ? children : <Navigate to="/login" replace />;
+};
+
+const AppRoutes = () => {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+      {/* Public auth routes */}
+      <Route
+        path="/login"
+        element={!user ? <LoginPage /> : <Navigate to="/" replace />}
+      />
+      <Route
+        path="/register"
+        element={!user ? <RegisterPage /> : <Navigate to="/" replace />}
+      />
+
+      {/* App routes */}
+      <Route
+        path="/*"
+        element={
+          <Layout>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/fir-draft" element={<FIRDraftPage />} />
+              <Route path="/laws" element={<LawExplorerPage />} />
+              <Route path="/news" element={<NewsPage />} />
+              <Route path="/education" element={<EducationPage />} />
+              <Route path="/stations" element={<NearbyStationsPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+
+              {/* Protected */}
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* 404 */}
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Layout>
+        }
+      />
+    </Routes>
+  );
+};
+
+export default AppRoutes;
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\services\api.js =====
+
+import axios from 'axios';
+
+const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// Attach JWT token to every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('caseiq_access_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Auto-refresh on 401
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      try {
+        const refresh = localStorage.getItem('caseiq_refresh_token');
+        const { data } = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, { refresh });
+        localStorage.setItem('caseiq_access_token', data.access);
+        original.headers.Authorization = `Bearer ${data.access}`;
+        return api(original);
+      } catch {
+        localStorage.removeItem('caseiq_access_token');
+        localStorage.removeItem('caseiq_refresh_token');
+        localStorage.removeItem('caseiq_user');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+
+// â”€â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const authAPI = {
+  register: (data) => api.post('/auth/register/', data),
+  login: async (email, password) => {
+    const res = await api.post('/auth/login/', { email, password });
+    localStorage.setItem('caseiq_access_token', res.data.tokens.access);
+    localStorage.setItem('caseiq_refresh_token', res.data.tokens.refresh);
+    localStorage.setItem('caseiq_user', JSON.stringify(res.data.user));
+    return res.data;
+  },
+  logout: async () => {
+    try {
+      const refresh = localStorage.getItem('caseiq_refresh_token');
+      await api.post('/auth/logout/', { refresh });
+    } finally {
+      localStorage.removeItem('caseiq_access_token');
+      localStorage.removeItem('caseiq_refresh_token');
+      localStorage.removeItem('caseiq_user');
+    }
+  },
+  getProfile: () => api.get('/auth/profile/'),
+  updateProfile: (data) => api.put('/auth/profile/', data),
+  changePassword: (data) => api.post('/auth/change-password/', data),
+};
+
+// â”€â”€â”€ LEGAL QUERY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const legalAPI = {
+  submitQuery: (query, language = 'en') =>
+    api.post('/legal/query/', { query, language }),
+  getHistory: () => api.get('/legal/query/history/'),
+  getSections: (params) => api.get('/legal/sections/', { params }),
+};
+
+// â”€â”€â”€ KNOWLEDGE BASE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const knowledgeAPI = {
+  search: (query, top_k = 5) => api.post('/knowledge/search/', { query, top_k }),
+  getProvisions: (params) => api.get('/knowledge/provisions/', { params }),
+  getCategories: () => api.get('/knowledge/categories/'),
+  getRights: () => api.get('/knowledge/rights/'),
+};
+
+// â”€â”€â”€ COMPLAINTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const complaintsAPI = {
+  generateDraft: (data) => api.post('/complaints/draft/', data),
+  getHistory: () => api.get('/complaints/history/'),
+  getDetail: (id) => api.get(`/complaints/${id}/`),
+  downloadPDF: async (id, complainantName) => {
+    const res = await api.get(`/complaints/${id}/download/`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `CaseIQ_FIR_${complainantName || id}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+};
+
+// â”€â”€â”€ AWARENESS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export const awarenessAPI = {
+  getNews: (params) => api.get('/awareness/news/', { params }),
+  getEducation: (params) => api.get('/awareness/education/', { params }),
+  getEducationDetail: (id) => api.get(`/awareness/education/${id}/`),
+};
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\utils\constants.js =====
+
+// App Name
+export const APP_NAME = "CaseIQ";
+
+// LocalStorage Keys
+export const STORAGE_KEYS = {
+  CHAT: "caseiq_chat",
+  FIR: "caseiq_fir",
+  USER: "caseiq_user",
+  LANGUAGE: "caseiq_language",
+  DARK_MODE: "caseiq_dark",
+  FONT_SIZE: "caseiq_font",
+};
+
+// FIR Types
+export const FIR_TYPES = [
+  "Cognizable Offence",
+  "Non-Cognizable Offence",
+];
+
+// Supported Languages
+export const SUPPORTED_LANGUAGES = [
+  "English",
+  "Hindi",
+  "Tamil",
+  "Marathi",
+];
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\utils\formatDate.js =====
+
+// App Name
+export const APP_NAME = "CaseIQ";
+
+// LocalStorage Keys
+export const STORAGE_KEYS = {
+  CHAT: "caseiq_chat",
+  FIR: "caseiq_fir",
+  USER: "caseiq_user",
+  LANGUAGE: "caseiq_language",
+  DARK_MODE: "caseiq_dark",
+  FONT_SIZE: "caseiq_font",
+};
+
+// FIR Types
+export const FIR_TYPES = [
+  "Cognizable Offence",
+  "Non-Cognizable Offence",
+];
+
+// Supported Languages
+export const SUPPORTED_LANGUAGES = [
+  "English",
+  "Hindi",
+  "Tamil",
+  "Marathi",
+];
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-frontend\src\utils\validation.js =====
+
+export const validateEmail = (email) => {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
+};
+
+export const validatePhone = (phone) => {
+  const regex = /^[6-9]\d{9}$/; // Indian 10-digit number
+  return regex.test(phone);
+};
+
+export const validateRequiredFields = (data) => {
+  for (let key in data) {
+    if (!data[key]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export const validateFIRForm = (formData) => {
+  if (!formData.fullName) return "Full Name is required";
+  if (!validatePhone(formData.contact))
+    return "Invalid phone number";
+  if (!validateEmail(formData.email))
+    return "Invalid email address";
+  if (!formData.description)
+    return "Incident description is required";
+
+  return null; // No error
+};

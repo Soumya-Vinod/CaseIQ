@@ -1,0 +1,879 @@
+﻿
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-backend\services\gemini_service.py =====
+
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-backend\services\groq_service.py =====
+
+import logging
+import time
+from groq import Groq
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+class GroqService:
+
+    def __init__(self):
+        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        self.model = 'llama-3.3-70b-versatile'
+        self.temperature = 0.1
+        self.max_retries = 3
+        self.retry_delay = 2
+
+    def _call_api(self, messages, temperature=None, max_tokens=2000):
+        for attempt in range(self.max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature or self.temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                logger.warning(f'Groq API attempt {attempt + 1} failed: {e}')
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay)
+                else:
+                    raise
+
+    def process_legal_query(self, query, language='en', user_context=None):
+        system_prompt = """You are CaseIQ â€” India's most trusted AI legal knowledge assistant. You specialize in BNS 2023, BNSS 2023, BSA 2023, IPC 1860, CrPC 1973, and Indian constitutional law.
+
+Your responses must be EXCEPTIONAL â€” clear, structured, compassionate, and immediately useful to a common Indian citizen with no legal background. This person is likely stressed, scared, or confused. Be their knowledgeable friend who explains the law simply.
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+RESPONSE STRUCTURE â€” follow this exactly every time:
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+
+**ðŸ“Œ What This Situation Means**
+In 2-3 plain sentences, explain what is happening legally. Is this serious? Is this a criminal matter or civil? What category of law applies? Write as if you are calmly explaining to a worried family member.
+
+---
+
+**âš–ï¸ Laws That Apply**
+- **[Act Name, Section Number]** â€” In one sentence, what this law says and exactly why it applies to this situation
+- **[Act Name, Section Number]** â€” same format
+- **[Act Name, Section Number]** â€” same format
+(List 3-5 most directly relevant laws. Always prefer BNS 2023 over IPC 1860 as BNS replaced IPC from July 2024. Mention IPC equivalent in brackets for reference.)
+
+---
+
+**ðŸ”´ Punishments & Consequences**
+What the accused/offender faces under Indian law:
+- **[Specific offence]** â†’ Imprisonment: [X years minimum to Y years maximum] + Fine: [amount if specified]
+- **[Specific offence]** â†’ Imprisonment: [duration] + Fine: [amount]
+- **Additional consequences** â†’ [bail conditions, property attachment, criminal record impact]
+(Be exact. If bail is possible mention it. If it is a non-bailable offence, say so clearly.)
+
+---
+
+**âœ… What You Can Do Right Now â€” Step by Step**
+1. **[Bold action title]** â€” Exactly what to do, where to go, what to bring, what to say. No vague instructions.
+2. **[Bold action title]** â€” Same level of detail
+3. **[Bold action title]** â€” Same level of detail
+4. **[Bold action title]** â€” Same level of detail
+5. **[Bold action title]** â€” Same level of detail
+(Give 5-7 steps. Make each step specific and actionable. A person with no legal knowledge must be able to follow this.)
+
+---
+
+**â±ï¸ Critical Deadlines â€” Do Not Miss These**
+- **[Time limit]** â€” What must be done within this time and what happens if missed
+- **[Limitation period]** â€” For filing criminal complaint / civil suit
+- **[Any other deadline]** â€” Consequence of missing it
+
+---
+
+**ðŸ’¡ Your Rights in This Situation**
+- **Right 1** â€” Explained in plain language with practical implication
+- **Right 2** â€” Explained in plain language
+- **Right 3** â€” Explained in plain language
+- **Right 4** â€” Explained in plain language
+(Focus on rights the person may not know they have. Empower them.)
+
+---
+
+**ðŸ†˜ Who to Call for Help**
+- **[Helpline name]** â€” [Number] â€” When to use this
+- **[Helpline name]** â€” [Number] â€” When to use this
+(Only include contacts directly relevant to this situation. Always include at least 2.)
+
+---
+âš ï¸ *This information is for legal awareness only. CaseIQ does not provide legal advice. Laws may have been amended. For case-specific guidance, consult a qualified advocate.*
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+ABSOLUTE RULES â€” never break these:
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+1. NEVER say "you should", "I recommend", "I advise" or "consult a lawyer" in the main body â€” only in the disclaimer
+2. ALWAYS cite exact section numbers â€” never say "relevant sections" or "applicable laws" without specifying
+3. ALWAYS include specific punishments with exact imprisonment duration and fine amounts
+4. ALWAYS tell the person whether the offence is Cognizable or Non-Cognizable, Bailable or Non-Bailable
+5. Write at the reading level of a Class 8 student â€” short sentences, common words, no jargon without explanation
+6. Use BNS 2023 as the PRIMARY reference since it replaced IPC 1860 from July 1, 2024
+7. If the person appears to be a VICTIM â€” focus steps on how to get justice and what the accused faces
+8. If the person appears to be ACCUSED â€” focus steps on their rights, bail, and what they are facing
+9. Be empathetic in tone â€” acknowledge the situation is difficult before diving into law
+10. Never make up section numbers â€” if unsure, say "consult the relevant provision"
+11. If query is in Hindi â†’ respond ENTIRELY in Hindi with the SAME structure
+12. If query is in Marathi â†’ respond ENTIRELY in Marathi with the SAME structure
+13. Maximum 2 lines per bullet point â€” be concise but complete"""
+
+        lang_instruction = {
+            'hi': 'The user has asked in Hindi. Your ENTIRE response must be in Hindi. Use the same structure but in Hindi language.',
+            'mr': 'The user has asked in Marathi. Your ENTIRE response must be in Marathi. Use the same structure but in Marathi language.',
+            'ta': 'The user has asked in Tamil. Your ENTIRE response must be in Tamil. Use the same structure but in Tamil language.',
+            'en': '',
+        }.get(language, '')
+
+        user_message = f"{lang_instruction}\n\nUser Query: {query}" if lang_instruction else f"User Query: {query}"
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_message},
+        ]
+
+        response_text = self._call_api(messages, max_tokens=2500)
+
+        disclaimer = 'âš ï¸ *This information is for legal awareness only. CaseIQ does not provide legal advice. Laws may have been amended. For case-specific guidance, consult a qualified advocate.*'
+
+        # Clean up â€” remove duplicate disclaimer if present
+        main_text = response_text
+        if 'âš ï¸' in response_text:
+            parts = response_text.split('âš ï¸')
+            main_text = parts[0].strip()
+
+        return {
+            'factual_summary': main_text,
+            'disclaimer': disclaimer,
+            'confidence_score': 0.92,
+            'language': language,
+        }
+
+    def detect_language(self, text):
+        prompt = f"""Detect the language of this text. Reply with ONLY one word from these options: en, hi, mr, ta, te
+
+Text: {text[:200]}
+
+Reply with only the language code, nothing else."""
+
+        try:
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.0,
+                max_tokens=5,
+            )
+            result = result.strip().lower().replace('.', '').replace(',', '')
+            if result in ['en', 'hi', 'mr', 'ta', 'te']:
+                return result
+            return 'en'
+        except Exception as e:
+            logger.error(f'Language detection failed: {e}')
+            return 'en'
+
+    def generate_complaint_draft(self, complaint_data):
+        prompt = f"""You are an expert Indian legal document writer. Generate a formal, professional FIR/complaint letter.
+
+The letter must be:
+- Written in formal legal English
+- Properly structured with all required sections
+- Ready to submit to a police station
+- Factual and precise
+
+Complainant Details:
+- Name: {complaint_data.get('complainant_name', 'N/A')}
+- Address: {complaint_data.get('complainant_address', 'N/A')}
+- Phone: {complaint_data.get('complainant_phone', 'N/A')}
+
+Complaint Details:
+- Type: {complaint_data.get('complaint_type', 'FIR').upper()}
+- Police Station: {complaint_data.get('police_station_name', 'N/A')}
+- Incident Date: {complaint_data.get('incident_date', 'N/A')}
+- Location of Incident: {complaint_data.get('incident_location', 'N/A')}
+- Description: {complaint_data.get('incident_description', 'N/A')}
+- Accused: {complaint_data.get('accused_details', 'Unknown / Not identified')}
+- Witnesses: {complaint_data.get('witnesses', 'None known')}
+- Evidence Available: {complaint_data.get('evidence_description', 'None mentioned')}
+- Applicable Sections: {', '.join(complaint_data.get('applicable_sections', [])) or 'To be determined by investigating officer'}
+- Relief Sought: {complaint_data.get('relief_sought', 'Registration of FIR and appropriate legal action')}
+
+Generate the complaint letter with these sections in order:
+1. Header: To, The Station House Officer, [Police Station Name]
+2. Subject line (clear and specific)
+3. Respectful opening
+4. Complainant introduction paragraph
+5. Detailed incident narrative (chronological, factual)
+6. Accused details paragraph
+7. Evidence and witnesses paragraph
+8. Applicable legal sections paragraph
+9. Relief sought paragraph
+10. Declaration of truth
+11. Signature block with date and place
+
+Write formally. Do not add any commentary or notes outside the letter."""
+
+        return self._call_api(
+            [{'role': 'user', 'content': prompt}],
+            temperature=0.05,
+            max_tokens=2000,
+        )
+
+    def tag_news_with_sections(self, title, summary):
+        prompt = f"""Analyze this Indian legal news article and extract structured metadata.
+
+Title: {title}
+Summary: {summary}
+
+Return ONLY a JSON object with no markdown formatting:
+{{
+  "tags": ["tag1", "tag2", "tag3"],
+  "sections": ["BNS Section X", "BNSS Section Y"],
+  "is_featured": true or false,
+  "category": "criminal or civil or constitutional or consumer or cyber or family or property"
+}}
+
+Rules:
+- tags should be 3-5 short keywords
+- sections should only include laws directly mentioned or clearly implied
+- is_featured should be true only for Supreme Court judgments or landmark cases
+- category must be exactly one of the options listed"""
+
+        try:
+            import json
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.1,
+                max_tokens=200,
+            )
+            result = result.strip()
+            if '```' in result:
+                result = result.split('```')[1]
+                if result.startswith('json'):
+                    result = result[4:]
+            return json.loads(result.strip())
+        except Exception as e:
+            logger.error(f'News tagging failed: {e}')
+            return {
+                'tags': [],
+                'sections': [],
+                'is_featured': False,
+                'category': 'general',
+            }
+
+    def generate_embeddings_text(self, text):
+        return text[:8000] if text else ''
+
+
+groq_service = GroqService()
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-backend\services\news_service.py =====
+
+import logging
+import requests
+from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+
+class NewsService:
+
+    def __init__(self):
+        from django.conf import settings
+        self.news_api_key = getattr(settings, 'NEWS_API_KEY', '')
+        self.groq_service = None
+
+    def _get_groq(self):
+        if not self.groq_service:
+            from services.groq_service import groq_service
+            self.groq_service = groq_service
+        return self.groq_service
+
+    # â”€â”€â”€ SOURCE 1: NewsAPI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    def fetch_from_newsapi(self, page_size=10):
+        if not self.news_api_key:
+            raise ValueError('NEWS_API_KEY not configured')
+
+        queries = [
+            'India Supreme Court judgment 2024',
+            'India High Court ruling 2024',
+            'BNS BNSS criminal law India',
+            'India legal rights police arrest',
+            'cybercrime India law 2024',
+            'consumer court India verdict',
+            'women rights India law',
+        ]
+
+        all_articles = []
+        seen_titles = set()
+
+        for query in queries:
+            try:
+                url = 'https://newsapi.org/v2/everything'
+                params = {
+                    'q': query,
+                    'language': 'en',
+                    'sortBy': 'publishedAt',
+                    'pageSize': 5,
+                    'apiKey': self.news_api_key,
+                }
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get('status') != 'ok':
+                    continue
+
+                for item in data.get('articles', []):
+                    title = item.get('title', '')
+                    if not title or title == '[Removed]' or title in seen_titles:
+                        continue
+                    seen_titles.add(title)
+                    all_articles.append({
+                        'title': title[:500],
+                        'source': item.get('source', {}).get('name', 'NewsAPI'),
+                        'source_url': item.get('url', ''),
+                        'summary': (
+                            item.get('description') or
+                            item.get('content', '')[:500] or
+                            title
+                        ),
+                        'published_at': item.get('publishedAt') or timezone.now().isoformat(),
+                        'tags': query.split()[:3],
+                        'is_featured': False,
+                        'language': 'en',
+                    })
+            except Exception as e:
+                logger.warning(f'Query "{query}" failed: {e}')
+                continue
+
+        logger.info(f'NewsAPI returned {len(all_articles)} articles')
+        return all_articles
+
+    # â”€â”€â”€ SOURCE 2: Groq AI Generated News â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    def fetch_from_groq(self, count=10):
+        prompt = f"""Generate {count} realistic Indian legal news headlines and summaries for 2024-2025.
+Focus on: Supreme Court judgments, High Court orders, BNS/BNSS implementation, consumer rights, cybercrime, women rights, RTI, bail rulings.
+
+Return ONLY a JSON array, no markdown, no explanation:
+[
+  {{
+    "title": "news headline",
+    "source": "LiveLaw or Bar and Bench or The Hindu or Indian Express",
+    "source_url": "https://www.livelaw.in",
+    "summary": "2-3 sentence summary of the news",
+    "tags": ["tag1", "tag2", "tag3"],
+    "is_featured": false
+  }}
+]"""
+
+        from groq import Groq
+        from django.conf import settings
+        import json
+
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model='llama-3.3-70b-versatile',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.7,
+            max_tokens=3000,
+        )
+        raw = response.choices[0].message.content.strip()
+
+        if '```' in raw:
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+        raw = raw.strip()
+
+        articles = json.loads(raw)
+        result = []
+        for item in articles:
+            result.append({
+                'title': item.get('title', '')[:500],
+                'source': item.get('source', 'CaseIQ Legal News'),
+                'source_url': item.get('source_url', 'https://www.livelaw.in'),
+                'summary': item.get('summary', '')[:1000],
+                'published_at': timezone.now().isoformat(),
+                'tags': item.get('tags', []),
+                'is_featured': item.get('is_featured', False),
+                'language': 'en',
+            })
+
+        logger.info(f'Groq generated {len(result)} articles')
+        return result
+
+    # â”€â”€â”€ SOURCE 3: Hardcoded Fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    def get_fallback_news(self):
+        return [
+            {'title': 'BNS 2023: Complete Guide to New Criminal Law', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'The Bharatiya Nyaya Sanhita 2023 replaced IPC from July 1 2024. Key changes include new sections on terrorism, organised crime, and updated punishments.', 'published_at': timezone.now().isoformat(), 'tags': ['BNS', 'Criminal Law', 'Reform'], 'is_featured': True, 'language': 'en'},
+            {'title': 'How to File a Zero FIR â€” Step by Step Guide', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'Zero FIR can be filed at any police station regardless of jurisdiction. BNSS Section 173 mandates registration without delay.', 'published_at': timezone.now().isoformat(), 'tags': ['Zero FIR', 'BNSS', 'Police'], 'is_featured': True, 'language': 'en'},
+            {'title': 'Supreme Court: Bail is the Rule, Jail is the Exception', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'The Supreme Court reiterated that personal liberty under Article 21 must be respected and bail should not be refused mechanically.', 'published_at': timezone.now().isoformat(), 'tags': ['Bail', 'Supreme Court', 'Personal Liberty'], 'is_featured': False, 'language': 'en'},
+            {'title': 'Cybercrime Helpline 1930 â€” How to Report Online Fraud', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'Online fraud victims can report to 1930 or cybercrime.gov.in. Quick reporting increases chances of fund recovery.', 'published_at': timezone.now().isoformat(), 'tags': ['Cybercrime', 'Online Fraud', 'Helpline'], 'is_featured': False, 'language': 'en'},
+            {'title': 'Women Rights Under BNS 2023 â€” Key Protections', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'BNS 2023 strengthens protections for women with enhanced sections on sexual assault, stalking, acid attacks and domestic violence.', 'published_at': timezone.now().isoformat(), 'tags': ['Women Rights', 'BNS', 'Protection'], 'is_featured': True, 'language': 'en'},
+            {'title': 'RTI Act â€” How to Seek Information from Government', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'RTI Act 2005 empowers citizens to request information from any public authority within 30 days with a Rs 10 fee.', 'published_at': timezone.now().isoformat(), 'tags': ['RTI', 'Government', 'Transparency'], 'is_featured': False, 'language': 'en'},
+            {'title': 'Consumer Protection Act 2019 â€” File Complaints Online', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'Consumers can now file complaints at edaakhil.nic.in against defective products and poor services without visiting courts.', 'published_at': timezone.now().isoformat(), 'tags': ['Consumer Rights', 'Online Complaint', 'Consumer Court'], 'is_featured': False, 'language': 'en'},
+            {'title': 'POCSO Act â€” Protecting Children from Sexual Offences', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'POCSO provides strict protection for children under 18 with minimum 10 year sentences and child-friendly trial procedures.', 'published_at': timezone.now().isoformat(), 'tags': ['POCSO', 'Child Protection', 'Sexual Assault'], 'is_featured': False, 'language': 'en'},
+            {'title': 'Anticipatory Bail â€” When and How to Apply', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'Anticipatory bail under BNSS Section 482 allows seeking bail before arrest. Sessions Court or High Court can grant it with conditions.', 'published_at': timezone.now().isoformat(), 'tags': ['Anticipatory Bail', 'BNSS', 'Arrest'], 'is_featured': False, 'language': 'en'},
+            {'title': 'Motor Accident Claims â€” Your Rights to Compensation', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'Road accident victims can claim compensation from MACT tribunals. Insurance companies must settle third-party claims promptly.', 'published_at': timezone.now().isoformat(), 'tags': ['Motor Accident', 'Compensation', 'MACT', 'Insurance'], 'is_featured': False, 'language': 'en'},
+            {'title': 'Domestic Violence Act â€” Protection Orders Explained', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'DV Act 2005 provides protection orders, residence orders, and monetary relief for victims of domestic violence including emotional and economic abuse.', 'published_at': timezone.now().isoformat(), 'tags': ['Domestic Violence', 'Women', 'Protection Order'], 'is_featured': False, 'language': 'en'},
+            {'title': 'BNSS 2023 â€” Key Changes to Criminal Procedure', 'source': 'CaseIQ', 'source_url': 'https://caseiq.in', 'summary': 'BNSS replaced CrPC from July 2024. Major changes include timeline for charge sheets, trial procedures, and witness protection measures.', 'published_at': timezone.now().isoformat(), 'tags': ['BNSS', 'CrPC', 'Criminal Procedure'], 'is_featured': True, 'language': 'en'},
+        ]
+
+    # â”€â”€â”€ MAIN FETCH â€” tries all sources in order â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    def fetch_and_save(self, count=10):
+        from apps.awareness.models import LegalNewsArticle
+        from dateutil import parser as dateparser
+
+        articles = []
+        source_used = 'fallback'
+
+        # Try NewsAPI first
+        try:
+            articles = self.fetch_from_newsapi(page_size=count)
+            if articles:
+                source_used = 'newsapi'
+            else:
+                raise ValueError('NewsAPI returned 0 articles')
+        except Exception as e:
+            logger.warning(f'NewsAPI failed: {e} â€” trying Groq')
+
+            # Try Groq second
+            try:
+                articles = self.fetch_from_groq(count=count)
+                source_used = 'groq'
+            except Exception as e2:
+                logger.warning(f'Groq failed: {e2} â€” using fallback')
+                articles = self.get_fallback_news()
+                source_used = 'fallback'
+
+        saved = 0
+        for item in articles:
+            try:
+                try:
+                    pub_date = dateparser.parse(str(item['published_at']))
+                    if pub_date and pub_date.tzinfo is None:
+                        from django.utils.timezone import make_aware
+                        pub_date = make_aware(pub_date)
+                except Exception:
+                    pub_date = timezone.now()
+
+                obj, created = LegalNewsArticle.objects.get_or_create(
+                    title=item['title'][:500],
+                    defaults={
+                        'source': item.get('source', 'Unknown')[:200],
+                        'source_url': item.get('source_url', '')[:500],
+                        'summary': item.get('summary', '')[:1000],
+                        'published_at': pub_date or timezone.now(),
+                        'tags': item.get('tags', []),
+                        'is_featured': item.get('is_featured', False),
+                        'language': item.get('language', 'en'),
+                        'relevance_score': 0.8,
+                    }
+                )
+                if created:
+                    saved += 1
+            except Exception as e:
+                logger.error(f'Error saving article "{item.get("title", "")}": {e}')
+                continue
+
+        logger.info(f'Source: {source_used} | Saved: {saved} | Total: {LegalNewsArticle.objects.count()}')
+        return saved
+
+
+news_service = NewsService()
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-backend\services\pdf_service.py =====
+
+import os
+import logging
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch, cm
+from reportlab.lib import colors
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer,
+    HRFlowable, Table, TableStyle
+)
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY, TA_RIGHT
+from reportlab.graphics.shapes import Drawing, Rect, String, Circle
+from reportlab.graphics import renderPDF
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+LANGUAGE_STRINGS = {
+    'en': {
+        'draft_notice': 'âš  DRAFT â€” FOR REFERENCE ONLY â€” NOT A LEGAL DOCUMENT âš ',
+        'generated_by': 'Generated by CaseIQ Legal Awareness Platform',
+        'to': 'TO,',
+        'subject': 'SUBJECT',
+        'complainant_details': 'COMPLAINANT DETAILS',
+        'incident_details': 'INCIDENT DETAILS',
+        'name': 'Name',
+        'address': 'Address',
+        'phone': 'Phone',
+        'date': 'Date',
+        'location': 'Location',
+        'description': 'Description of Incident',
+        'accused': 'Details of Accused (if known)',
+        'witnesses': 'Witnesses',
+        'evidence': 'Evidence',
+        'sections': 'Applicable Legal Sections',
+        'draft_text': 'AI-GENERATED DRAFT TEXT',
+        'relief': 'Relief Sought',
+        'declaration_title': 'DECLARATION',
+        'declaration_text': 'I, the undersigned, do hereby solemnly declare that the information provided above is true and correct to the best of my knowledge and belief. I understand that providing false information is punishable under law.',
+        'place': 'Place',
+        'signature': 'Signature',
+        'not_provided': 'Not provided',
+        'disclaimer': 'DISCLAIMER: This document is generated by CaseIQ for legal awareness purposes only. CaseIQ does not provide legal advice. This draft should be reviewed by a qualified advocate before submission.',
+        'regarding': 'regarding incident at',
+        'on': 'on',
+        'police_station': 'Police Station',
+    },
+    'hi': {
+        'draft_notice': 'âš  à¤®à¤¸à¥Œà¤¦à¤¾ â€” à¤•à¥‡à¤µà¤² à¤¸à¤‚à¤¦à¤°à¥à¤­ à¤•à¥‡ à¤²à¤¿à¤ â€” à¤¯à¤¹ à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤¦à¤¸à¥à¤¤à¤¾à¤µà¥‡à¤œà¤¼ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆ âš ',
+        'generated_by': 'CaseIQ à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤œà¤¾à¤—à¤°à¥‚à¤•à¤¤à¤¾ à¤ªà¥à¤²à¥‡à¤Ÿà¤«à¤¼à¥‰à¤°à¥à¤® à¤¦à¥à¤µà¤¾à¤°à¤¾ à¤¤à¥ˆà¤¯à¤¾à¤°',
+        'to': 'à¤¸à¥‡à¤µà¤¾ à¤®à¥‡à¤‚,',
+        'subject': 'à¤µà¤¿à¤·à¤¯',
+        'complainant_details': 'à¤¶à¤¿à¤•à¤¾à¤¯à¤¤à¤•à¤°à¥à¤¤à¤¾ à¤•à¤¾ à¤µà¤¿à¤µà¤°à¤£',
+        'incident_details': 'à¤˜à¤Ÿà¤¨à¤¾ à¤•à¤¾ à¤µà¤¿à¤µà¤°à¤£',
+        'name': 'à¤¨à¤¾à¤®',
+        'address': 'à¤ªà¤¤à¤¾',
+        'phone': 'à¤«à¤¼à¥‹à¤¨',
+        'date': 'à¤¤à¤¾à¤°à¥€à¤–',
+        'location': 'à¤¸à¥à¤¥à¤¾à¤¨',
+        'description': 'à¤˜à¤Ÿà¤¨à¤¾ à¤•à¤¾ à¤µà¤¿à¤µà¤°à¤£',
+        'accused': 'à¤†à¤°à¥‹à¤ªà¥€ à¤•à¤¾ à¤µà¤¿à¤µà¤°à¤£ (à¤¯à¤¦à¤¿ à¤œà¥à¤žà¤¾à¤¤ à¤¹à¥‹)',
+        'witnesses': 'à¤—à¤µà¤¾à¤¹',
+        'evidence': 'à¤¸à¤¾à¤•à¥à¤·à¥à¤¯',
+        'sections': 'à¤²à¤¾à¤—à¥‚ à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤§à¤¾à¤°à¤¾à¤à¤‚',
+        'draft_text': 'AI-à¤œà¤¨à¤¿à¤¤ à¤®à¤¸à¥Œà¤¦à¤¾ à¤ªà¤¾à¤ ',
+        'relief': 'à¤®à¤¾à¤‚à¤—à¥€ à¤—à¤ˆ à¤°à¤¾à¤¹à¤¤',
+        'declaration_title': 'à¤˜à¥‹à¤·à¤£à¤¾',
+        'declaration_text': 'à¤®à¥ˆà¤‚, à¤¨à¥€à¤šà¥‡ à¤¹à¤¸à¥à¤¤à¤¾à¤•à¥à¤·à¤°à¤•à¤°à¥à¤¤à¤¾, à¤à¤¤à¤¦à¥à¤¦à¥à¤µà¤¾à¤°à¤¾ à¤¸à¤¤à¥à¤¯à¤¨à¤¿à¤·à¥à¤ à¤¾ à¤¸à¥‡ à¤˜à¥‹à¤·à¤£à¤¾ à¤•à¤°à¤¤à¤¾/à¤•à¤°à¤¤à¥€ à¤¹à¥‚à¤‚ à¤•à¤¿ à¤Šà¤ªà¤° à¤¦à¥€ à¤—à¤ˆ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤®à¥‡à¤°à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤”à¤° à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤•à¥‡ à¤…à¤¨à¥à¤¸à¤¾à¤° à¤¸à¤¤à¥à¤¯ à¤”à¤° à¤¸à¤¹à¥€ à¤¹à¥ˆà¥¤',
+        'place': 'à¤¸à¥à¤¥à¤¾à¤¨',
+        'signature': 'à¤¹à¤¸à¥à¤¤à¤¾à¤•à¥à¤·à¤°',
+        'not_provided': 'à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚',
+        'disclaimer': 'à¤…à¤¸à¥à¤µà¥€à¤•à¤°à¤£: à¤¯à¤¹ à¤¦à¤¸à¥à¤¤à¤¾à¤µà¥‡à¤œà¤¼ CaseIQ à¤¦à¥à¤µà¤¾à¤°à¤¾ à¤•à¥‡à¤µà¤² à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤œà¤¾à¤—à¤°à¥‚à¤•à¤¤à¤¾ à¤•à¥‡ à¤‰à¤¦à¥à¤¦à¥‡à¤¶à¥à¤¯ à¤¸à¥‡ à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ CaseIQ à¤•à¤¾à¤¨à¥‚à¤¨à¥€ à¤¸à¤²à¤¾à¤¹ à¤¨à¤¹à¥€à¤‚ à¤¦à¥‡à¤¤à¤¾à¥¤',
+        'regarding': 'à¤˜à¤Ÿà¤¨à¤¾ à¤•à¥‡ à¤¸à¤‚à¤¬à¤‚à¤§ à¤®à¥‡à¤‚',
+        'on': 'à¤•à¥‹',
+        'police_station': 'à¤¥à¤¾à¤¨à¤¾',
+    },
+    'mr': {
+        'draft_notice': 'âš  à¤®à¤¸à¥à¤¦à¤¾ â€” à¤•à¥‡à¤µà¤² à¤¸à¤‚à¤¦à¤°à¥à¤­à¤¾à¤¸à¤¾à¤ à¥€ â€” à¤¹à¥‡ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤¦à¤¸à¥à¤¤à¤à¤µà¤œ à¤¨à¤¾à¤¹à¥€ âš ',
+        'generated_by': 'CaseIQ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤œà¤¾à¤—à¤°à¥‚à¤•à¤¤à¤¾ à¤ªà¥à¤²à¥…à¤Ÿà¤«à¥‰à¤°à¥à¤®à¤¦à¥à¤µà¤¾à¤°à¥‡ à¤¤à¤¯à¤¾à¤° à¤•à¥‡à¤²à¥‡',
+        'to': 'à¤¸à¥‡à¤µà¥‡à¤¤,',
+        'subject': 'à¤µà¤¿à¤·à¤¯',
+        'complainant_details': 'à¤¤à¤•à¥à¤°à¤¾à¤°à¤¦à¤¾à¤°à¤¾à¤šà¤¾ à¤¤à¤ªà¤¶à¥€à¤²',
+        'incident_details': 'à¤˜à¤Ÿà¤¨à¥‡à¤šà¤¾ à¤¤à¤ªà¤¶à¥€à¤²',
+        'name': 'à¤¨à¤¾à¤µ',
+        'address': 'à¤ªà¤¤à¥à¤¤à¤¾',
+        'phone': 'à¤«à¥‹à¤¨',
+        'date': 'à¤¤à¤¾à¤°à¥€à¤–',
+        'location': 'à¤ à¤¿à¤•à¤¾à¤£',
+        'description': 'à¤˜à¤Ÿà¤¨à¥‡à¤šà¥‡ à¤µà¤°à¥à¤£à¤¨',
+        'accused': 'à¤†à¤°à¥‹à¤ªà¥€à¤šà¤¾ à¤¤à¤ªà¤¶à¥€à¤² (à¤®à¤¾à¤¹à¥€à¤¤ à¤…à¤¸à¤²à¥à¤¯à¤¾à¤¸)',
+        'witnesses': 'à¤¸à¤¾à¤•à¥à¤·à¥€à¤¦à¤¾à¤°',
+        'evidence': 'à¤ªà¥à¤°à¤¾à¤µà¥‡',
+        'sections': 'à¤²à¤¾à¤—à¥‚ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤•à¤²à¤®à¥‡',
+        'draft_text': 'AI-à¤¨à¤¿à¤°à¥à¤®à¤¿à¤¤ à¤®à¤¸à¥à¤¦à¤¾ à¤®à¤œà¤•à¥‚à¤°',
+        'relief': 'à¤®à¤¾à¤—à¤¿à¤¤à¤²à¥‡à¤²à¥€ à¤¦à¤¾à¤¦',
+        'declaration_title': 'à¤˜à¥‹à¤·à¤£à¤¾',
+        'declaration_text': 'à¤®à¥€, à¤–à¤¾à¤²à¥€à¤² à¤¸à¥à¤µà¤¾à¤•à¥à¤·à¤°à¥€à¤•à¤°à¥à¤¤à¤¾, à¤¯à¥‡à¤¥à¥‡ à¤ªà¥à¤°à¤¾à¤®à¤¾à¤£à¤¿à¤•à¤ªà¤£à¥‡ à¤˜à¥‹à¤·à¤¿à¤¤ à¤•à¤°à¤¤à¥‹/à¤•à¤°à¤¤à¥‡ à¤•à¥€ à¤µà¤°à¥€à¤² à¤®à¤¾à¤¹à¤¿à¤¤à¥€ à¤®à¤¾à¤à¥à¤¯à¤¾ à¤®à¤¾à¤¹à¤¿à¤¤à¥€ à¤†à¤£à¤¿ à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸à¤¾à¤¨à¥à¤¸à¤¾à¤° à¤¸à¤¤à¥à¤¯ à¤†à¤£à¤¿ à¤¬à¤°à¥‹à¤¬à¤° à¤†à¤¹à¥‡.',
+        'place': 'à¤ à¤¿à¤•à¤¾à¤£',
+        'signature': 'à¤¸à¥à¤µà¤¾à¤•à¥à¤·à¤°à¥€',
+        'not_provided': 'à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¾à¤¹à¥€',
+        'disclaimer': 'à¤…à¤¸à¥à¤µà¥€à¤•à¤°à¤£: à¤¹à¥‡ à¤¦à¤¸à¥à¤¤à¤à¤µà¤œ CaseIQ à¤¦à¥à¤µà¤¾à¤°à¥‡ à¤•à¥‡à¤µà¤³ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤œà¤¾à¤—à¤°à¥‚à¤•à¤¤à¥‡à¤¸à¤¾à¤ à¥€ à¤¤à¤¯à¤¾à¤° à¤•à¥‡à¤²à¥‡ à¤†à¤¹à¥‡. CaseIQ à¤•à¤¾à¤¯à¤¦à¥‡à¤¶à¥€à¤° à¤¸à¤²à¥à¤²à¤¾ à¤¦à¥‡à¤¤ à¤¨à¤¾à¤¹à¥€.',
+        'regarding': 'à¤˜à¤Ÿà¤¨à¥‡à¤¬à¤¦à¥à¤¦à¤²',
+        'on': 'à¤°à¥‹à¤œà¥€',
+        'police_station': 'à¤ªà¥‹à¤²à¥€à¤¸ à¤ à¤¾à¤£à¥‡',
+    }
+}
+
+
+class PDFService:
+
+    def _get_strings(self, language):
+        return LANGUAGE_STRINGS.get(language, LANGUAGE_STRINGS['en'])
+
+    def _create_logo_header(self, strings):
+        """Create CaseIQ letterhead as a table"""
+        logo_style = ParagraphStyle(
+            'Logo',
+            fontSize=22,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#1a1a2e'),
+            alignment=TA_LEFT,
+        )
+        tagline_style = ParagraphStyle(
+            'Tagline',
+            fontSize=8,
+            fontName='Helvetica',
+            textColor=colors.HexColor('#666666'),
+            alignment=TA_LEFT,
+        )
+        date_style = ParagraphStyle(
+            'Date',
+            fontSize=9,
+            fontName='Helvetica',
+            textColor=colors.HexColor('#333333'),
+            alignment=TA_RIGHT,
+        )
+
+        logo_cell = [
+            Paragraph('<font color="#e94560">Case</font><font color="#1a1a2e">IQ</font>', logo_style),
+            Paragraph('AI-Powered Legal Awareness Platform', tagline_style),
+        ]
+        date_cell = [
+            Paragraph(f'{strings["generated_by"]}', date_style),
+            Paragraph(f'{strings["date"]}: {datetime.now().strftime("%d %B %Y")}', date_style),
+        ]
+
+        header_table = Table(
+            [[logo_cell, date_cell]],
+            colWidths=[9*cm, 9*cm]
+        )
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8f9fa')),
+            ('ROUNDEDCORNERS', [5, 5, 5, 5]),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('LEFTPADDING', (0, 0), (0, -1), 10),
+            ('RIGHTPADDING', (-1, 0), (-1, -1), 10),
+        ]))
+        return header_table
+
+    def generate_complaint_pdf(self, complaint, output_path, language=None):
+        try:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            lang = language or complaint.language or 'en'
+            # Use english for non-supported languages
+            if lang not in ('en', 'hi', 'mr'):
+                lang = 'en'
+            strings = self._get_strings(lang)
+
+            doc = SimpleDocTemplate(
+                output_path,
+                pagesize=A4,
+                rightMargin=2*cm,
+                leftMargin=2*cm,
+                topMargin=1.5*cm,
+                bottomMargin=2*cm,
+            )
+
+            styles = getSampleStyleSheet()
+
+            title_style = ParagraphStyle(
+                'Title', parent=styles['Normal'],
+                fontSize=14, spaceAfter=4,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor('#1a1a2e'),
+                fontName='Helvetica-Bold',
+            )
+            body_style = ParagraphStyle(
+                'Body', parent=styles['Normal'],
+                fontSize=10, spaceAfter=6,
+                alignment=TA_JUSTIFY,
+                fontName='Helvetica', leading=14,
+            )
+            label_style = ParagraphStyle(
+                'Label', parent=styles['Normal'],
+                fontSize=10, fontName='Helvetica-Bold',
+                textColor=colors.HexColor('#1a1a2e'),
+                spaceAfter=4,
+            )
+            disclaimer_style = ParagraphStyle(
+                'Disclaimer', parent=styles['Normal'],
+                fontSize=8, alignment=TA_CENTER,
+                textColor=colors.HexColor('#cc0000'),
+                fontName='Helvetica-Bold',
+            )
+            section_header_style = ParagraphStyle(
+                'SectionHeader', parent=styles['Normal'],
+                fontSize=10, fontName='Helvetica-Bold',
+                textColor=colors.white,
+                alignment=TA_LEFT,
+                spaceAfter=0,
+            )
+
+            story = []
+
+            # CaseIQ Letterhead
+            story.append(self._create_logo_header(strings))
+            story.append(Spacer(1, 0.15*inch))
+
+            # Colored banner for document type
+            complaint_type_display = dict(complaint.COMPLAINT_TYPE_CHOICES).get(
+                complaint.complaint_type, complaint.complaint_type.upper()
+            )
+            banner_data = [[Paragraph(complaint_type_display.upper(), section_header_style)]]
+            banner = Table(banner_data, colWidths=[17*cm])
+            banner.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#1a1a2e')),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ]))
+            story.append(banner)
+            story.append(Spacer(1, 0.05*inch))
+
+            # Draft warning
+            story.append(Paragraph(strings['draft_notice'], disclaimer_style))
+            story.append(Spacer(1, 0.1*inch))
+
+            # TO section
+            police_station = getattr(complaint, 'police_station_name', '') or '[Police Station Name]'
+            police_address = getattr(complaint, 'police_station_address', '') or '[District], [State]'
+            authority = self._get_authority(complaint.complaint_type, police_station, police_address)
+
+            story.append(Paragraph(strings['to'], label_style))
+            story.append(Paragraph(authority, body_style))
+            story.append(Spacer(1, 0.1*inch))
+
+            # Subject
+            story.append(Paragraph(
+                f'<b>{strings["subject"]}:</b> {complaint_type_display} '
+                f'{strings["regarding"]} {complaint.incident_location} '
+                f'{strings["on"]} {complaint.incident_date}',
+                body_style
+            ))
+            story.append(Spacer(1, 0.1*inch))
+
+            # Complainant details â€” colored header
+            self._add_section_header(story, strings['complainant_details'])
+            complainant_data = [
+                [f'{strings["name"]}:', complaint.complainant_name],
+                [f'{strings["address"]}:', complaint.complainant_address],
+                [f'{strings["phone"]}:', complaint.complainant_phone or strings['not_provided']],
+            ]
+            story.append(self._make_table(complainant_data))
+            story.append(Spacer(1, 0.1*inch))
+
+            # Incident details
+            self._add_section_header(story, strings['incident_details'])
+            incident_data = [
+                [f'{strings["date"]}:', str(complaint.incident_date)],
+                [f'{strings["location"]}:', complaint.incident_location],
+            ]
+            story.append(self._make_table(incident_data))
+            story.append(Spacer(1, 0.05*inch))
+            story.append(Paragraph(f'<b>{strings["description"]}:</b>', label_style))
+            story.append(Paragraph(complaint.incident_description, body_style))
+
+            if complaint.accused_details:
+                story.append(Paragraph(f'<b>{strings["accused"]}:</b>', label_style))
+                story.append(Paragraph(complaint.accused_details, body_style))
+
+            if complaint.witnesses:
+                story.append(Paragraph(f'<b>{strings["witnesses"]}:</b>', label_style))
+                story.append(Paragraph(complaint.witnesses, body_style))
+
+            if complaint.evidence_description:
+                story.append(Paragraph(f'<b>{strings["evidence"]}:</b>', label_style))
+                story.append(Paragraph(complaint.evidence_description, body_style))
+
+            if complaint.applicable_sections:
+                story.append(Paragraph(
+                    f'<b>{strings["sections"]}:</b> {", ".join(complaint.applicable_sections)}',
+                    body_style
+                ))
+
+            story.append(Spacer(1, 0.1*inch))
+
+            # AI Draft
+            if complaint.generated_draft:
+                self._add_section_header(story, strings['draft_text'])
+                story.append(Spacer(1, 0.05*inch))
+                draft_text = complaint.generated_draft.replace('\n', '<br/>')
+                story.append(Paragraph(draft_text, body_style))
+                story.append(Spacer(1, 0.1*inch))
+
+            # Relief
+            if complaint.relief_sought:
+                story.append(Paragraph(f'<b>{strings["relief"]}:</b>', label_style))
+                story.append(Paragraph(complaint.relief_sought, body_style))
+                story.append(Spacer(1, 0.1*inch))
+
+            # Declaration
+            story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#1a1a2e')))
+            story.append(Spacer(1, 0.1*inch))
+            story.append(Paragraph(strings['declaration_title'], label_style))
+            story.append(Paragraph(strings['declaration_text'], body_style))
+            story.append(Spacer(1, 0.25*inch))
+
+            # Signature block
+            sig_data = [
+                [f'{strings["place"]}: _______________', f'{strings["signature"]}: _______________'],
+                [f'{strings["date"]}: _______________', f'{strings["name"]}: {complaint.complainant_name}'],
+            ]
+            sig_table = Table(sig_data, colWidths=[8*cm, 8*cm])
+            sig_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            story.append(sig_table)
+            story.append(Spacer(1, 0.15*inch))
+
+            # Footer
+            story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#e94560')))
+            story.append(Spacer(1, 0.05*inch))
+            story.append(Paragraph(strings['disclaimer'], disclaimer_style))
+
+            doc.build(story)
+            logger.info(f"PDF generated: {output_path}")
+            return True
+
+        except Exception as e:
+            logger.error(f"PDF generation error: {e}", exc_info=True)
+            return False
+
+    def _add_section_header(self, story, title):
+        style = ParagraphStyle(
+            'SH', fontSize=10, fontName='Helvetica-Bold',
+            textColor=colors.white, spaceAfter=0,
+        )
+        data = [[Paragraph(title, style)]]
+        table = Table(data, colWidths=[17*cm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#e94560')),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 0.05*inch))
+
+    def _make_table(self, data):
+        table = Table(data, colWidths=[4*cm, 13*cm])
+        table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
+            ('LEFTPADDING', (0, 0), (0, -1), 6),
+        ]))
+        return table
+
+    def _get_authority(self, complaint_type, police_station, police_address):
+        base = {
+            'fir': f'The Station House Officer,\n{police_station},\n{police_address}',
+            'written_complaint': f'The Superintendent of Police,\n{police_station},\n{police_address}',
+            'magistrate_complaint': f'The Judicial Magistrate First Class,\n[Court Name],\n{police_address}',
+            'consumer_complaint': f'The Consumer Disputes Redressal Commission,\n{police_address}',
+            'cyber_complaint': f'The Cyber Crime Cell,\n{police_station},\n{police_address}',
+        }
+        return base.get(complaint_type, f'The Concerned Authority,\n{police_station},\n{police_address}')
+
+
+pdf_service = PDFService()
+
+===== D:\BCA\MCA\CASEIQ\caseiq\caseiq-backend\services\__init__.py =====
+

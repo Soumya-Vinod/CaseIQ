@@ -66,9 +66,10 @@ export const authAPI = {
 };
 
 // ─── LEGAL QUERY ────────────────────────────────────
+
 export const legalAPI = {
-  submitQuery: (query, language = 'en') =>
-    api.post('/legal/query/', { query, language }),
+  submitQuery: (query, language = 'en', sessionId = '') =>
+    api.post('/legal/query/', { query, language, session_id: sessionId }),
   getHistory: () => api.get('/legal/query/history/'),
   getSections: (params) => api.get('/legal/sections/', { params }),
 };
