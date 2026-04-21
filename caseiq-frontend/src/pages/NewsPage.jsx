@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { awarenessAPI } from '../services/api';
 import { SkeletonCard } from '../components/ui/Skeleton';
-import { ExternalLink, Tag, TrendingUp } from 'lucide-react';
+import { ExternalLink, Tag, TrendingUp, Search } from 'lucide-react';
 
 const NewsPage = () => {
   const [search, setSearch] = useState('');
@@ -22,26 +22,59 @@ const NewsPage = () => {
   const regular = filtered.filter((item) => !item.is_featured);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10 pb-16">
+   <div style={{ background: '#0B0B0B', minHeight: '100vh' }} className="max-w-6xl mx-auto space-y-10 pb-16">
 
       {/* Header */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <TrendingUp className="text-[#443627]" size={28} />
-          <h1 className="text-4xl font-bold text-[#443627]">Legal News</h1>
+      <div className="space-y-5">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '42px', height: '42px', borderRadius: '12px',
+            background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 20px rgba(212,175,55,0.35)', flexShrink: 0,
+          }}>
+            <TrendingUp size={20} color="#0B0B0B" />
+          </div>
+          <h1 style={{
+            fontSize: '34px', fontWeight: '800',
+            fontFamily: "'Georgia', 'Times New Roman', serif",
+            background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            letterSpacing: '-0.5px',
+          }}>Legal News</h1>
         </div>
-        <p className="text-[#725E54]">
+        <p style={{ color: '#A1A1AA', fontFamily: 'system-ui, sans-serif', fontSize: '15px' }}>
           Stay updated with the latest Indian legal developments, court judgments, and law changes.
         </p>
 
         {/* Search */}
-        <input
-          type="text"
-          placeholder="Search legal news..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-lg rounded-xl border border-[#A7B0CA] p-3 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] bg-white"
-        />
+        <div style={{ position: 'relative', maxWidth: '480px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#A1A1AA' }} />
+          <input
+            type="text"
+            placeholder="Search legal news..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              width: '100%',
+              paddingLeft: '42px',
+              paddingRight: '16px',
+              paddingTop: '13px',
+              paddingBottom: '13px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(212,175,55,0.25)',
+              borderRadius: '12px',
+              color: '#E5E5E5',
+              outline: 'none',
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: '14px',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+              boxSizing: 'border-box',
+            }}
+            onFocus={e => { e.target.style.borderColor = '#D4AF37'; e.target.style.boxShadow = '0 0 0 3px rgba(212,175,55,0.15)'; }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(212,175,55,0.25)'; e.target.style.boxShadow = 'none'; }}
+          />
+        </div>
       </div>
 
       {isLoading && (
@@ -51,17 +84,32 @@ const NewsPage = () => {
       )}
 
       {error && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-6 text-center">
-          <p className="font-semibold">Could not load news</p>
-          <p className="text-sm mt-1">Make sure your NewsAPI key is configured in the backend.</p>
+        <div style={{
+          background: 'rgba(245,158,11,0.08)',
+          border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: '16px',
+          padding: '28px',
+          textAlign: 'center',
+        }}>
+          <p style={{ fontWeight: '600', color: '#FDE68A', fontFamily: 'system-ui, sans-serif' }}>Could not load news</p>
+          <p style={{ fontSize: '13px', color: '#A1A1AA', marginTop: '6px', fontFamily: 'system-ui, sans-serif' }}>
+            Make sure your NewsAPI key is configured in the backend.
+          </p>
         </div>
       )}
 
       {!isLoading && !error && filtered.length === 0 && (
-        <div className="bg-white rounded-2xl p-10 text-center border border-[#D5DCF9] shadow">
-          <p className="text-4xl mb-3">📰</p>
-          <p className="text-[#443627] font-semibold">No news articles found</p>
-          <p className="text-[#725E54] text-sm mt-1">
+        <div style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(212,175,55,0.2)',
+          borderRadius: '16px',
+          padding: '56px',
+          textAlign: 'center',
+          backdropFilter: 'blur(12px)',
+        }}>
+          <p style={{ fontSize: '40px', marginBottom: '14px' }}>📰</p>
+          <p style={{ color: '#E5E5E5', fontWeight: '600', fontFamily: 'system-ui, sans-serif' }}>No news articles found</p>
+          <p style={{ color: '#A1A1AA', fontSize: '13px', marginTop: '6px', fontFamily: 'system-ui, sans-serif' }}>
             Ask your admin to fetch news using the backend API.
           </p>
         </div>
@@ -69,9 +117,19 @@ const NewsPage = () => {
 
       {/* Featured */}
       {featured.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-[#443627] flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#8EDCE6] inline-block" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <h2 style={{
+            fontSize: '18px', fontWeight: '700',
+            color: '#E5E5E5',
+            fontFamily: "'Georgia', 'Times New Roman', serif",
+            display: 'flex', alignItems: 'center', gap: '10px',
+          }}>
+            <span style={{
+              width: '8px', height: '8px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+              boxShadow: '0 0 8px rgba(212,175,55,0.6)',
+              display: 'inline-block',
+            }} />
             Featured
           </h2>
           <div className="grid md:grid-cols-2 gap-6">
@@ -82,8 +140,12 @@ const NewsPage = () => {
 
       {/* All News */}
       {regular.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-[#443627]">All Articles</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <h2 style={{
+            fontSize: '18px', fontWeight: '700',
+            color: '#E5E5E5',
+            fontFamily: "'Georgia', 'Times New Roman', serif",
+          }}>All Articles</h2>
           <div className="grid md:grid-cols-2 gap-6">
             {regular.map((item) => <NewsCard key={item.id} item={item} />)}
           </div>
@@ -94,37 +156,100 @@ const NewsPage = () => {
 };
 
 const NewsCard = ({ item, featured }) => (
-  <div className={`rounded-2xl p-6 shadow border transition hover:shadow-lg hover:-translate-y-1 duration-300 ${
-    featured
-      ? 'bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6] border-[#A7B0CA]'
-      : 'bg-white border-[#D5DCF9]'
-  }`}>
-    <div className="flex justify-between items-start mb-3">
-      <span className="text-xs bg-white/60 text-[#443627] px-2 py-1 rounded-full font-medium">
+  <div
+    style={{
+      borderRadius: '16px',
+      padding: '24px',
+      transition: 'all 0.25s ease',
+      cursor: 'default',
+      background: featured
+        ? 'linear-gradient(135deg, rgba(212,175,55,0.1) 0%, rgba(197,164,109,0.07) 100%)'
+        : 'rgba(255,255,255,0.03)',
+      border: featured
+        ? '1px solid rgba(212,175,55,0.4)'
+        : '1px solid rgba(212,175,55,0.15)',
+      backdropFilter: 'blur(12px)',
+      boxShadow: featured ? '0 8px 30px rgba(212,175,55,0.1)' : '0 2px 16px rgba(0,0,0,0.3)',
+    }}
+    onMouseEnter={e => {
+      e.currentTarget.style.transform = 'translateY(-4px)';
+      e.currentTarget.style.boxShadow = featured
+        ? '0 16px 48px rgba(212,175,55,0.2)'
+        : '0 12px 36px rgba(212,175,55,0.1)';
+      e.currentTarget.style.borderColor = 'rgba(212,175,55,0.5)';
+    }}
+    onMouseLeave={e => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = featured ? '0 8px 30px rgba(212,175,55,0.1)' : '0 2px 16px rgba(0,0,0,0.3)';
+      e.currentTarget.style.borderColor = featured ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.15)';
+    }}
+  >
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+      <span style={{
+        fontSize: '11px',
+        background: 'rgba(212,175,55,0.15)',
+        color: '#D4AF37',
+        padding: '4px 10px',
+        borderRadius: '20px',
+        fontWeight: '600',
+        fontFamily: 'system-ui, sans-serif',
+        border: '1px solid rgba(212,175,55,0.25)',
+      }}>
         {item.source}
       </span>
-      <span className="text-xs text-[#725E54]">
-        {new Date(item.published_at).toLocaleDateString('en-IN', {
-          day: 'numeric', month: 'short', year: 'numeric'
-        })}
+      <span style={{ fontSize: '12px', color: '#71717A', fontFamily: 'system-ui, sans-serif' }}>
+        {new Date(item.published_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
       </span>
     </div>
 
-    <h3 className="font-semibold text-[#443627] text-base mb-2 leading-snug">{item.title}</h3>
-    <p className="text-sm text-[#725E54] line-clamp-3">{item.summary}</p>
+    <h3 style={{
+      fontWeight: '700',
+      color: '#E5E5E5',
+      fontSize: '15px',
+      marginBottom: '10px',
+      lineHeight: '1.4',
+      fontFamily: 'system-ui, sans-serif',
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+      overflow: 'hidden',
+    }}>{item.title}</h3>
+    <p style={{
+      fontSize: '13px', color: '#A1A1AA', lineHeight: '1.6',
+      fontFamily: 'system-ui, sans-serif',
+      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+    }}>{item.summary}</p>
 
     {item.tags?.length > 0 && (
-      <div className="flex flex-wrap gap-2 mt-3">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '14px' }}>
         {item.tags.slice(0, 3).map((tag, i) => (
-          <span key={i} className="flex items-center gap-1 text-xs bg-white/50 text-[#443627] px-2 py-1 rounded-full">
-            <Tag size={10} /> {tag}
+          <span key={i} style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            fontSize: '11px',
+            background: 'rgba(255,255,255,0.05)',
+            color: '#C5A46D',
+            padding: '4px 10px',
+            borderRadius: '20px',
+            border: '1px solid rgba(197,164,109,0.2)',
+            fontFamily: 'system-ui, sans-serif',
+          }}>
+            <Tag size={9} /> {tag}
           </span>
         ))}
       </div>
     )}
 
     <a href={item.source_url} target="_blank" rel="noopener noreferrer"
-      className="flex items-center gap-1 text-xs text-[#443627] font-medium mt-4 hover:underline">
+      style={{
+        display: 'flex', alignItems: 'center', gap: '6px',
+        fontSize: '12px', color: '#D4AF37', fontWeight: '600',
+        marginTop: '16px', textDecoration: 'none',
+        fontFamily: 'system-ui, sans-serif',
+        transition: 'gap 0.2s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
+      onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
+    >
       Read full article <ExternalLink size={12} />
     </a>
   </div>

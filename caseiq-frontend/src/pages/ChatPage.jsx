@@ -11,7 +11,6 @@ import { useSettings } from '../context/SettingsContext';
 import toast from 'react-hot-toast';
 import { FileText, ChevronRight } from 'lucide-react';
 
-// Stable session ID — persists for the browser session, resets on new chat
 function getOrCreateSessionId() {
   let sid = sessionStorage.getItem('caseiq_session_id');
   if (!sid) {
@@ -23,17 +22,6 @@ function getOrCreateSessionId() {
 
 const STORAGE_KEY = 'caseiq_chat_guest';
 
-const SUGGESTED_QUERIES = [
-  { label: '🚨 Rights during arrest', query: 'What are my rights when I am arrested by police in India?' },
-  { label: '📄 How to file FIR', query: 'What is the procedure to file an FIR at a police station?' },
-  { label: '💼 Employer not paying salary', query: 'My employer has not paid salary for 3 months. What legal action can I take?' },
-  { label: '🏠 Property dispute', query: 'My landlord is refusing to return my security deposit. What are my legal options?' },
-  { label: '📱 Cybercrime victim', query: 'I was cheated online and lost money. How do I report cybercrime in India?' },
-  { label: '⚖️ Bail process', query: 'How does bail work in India and what are the types of bail available?' },
-  { label: '👩 Domestic violence', query: 'What legal protections are available for women facing domestic violence in India?' },
-  { label: '🚗 Road accident rights', query: 'I was injured in a road accident. What compensation am I entitled to under Indian law?' },
-];
-
 const ChatPage = () => {
   const { isAuthenticated } = useAuth();
   const { language } = useSettings();
@@ -41,21 +29,18 @@ const ChatPage = () => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [latestLaws, setLatestLaws] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(true);
   const [sessionId] = useState(getOrCreateSessionId);
   const [lastAIText, setLastAIText] = useState('');
   const historyRef = useRef([]);
 
   const langMap = { English: 'en', Hindi: 'hi', Marathi: 'mr', Tamil: 'ta' };
 
-  // Load saved messages
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setMessages(parsed);
-        if (parsed.length > 1) setShowSuggestions(false);
         const last = parsed[parsed.length - 1];
         if (last?.laws) setLatestLaws(last.laws);
         if (last?.sender === 'ai') setLastAIText(last.text || '');
@@ -71,7 +56,6 @@ const ChatPage = () => {
     }
   }, []);
 
-  // Save messages on change
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
@@ -81,18 +65,13 @@ const ChatPage = () => {
 
   const handleSend = useCallback(async (text) => {
     if (!text.trim()) return;
-    setShowSuggestions(false);
 
     const userMsg = { sender: 'user', text };
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
     try {
-      const res = await legalAPI.submitQuery(
-        text,
-        langMap[language] || 'en',
-        sessionId,
-      );
+      const res = await legalAPI.submitQuery(text, langMap[language] || 'en', sessionId);
       const data = res.data;
 
       const laws = (data.legal_sections || []).map((s) => ({
@@ -125,7 +104,6 @@ const ChatPage = () => {
     }
   }, [language, sessionId]);
 
-  // Handle pending query from global search or home page
   useEffect(() => {
     const pending = localStorage.getItem('caseiq_pending_query');
     if (pending) {
@@ -135,7 +113,6 @@ const ChatPage = () => {
   }, [handleSend]);
 
   const clearChat = () => {
-    // New session on clear
     const newSid = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     sessionStorage.setItem('caseiq_session_id', newSid);
     localStorage.removeItem(STORAGE_KEY);
@@ -146,12 +123,9 @@ const ChatPage = () => {
     setMessages(welcome);
     setLatestLaws([]);
     setLastAIText('');
-    setShowSuggestions(true);
   };
 
-  // Draft FIR from this conversation
   const handleDraftFIR = () => {
-    // Extract what we can from the last AI response to pre-fill FIR
     const userQueries = messages
       .filter((m) => m.sender === 'user')
       .map((m) => m.text)
@@ -171,118 +145,453 @@ const ChatPage = () => {
 
   return (
     <PageTransition>
-      <div className="max-w-5xl mx-auto space-y-8 pb-12">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <h2 className="text-4xl font-bold text-[#443627]">AI Legal Assistant</h2>
-            <p className="text-[#725E54]">
-              Powered by Groq Llama 3.3 — Indian Law Specialist
-              {turnCount > 1 && (
-                <span className="ml-3 text-xs bg-[#D5DCF9] text-[#443627] px-2 py-0.5 rounded-full font-medium">
-                  {turnCount} turn conversation
-                </span>
-              )}
-            </p>
-          </div>
-          {hasUserMessages && (
-            <button
-              onClick={clearChat}
-              className="text-sm text-slate-400 hover:text-red-500 transition border border-slate-200 px-3 py-1.5 rounded-lg hover:border-red-200"
-            >
-              New Chat
-            </button>
-          )}
-        </div>
+        html, body, #root {
+          background-color: #0B0B0B !important;
+        }
 
-        {!isAuthenticated && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-3 text-sm flex items-center gap-2"
-          >
-            💡 Sign in to save your conversation history across devices
-          </motion.div>
-        )}
+        .cp-page-shell {
+          min-height: 100vh;
+          width: 100%;
+          background: #0B0B0B;
+          background-image:
+            radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212,175,55,0.12) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 40% at 80% 80%, rgba(184,150,12,0.06) 0%, transparent 55%),
+            radial-gradient(ellipse 40% 30% at 10% 70%, rgba(212,175,55,0.04) 0%, transparent 50%);
+          position: relative;
+        }
 
-        {/* Suggested Queries */}
-        <AnimatePresence>
-          {showSuggestions && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-3"
-            >
-              <p className="text-sm font-medium text-[#725E54]">💡 Common legal questions:</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {SUGGESTED_QUERIES.map((sq, i) => (
-                  <motion.button
-                    key={i}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => handleSend(sq.query)}
-                    disabled={loading}
-                    className="text-left text-xs bg-white border border-[#D5DCF9] text-[#443627] px-3 py-2.5 rounded-xl hover:bg-[#D5DCF9] hover:border-[#A7B0CA] transition shadow-sm disabled:opacity-50"
-                  >
-                    {sq.label}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        .cp-page-shell::after {
+          content: '';
+          position: fixed;
+          inset: 0;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+          pointer-events: none;
+          z-index: 0;
+          opacity: 0.4;
+        }
 
-        {/* Chat Window */}
-        <div className="bg-gradient-to-br from-[#D5DCF9]/60 to-[#8EDCE6]/60 backdrop-blur-md rounded-3xl shadow-xl p-6 border border-white/40">
-          <AIResponseWindow messages={messages} loading={loading} />
-          <div className="mt-4">
-            <QueryInput onSend={handleSend} disabled={loading} />
-          </div>
-        </div>
+        .cp-root {
+          font-family: 'DM Sans', sans-serif;
+          max-width: 920px;
+          margin: 0 auto;
+          padding: 40px 24px 80px;
+          display: flex;
+          flex-direction: column;
+          gap: 28px;
+          position: relative;
+          z-index: 1;
+        }
 
-        {/* Draft FIR from conversation — appears after first AI response */}
-        <AnimatePresence>
-          {hasUserMessages && !loading && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl p-4 border border-[#D5DCF9] shadow flex items-center justify-between gap-4"
-            >
-              <div>
-                <p className="text-sm font-semibold text-[#443627]">Ready to take action?</p>
-                <p className="text-xs text-[#725E54] mt-0.5">Use this conversation to auto-fill your FIR draft</p>
-              </div>
-              <button
-                onClick={handleDraftFIR}
-                className="flex items-center gap-2 bg-[#443627] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#725E54] transition font-medium shadow shrink-0"
-              >
-                <FileText size={14} />
-                Draft FIR
-                <ChevronRight size={14} />
+        .cp-root::before {
+          content: '';
+          position: absolute;
+          top: 60px;
+          left: -1px;
+          width: 2px;
+          height: 120px;
+          background: linear-gradient(180deg, transparent, rgba(212,175,55,0.6), transparent);
+          border-radius: 2px;
+        }
+
+        /* ── HEADER ── */
+        .cp-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          padding-bottom: 8px;
+        }
+
+        .cp-header-left {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .cp-heading-eyebrow {
+          font-size: 0.7rem;
+          font-weight: 500;
+          letter-spacing: 3px;
+          text-transform: uppercase;
+          color: #9A7D3A;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .cp-heading-eyebrow::before {
+          content: '';
+          display: inline-block;
+          width: 28px;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, #9A7D3A);
+        }
+
+        .cp-heading {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: clamp(2rem, 4.5vw, 3rem);
+          font-weight: 700;
+          font-style: italic;
+          background: linear-gradient(135deg, #D4AF37 0%, #FFD700 45%, #C5A46D 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          filter: drop-shadow(0 0 24px rgba(212,175,55,0.3));
+          line-height: 1.05;
+          margin: 0;
+          letter-spacing: -0.5px;
+        }
+
+        .cp-subtitle {
+          font-size: 0.8rem;
+          color: #6B6B75;
+          font-weight: 400;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          letter-spacing: 0.2px;
+        }
+
+        .cp-subtitle-dot {
+          width: 3px;
+          height: 3px;
+          border-radius: 50%;
+          background: #4A4A52;
+          display: inline-block;
+        }
+
+        .cp-turn-badge {
+          background: rgba(212,175,55,0.1);
+          border: 1px solid rgba(212,175,55,0.25);
+          color: #C9A84C;
+          font-size: 0.68rem;
+          font-weight: 600;
+          padding: 3px 12px;
+          border-radius: 20px;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+        }
+
+        .cp-btn-newchat {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.78rem;
+          font-weight: 500;
+          color: #7A7A82;
+          background: transparent;
+          border: 1px solid rgba(255,255,255,0.07);
+          padding: 9px 18px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          letter-spacing: 0.3px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .cp-btn-newchat::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, rgba(212,175,55,0.06), transparent);
+          opacity: 0;
+          transition: opacity 0.25s ease;
+        }
+
+        .cp-btn-newchat:hover {
+          color: #C9A84C;
+          border-color: rgba(212,175,55,0.4);
+          box-shadow: 0 0 20px rgba(212,175,55,0.1), inset 0 0 20px rgba(212,175,55,0.03);
+        }
+
+        .cp-btn-newchat:hover::before { opacity: 1; }
+
+        /* ── SIGN-IN BANNER ── */
+        .cp-signin-banner {
+          background: rgba(212,175,55,0.04);
+          border: 1px solid rgba(212,175,55,0.15);
+          border-left: 3px solid rgba(212,175,55,0.5);
+          color: #9A7D3A;
+          border-radius: 12px;
+          padding: 12px 18px;
+          font-size: 0.82rem;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          letter-spacing: 0.1px;
+        }
+
+        /* ── CHAT CONTAINER ── */
+        .cp-chat-container {
+          background: rgba(12, 10, 4, 0.96);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(212,175,55,0.18);
+          border-top: 1px solid rgba(212,175,55,0.28);
+          border-radius: 20px;
+          padding: 24px;
+          box-shadow:
+            0 1px 0 rgba(212,175,55,0.15) inset,
+            0 -1px 0 rgba(0,0,0,0.5) inset,
+            0 20px 60px rgba(0,0,0,0.8),
+            0 4px 24px rgba(0,0,0,0.6);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .cp-chat-container::before {
+          content: '';
+          position: absolute;
+          top: 0; right: 0;
+          width: 160px; height: 160px;
+          background: radial-gradient(circle at top right, rgba(212,175,55,0.06), transparent 70%);
+          pointer-events: none;
+        }
+
+        .cp-chat-container::after {
+          content: '';
+          position: absolute;
+          bottom: 0; left: 0;
+          width: 100px; height: 100px;
+          background: radial-gradient(circle at bottom left, rgba(212,175,55,0.04), transparent 70%);
+          pointer-events: none;
+        }
+
+        .cp-query-input-wrap {
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid rgba(212,175,55,0.1);
+          position: relative;
+        }
+
+        .cp-query-input-wrap::before {
+          content: '';
+          position: absolute;
+          top: -1px; left: 50%;
+          transform: translateX(-50%);
+          width: 60px; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+        }
+
+        /* ── FIR CARD ── */
+        .cp-fir-card {
+          background: rgba(12, 10, 4, 0.96);
+          border: 1px solid rgba(212,175,55,0.2);
+          border-radius: 16px;
+          padding: 20px 26px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+          box-shadow:
+            0 4px 32px rgba(0,0,0,0.6),
+            0 1px 0 rgba(212,175,55,0.15) inset;
+          flex-wrap: wrap;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .cp-fir-card::before {
+          content: '';
+          position: absolute;
+          left: 0; top: 0; bottom: 0;
+          width: 3px;
+          background: linear-gradient(180deg, transparent, #D4AF37, transparent);
+        }
+
+        .cp-fir-card-left p:first-child {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 1.05rem;
+          font-weight: 600;
+          color: #E5E5E5;
+          margin: 0 0 4px;
+          letter-spacing: 0.2px;
+        }
+
+        .cp-fir-card-left p:last-child {
+          font-size: 0.77rem;
+          color: #555560;
+          margin: 0;
+          letter-spacing: 0.1px;
+        }
+
+        .cp-btn-fir {
+          font-family: 'DM Sans', sans-serif;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: linear-gradient(135deg, #B8960C 0%, #D4AF37 50%, #FFD700 100%);
+          color: #0B0B0B;
+          font-size: 0.75rem;
+          font-weight: 700;
+          padding: 11px 22px;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.22s ease;
+          white-space: nowrap;
+          letter-spacing: 0.4px;
+          text-transform: uppercase;
+          box-shadow: 0 4px 16px rgba(212,175,55,0.3);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .cp-btn-fir::before {
+          content: '';
+          position: absolute;
+          top: 0; left: -100%;
+          width: 100%; height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+          transition: left 0.4s ease;
+        }
+
+        .cp-btn-fir:hover {
+          transform: translateY(-2px) scale(1.02);
+          box-shadow: 0 8px 28px rgba(212,175,55,0.45);
+          filter: brightness(1.08);
+        }
+
+        .cp-btn-fir:hover::before { left: 100%; }
+
+        /* ── LAW PANEL ── */
+        .cp-law-panel {
+          background: rgba(12, 10, 4, 0.96);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(212,175,55,0.15);
+          border-top: 1px solid rgba(212,175,55,0.25);
+          border-radius: 20px;
+          padding: 28px;
+          box-shadow:
+            0 1px 0 rgba(212,175,55,0.12) inset,
+            0 20px 60px rgba(0,0,0,0.6);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .cp-law-panel::before {
+          content: '';
+          position: absolute;
+          bottom: -40px; right: -40px;
+          width: 200px; height: 200px;
+          background: radial-gradient(circle, rgba(212,175,55,0.05) 0%, transparent 70%);
+          pointer-events: none;
+        }
+
+        .cp-law-heading {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 1.3rem;
+          font-weight: 600;
+          color: #C9A84C;
+          margin: 0 0 20px;
+          padding-bottom: 16px;
+          border-bottom: 1px solid rgba(212,175,55,0.12);
+          letter-spacing: 0.3px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .cp-law-heading::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(212,175,55,0.2), transparent);
+          margin-left: 8px;
+        }
+
+        @media (max-width: 640px) {
+          .cp-root { padding: 24px 16px 60px; gap: 20px; }
+          .cp-chat-container { padding: 18px 16px; }
+          .cp-law-panel { padding: 20px 16px; }
+          .cp-fir-card { padding: 16px 18px; }
+          .cp-heading { font-size: 1.8rem; }
+        }
+      `}</style>
+
+      <div className="cp-page-shell">
+        <div className="cp-root">
+
+          {/* Header */}
+          <div className="cp-header">
+            <div className="cp-header-left">
+              <span className="cp-heading-eyebrow">Indian Law Intelligence</span>
+              <h2 className="cp-heading">AI Legal Assistant</h2>
+              <p className="cp-subtitle">
+                <span>Groq Llama 3.3</span>
+                <span className="cp-subtitle-dot" />
+                <span>BNS · BNSS · IPC · CrPC</span>
+                {turnCount > 1 && (
+                  <span className="cp-turn-badge">{turnCount} turns</span>
+                )}
+              </p>
+            </div>
+            {hasUserMessages && (
+              <button onClick={clearChat} className="cp-btn-newchat">
+                + New Chat
               </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </div>
 
-        {/* Law References */}
-        <AnimatePresence>
-          {latestLaws.length > 0 && (
+          {/* Sign-in banner */}
+          {!isAuthenticated && (
             <motion.div
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-[#A7B0CA]/60 to-[#D5DCF9]/60 backdrop-blur-md rounded-3xl shadow-lg p-6 border border-white/40"
+              className="cp-signin-banner"
             >
-              <h3 className="text-xl font-semibold text-[#443627] mb-4">
-                📚 Relevant Legal Sections
-              </h3>
-              <LawReferenceViewer laws={latestLaws} />
+              💡 Sign in to save your conversation history across devices
             </motion.div>
           )}
-        </AnimatePresence>
 
+          {/* Chat Window */}
+          <div className="cp-chat-container">
+            <AIResponseWindow messages={messages} loading={loading} />
+            <div className="cp-query-input-wrap">
+              <QueryInput onSend={handleSend} disabled={loading} />
+            </div>
+          </div>
+
+          {/* Draft FIR Action Card */}
+          <AnimatePresence>
+            {hasUserMessages && !loading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="cp-fir-card"
+              >
+                <div className="cp-fir-card-left">
+                  <p>Ready to take action?</p>
+                  <p>Use this conversation to auto-fill your FIR draft</p>
+                </div>
+                <button onClick={handleDraftFIR} className="cp-btn-fir">
+                  <FileText size={13} />
+                  Draft FIR
+                  <ChevronRight size={13} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Law References */}
+          <AnimatePresence>
+            {latestLaws.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="cp-law-panel"
+              >
+                <h3 className="cp-law-heading">📚 Relevant Legal Sections</h3>
+                <LawReferenceViewer laws={latestLaws} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+        </div>
       </div>
     </PageTransition>
   );

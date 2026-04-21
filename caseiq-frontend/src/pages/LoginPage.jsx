@@ -1,67 +1,219 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
+import bgImage from "../assets/download.png";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate("/");
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid email or password.');
+      setError(err.response?.data?.error || "Invalid email or password.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#D5DCF9] to-[#8EDCE6]">
-      <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md space-y-6">
+  const inputStyle = {
+    width: "100%",
+    padding: "14px 16px",
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(212,175,55,0.25)",
+    borderRadius: "12px",
+    color: "#E5E5E5",
+    outline: "none",
+    fontSize: "14px",
+    transition: "all 0.2s",
+  };
 
-        {/* Logo */}
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold text-[#443627]">CaseIQ</h1>
-          <p className="text-[#725E54] text-sm">AI-Powered Legal Knowledge Platform</p>
+  const handleInputFocus = (e) => {
+    e.target.style.borderColor = "#FFD700";
+    e.target.style.boxShadow = "0 0 0 3px rgba(212,175,55,0.15)";
+  };
+
+  const handleInputBlur = (e) => {
+    e.target.style.borderColor = "rgba(212,175,55,0.25)";
+    e.target.style.boxShadow = "none";
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "radial-gradient(ellipse at 50% 0%, rgba(212,175,55,0.12) 0%, #0B0B0B 60%)",
+        padding: "20px",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* 🔥 GOLD BACKGROUND IMAGE */}
+      <img
+        src={bgImage}
+        alt="legal emblem"
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "600px",
+          opacity: 0.06,
+          filter: "blur(1px)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+
+      {/* ✨ GOLD GLOW */}
+      <div
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "700px",
+          height: "700px",
+          background:
+            "radial-gradient(circle, rgba(212,175,55,0.08), transparent 70%)",
+          pointerEvents: "none",
+          zIndex: 1,
+        }}
+      />
+
+      {/* LOGIN CARD */}
+      <div
+        style={{
+          background: "rgba(17,17,17,0.75)",
+          border: "1px solid rgba(212,175,55,0.25)",
+          borderRadius: "24px",
+          padding: "48px",
+          width: "100%",
+          maxWidth: "440px",
+          backdropFilter: "blur(20px)",
+          boxShadow:
+            "0 30px 80px rgba(0,0,0,0.7), 0 0 20px rgba(212,175,55,0.1)",
+          position: "relative",
+          zIndex: 10,
+        }}
+      >
+        {/* TOP GOLD LINE */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: "15%",
+            right: "15%",
+            height: "1px",
+            background:
+              "linear-gradient(90deg, transparent, #D4AF37, transparent)",
+          }}
+        />
+
+        {/* LOGO */}
+        <div style={{ textAlign: "center", marginBottom: "36px" }}>
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "18px",
+              background: "linear-gradient(135deg, #D4AF37, #FFD700)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px",
+              boxShadow: "0 8px 30px rgba(212,175,55,0.4)",
+              fontSize: "28px",
+            }}
+          >
+            ⚖️
+          </div>
+
+          <h1
+            style={{
+              fontSize: "32px",
+              fontWeight: "800",
+              fontFamily: "'Georgia', serif",
+              background: "linear-gradient(135deg, #D4AF37, #FFD700)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              marginBottom: "6px",
+            }}
+          >
+            CaseIQ
+          </h1>
+
+          <p style={{ color: "#A1A1AA", fontSize: "13px" }}>
+            AI-Powered Legal Knowledge Platform
+          </p>
         </div>
 
-        {/* Error */}
+        {/* ERROR */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">
+          <div
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#FCA5A5",
+              fontSize: "13px",
+              borderRadius: "10px",
+              padding: "12px 16px",
+              marginBottom: "20px",
+            }}
+          >
             {error}
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* FORM */}
+        <form
+          onSubmit={handleLogin}
+          style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+        >
           <input
             type="email"
             placeholder="Email Address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] transition"
+            style={inputStyle}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
           />
+
           <input
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] transition"
+            style={inputStyle}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
           />
 
-          <div className="flex justify-end">
-            <Link to="/forgot-password" className="text-sm text-[#725E54] hover:text-[#443627]">
+          <div style={{ textAlign: "right" }}>
+            <Link
+              to="/forgot-password"
+              style={{
+                fontSize: "13px",
+                color: "#A1A1AA",
+                textDecoration: "none",
+              }}
+            >
               Forgot password?
             </Link>
           </div>
@@ -69,31 +221,64 @@ const LoginPage = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#443627] text-white py-3 rounded-xl hover:bg-[#725E54] transition disabled:opacity-50"
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: "linear-gradient(135deg, #D4AF37, #FFD700)",
+              border: "none",
+              borderRadius: "12px",
+              color: "#0B0B0B",
+              fontWeight: "700",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              boxShadow: "0 6px 25px rgba(212,175,55,0.5)",
+            }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <hr className="flex-1 border-slate-200" />
-          <span className="text-slate-400 text-sm">or</span>
-          <hr className="flex-1 border-slate-200" />
+        {/* DIVIDER */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            margin: "24px 0",
+          }}
+        >
+          <div style={{ flex: 1, height: "1px", background: "#333" }} />
+          <span style={{ color: "#A1A1AA", fontSize: "13px" }}>or</span>
+          <div style={{ flex: 1, height: "1px", background: "#333" }} />
         </div>
 
-        {/* Guest */}
+        {/* GUEST */}
         <button
-          onClick={() => navigate('/')}
-          className="w-full border border-[#A7B0CA] text-[#443627] py-3 rounded-xl hover:bg-[#D5DCF9]/40 transition"
+          onClick={() => navigate("/")}
+          style={{
+            width: "100%",
+            padding: "13px",
+            background: "transparent",
+            border: "1px solid rgba(212,175,55,0.3)",
+            borderRadius: "12px",
+            color: "#C5A46D",
+            cursor: "pointer",
+          }}
         >
           Continue as Guest
         </button>
 
-        {/* Register */}
-        <p className="text-center text-sm text-[#725E54]">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-[#443627] font-semibold hover:underline">
+        {/* REGISTER */}
+        <p
+          style={{
+            textAlign: "center",
+            fontSize: "13px",
+            marginTop: "20px",
+            color: "#A1A1AA",
+          }}
+        >
+          Don't have an account?{" "}
+          <Link to="/register" style={{ color: "#FFD700" }}>
             Create one
           </Link>
         </p>

@@ -13,124 +13,310 @@ const Sidebar = () => {
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const baseStyle = 'flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm w-full';
-  const iconStyle = 'w-4 h-4 shrink-0';
-
-  const navClass = ({ isActive }) =>
-    `${baseStyle} ${isActive
-      ? 'bg-gradient-to-r from-[#8EDCE6] to-[#D5DCF9] text-[#443627] shadow-md font-semibold'
-      : darkMode
-      ? 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
-      : 'text-slate-600 hover:bg-[#D5DCF9]/50 hover:text-[#443627]'
-    }`;
-
   const navItems = [
-    { to: '/', icon: Home, label: 'Home' },
-    { to: '/chat', icon: MessageCircle, label: 'AI Assistant' },
-    { to: '/fir-draft', icon: FileText, label: 'FIR Draft' },
-    { to: '/laws', icon: Scale, label: 'Law Explorer' },
-    { to: '/news', icon: Newspaper, label: 'Legal News' },
-    { to: '/education', icon: BookOpen, label: 'Education' },
-    { to: '/stations', icon: MapPin, label: 'Find Stations' },
+    { to: '/',          icon: Home,            label: 'Home' },
+    { to: '/chat',      icon: MessageCircle,   label: 'AI Assistant' },
+    { to: '/fir-draft', icon: FileText,        label: 'FIR Draft' },
+    { to: '/laws',      icon: Scale,           label: 'Law Explorer' },
+    { to: '/news',      icon: Newspaper,       label: 'Legal News' },
+    { to: '/education', icon: BookOpen,        label: 'Education' },
+    { to: '/stations',  icon: MapPin,          label: 'Find Stations' },
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/history', icon: History, label: 'History' },
+    { to: '/history',   icon: History,         label: 'History' },
   ];
 
   return (
-    <aside className={`w-64 min-h-screen sticky top-0 flex flex-col py-6 px-4 border-r transition-all duration-300 ${
-      darkMode
-        ? 'bg-slate-900/95 border-slate-700/60'
-        : 'bg-white/90 border-slate-200/60'
-    } backdrop-blur-xl`}>
+    // height: 100% + no minHeight/sticky — Layout wrapper controls sizing
+    <aside style={{
+      width: '240px',
+      height: '100%',             /* fill the Layout wrapper, not the viewport */
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '24px 12px',
+      background: 'rgba(10,10,10,0.92)',
+      borderRight: '1px solid rgba(212,175,55,0.15)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      flexShrink: 0,
+      boxSizing: 'border-box',
+    }}>
 
-      {/* Nav Section */}
-      <div className="flex-1 space-y-1">
-        <p className={`text-xs uppercase tracking-widest px-4 mb-4 font-semibold ${
-          darkMode ? 'text-slate-500' : 'text-slate-400'
-        }`}>
+      {/* ── Nav items ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+        <p style={{
+          fontSize: '10px',
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
+          color: 'rgba(212,175,55,0.45)',
+          padding: '0 12px',
+          marginBottom: '12px',
+          fontWeight: '600',
+          fontFamily: 'system-ui, sans-serif',
+          flexShrink: 0,
+        }}>
           Navigation
         </p>
 
         {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} end={to === '/'} className={navClass}>
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/'}
+            style={{ textDecoration: 'none', flexShrink: 0 }}
+          >
             {({ isActive }) => (
-              <>
-                <Icon className={iconStyle} />
-                <span className="flex-1">{label}</span>
-                {isActive && <ChevronRight className="w-3 h-3 opacity-50" />}
-              </>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer',
+                  fontFamily: 'system-ui, sans-serif',
+                  fontSize: '13px',
+                  fontWeight: isActive ? '600' : '500',
+                  position: 'relative',
+                  ...(isActive ? {
+                    background: 'linear-gradient(135deg, rgba(212,175,55,0.18), rgba(255,215,0,0.08))',
+                    color: '#D4AF37',
+                    border: '1px solid rgba(212,175,55,0.3)',
+                    boxShadow: '0 2px 12px rgba(212,175,55,0.12)',
+                  } : {
+                    background: 'transparent',
+                    color: '#A1A1AA',
+                    border: '1px solid transparent',
+                  }),
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'rgba(212,175,55,0.07)';
+                    e.currentTarget.style.color = '#D4AF37';
+                    e.currentTarget.style.borderColor = 'rgba(212,175,55,0.15)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = '#A1A1AA';
+                    e.currentTarget.style.borderColor = 'transparent';
+                  }
+                }}
+              >
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    left: 0, top: '20%', bottom: '20%',
+                    width: '3px',
+                    background: 'linear-gradient(180deg, #D4AF37, #FFD700)',
+                    borderRadius: '0 3px 3px 0',
+                    boxShadow: '0 0 8px rgba(212,175,55,0.6)',
+                  }} />
+                )}
+                <Icon size={15} style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{label}</span>
+                {isActive && <ChevronRight size={12} style={{ opacity: 0.6 }} />}
+              </div>
             )}
           </NavLink>
         ))}
       </div>
 
-      {/* Divider */}
-      <div className={`my-4 border-t ${darkMode ? 'border-slate-700/60' : 'border-slate-200'}`} />
+      {/* ── Divider ── */}
+      <div style={{
+        height: '1px',
+        margin: '16px 0',
+        flexShrink: 0,
+        background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.25), transparent)',
+      }} />
 
-      {/* Bottom Section */}
-      {isAuthenticated ? (
-        <div className="space-y-1">
+      {/* ── Bottom section ── */}
+      <div style={{ flexShrink: 0 }}>
+        {isAuthenticated ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
-          {/* User Card */}
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => navigate('/profile')}
-            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition mb-2 ${
-              darkMode
-                ? 'hover:bg-slate-800 bg-slate-800/50'
-                : 'hover:bg-[#D5DCF9]/40 bg-[#F8FAFC]'
-            }`}
-          >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow-md shrink-0">
-              <span className="text-[#443627] font-bold text-sm">
-                {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <p className={`text-sm font-semibold truncate ${darkMode ? 'text-white' : 'text-[#443627]'}`}>
-                {user?.full_name || 'My Account'}
-              </p>
-              <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-            </div>
-          </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              onClick={() => navigate('/profile')}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 12px',
+                borderRadius: '12px',
+                background: 'rgba(212,175,55,0.06)',
+                border: '1px solid rgba(212,175,55,0.15)',
+                cursor: 'pointer',
+                marginBottom: '6px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(212,175,55,0.11)';
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.3)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(212,175,55,0.06)';
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.15)';
+              }}
+            >
+              <div style={{
+                width: '34px', height: '34px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 10px rgba(212,175,55,0.35)',
+                flexShrink: 0,
+              }}>
+                <span style={{ color: '#0B0B0B', fontWeight: '800', fontSize: '13px', fontFamily: 'system-ui, sans-serif' }}>
+                  {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+                </span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                <p style={{
+                  fontSize: '13px', fontWeight: '600', color: '#E5E5E5',
+                  fontFamily: 'system-ui, sans-serif',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  margin: 0,
+                }}>
+                  {user?.full_name || 'My Account'}
+                </p>
+                <p style={{
+                  fontSize: '11px', color: '#71717A',
+                  fontFamily: 'system-ui, sans-serif',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  margin: 0,
+                }}>
+                  {user?.email}
+                </p>
+              </div>
+            </motion.button>
 
-          <NavLink to="/settings" className={navClass}>
-            <Settings className={iconStyle} />
-            <span className="flex-1">Settings</span>
-          </NavLink>
+            <NavLink to="/settings" style={{ textDecoration: 'none' }}>
+              {({ isActive }) => (
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '9px 12px', borderRadius: '10px',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    fontSize: '13px', fontWeight: '500',
+                    fontFamily: 'system-ui, sans-serif',
+                    color: isActive ? '#D4AF37' : '#A1A1AA',
+                    background: isActive ? 'rgba(212,175,55,0.1)' : 'transparent',
+                    border: isActive ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+                  }}
+                  onMouseEnter={e => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'rgba(212,175,55,0.07)';
+                      e.currentTarget.style.color = '#D4AF37';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#A1A1AA';
+                    }
+                  }}
+                >
+                  <Settings size={15} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>Settings</span>
+                </div>
+              )}
+            </NavLink>
 
-          <button
-            onClick={logout}
-            className={`${baseStyle} text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600`}
-          >
-            <LogOut className={iconStyle} />
-            <span className="flex-1">Sign Out</span>
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p className={`text-xs text-center mb-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Sign in to save your history
-          </p>
-          <button
-            onClick={() => navigate('/login')}
-            className="w-full bg-[#443627] text-white px-4 py-2.5 rounded-xl hover:bg-[#725E54] transition text-sm font-medium shadow"
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => navigate('/register')}
-            className={`w-full border px-4 py-2.5 rounded-xl transition text-sm font-medium ${
-              darkMode
-                ? 'border-slate-600 text-slate-300 hover:bg-slate-800'
-                : 'border-[#A7B0CA] text-[#443627] hover:bg-[#D5DCF9]/40'
-            }`}
-          >
-            Create Account
-          </button>
-        </div>
-      )}
+            <button
+              onClick={logout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '9px 12px', borderRadius: '10px',
+                cursor: 'pointer', transition: 'all 0.2s',
+                fontSize: '13px', fontWeight: '500',
+                fontFamily: 'system-ui, sans-serif',
+                color: '#F87171',
+                background: 'transparent',
+                border: '1px solid transparent',
+                width: '100%',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(239,68,68,0.1)';
+                e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'transparent';
+              }}
+            >
+              <LogOut size={15} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1, textAlign: 'left' }}>Sign Out</span>
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <p style={{
+              fontSize: '12px', textAlign: 'center', color: '#71717A',
+              marginBottom: '6px', fontFamily: 'system-ui, sans-serif',
+            }}>
+              Sign in to save your history
+            </p>
+            <button
+              onClick={() => navigate('/login')}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                color: '#0B0B0B',
+                padding: '10px 16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '700',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 3px 14px rgba(212,175,55,0.35)',
+                transition: 'all 0.2s',
+                fontFamily: 'system-ui, sans-serif',
+              }}
+              onMouseEnter={e => {
+                e.target.style.boxShadow = '0 5px 20px rgba(212,175,55,0.55)';
+                e.target.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={e => {
+                e.target.style.boxShadow = '0 3px 14px rgba(212,175,55,0.35)';
+                e.target.style.transform = 'translateY(0)';
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => navigate('/register')}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                color: '#C5A46D',
+                padding: '10px 16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '500',
+                border: '1px solid rgba(212,175,55,0.25)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontFamily: 'system-ui, sans-serif',
+              }}
+              onMouseEnter={e => {
+                e.target.style.background = 'rgba(212,175,55,0.07)';
+                e.target.style.borderColor = 'rgba(212,175,55,0.45)';
+                e.target.style.color = '#D4AF37';
+              }}
+              onMouseLeave={e => {
+                e.target.style.background = 'transparent';
+                e.target.style.borderColor = 'rgba(212,175,55,0.25)';
+                e.target.style.color = '#C5A46D';
+              }}
+            >
+              Create Account
+            </button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 };

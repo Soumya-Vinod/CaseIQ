@@ -41,10 +41,7 @@ const ProfilePage = () => {
     }
     setLoading(true);
     try {
-      await authAPI.changePassword({
-        old_password: passwords.old_password,
-        new_password: passwords.new_password,
-      });
+      await authAPI.changePassword({ old_password: passwords.old_password, new_password: passwords.new_password });
       toast.success('Password changed successfully!');
       setPasswords({ old_password: '', new_password: '', confirm: '' });
     } catch {
@@ -54,103 +51,213 @@ const ProfilePage = () => {
     }
   };
 
-  const inputClass = 'w-full rounded-xl p-3 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#8EDCE6] bg-white transition';
+  const baseInputStyle = {
+    width: '100%',
+    padding: '12px 14px',
+    borderRadius: '10px',
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: '14px',
+    outline: 'none',
+    transition: 'all 0.2s',
+    boxSizing: 'border-box',
+  };
+
+  const activeInputStyle = {
+    ...baseInputStyle,
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(212,175,55,0.3)',
+    color: '#E5E5E5',
+  };
+
+  const disabledInputStyle = {
+    ...baseInputStyle,
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    color: '#71717A',
+    cursor: 'not-allowed',
+  };
+
+  const handleInputFocus = (e) => {
+    e.target.style.borderColor = '#D4AF37';
+    e.target.style.boxShadow = '0 0 0 3px rgba(212,175,55,0.15)';
+  };
+  const handleInputBlur = (e) => {
+    e.target.style.borderColor = 'rgba(212,175,55,0.3)';
+    e.target.style.boxShadow = 'none';
+  };
+
+  const cardStyle = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(212,175,55,0.2)',
+    borderRadius: '20px',
+    padding: '36px',
+    backdropFilter: 'blur(12px)',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(212,175,55,0.08)',
+    position: 'relative',
+    overflow: 'hidden',
+  };
 
   return (
     <PageTransition>
       <div className="max-w-3xl mx-auto space-y-8 pb-16">
 
         {/* Header */}
-        <div className="flex items-center gap-5">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow-xl">
-            <span className="text-3xl font-bold text-[#443627]">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{
+            width: '80px', height: '80px', borderRadius: '50%',
+            background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 8px 32px rgba(212,175,55,0.45), 0 0 0 3px rgba(212,175,55,0.2)',
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: '32px', fontWeight: '800', color: '#0B0B0B', fontFamily: "'Georgia', serif" }}>
               {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
             </span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-[#443627]">{user?.full_name || 'Your Profile'}</h1>
-            <p className="text-[#725E54]">{user?.email}</p>
-            <span className="text-xs bg-[#D5DCF9] text-[#443627] px-2 py-1 rounded-full font-medium mt-1 inline-block capitalize">
+            <h1 style={{
+              fontSize: '28px', fontWeight: '800',
+              fontFamily: "'Georgia', 'Times New Roman', serif",
+              background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              marginBottom: '4px',
+            }}>{user?.full_name || 'Your Profile'}</h1>
+            <p style={{ color: '#A1A1AA', fontSize: '14px', fontFamily: 'system-ui, sans-serif', marginBottom: '8px' }}>
+              {user?.email}
+            </p>
+            <span style={{
+              fontSize: '11px',
+              background: 'rgba(212,175,55,0.15)',
+              color: '#D4AF37',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              border: '1px solid rgba(212,175,55,0.3)',
+              fontWeight: '600',
+              fontFamily: 'system-ui, sans-serif',
+              textTransform: 'capitalize',
+            }}>
               {user?.role || 'citizen'}
             </span>
           </div>
         </div>
 
         {/* Profile Form */}
-        <div className="bg-white rounded-3xl p-8 shadow border border-[#D5DCF9] space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-[#443627]">Personal Information</h2>
+        <div style={cardStyle}>
+          {/* Top accent line */}
+          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, #D4AF37, transparent)' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#E5E5E5', fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+              Personal Information
+            </h2>
             <button
               onClick={() => setEditing(!editing)}
-              className="text-sm text-[#725E54] hover:text-[#443627] border border-[#A7B0CA] px-4 py-1.5 rounded-xl transition"
+              style={{
+                fontSize: '13px',
+                color: editing ? '#A1A1AA' : '#D4AF37',
+                background: 'transparent',
+                border: `1px solid ${editing ? 'rgba(255,255,255,0.1)' : 'rgba(212,175,55,0.3)'}`,
+                padding: '7px 16px',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontFamily: 'system-ui, sans-serif',
+                fontWeight: '500',
+              }}
+              onMouseEnter={e => { e.target.style.background = 'rgba(212,175,55,0.08)'; }}
+              onMouseLeave={e => { e.target.style.background = 'transparent'; }}
             >
               {editing ? 'Cancel' : '✏️ Edit'}
             </button>
           </div>
 
-          <form onSubmit={handleUpdate} className="space-y-4">
+          <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#443627] mb-1">Full Name</label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#C5A46D', marginBottom: '6px', fontFamily: 'system-ui, sans-serif', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Full Name</label>
                 <input
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   disabled={!editing}
-                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                  style={editing ? activeInputStyle : disabledInputStyle}
+                  onFocus={editing ? handleInputFocus : undefined}
+                  onBlur={editing ? handleInputBlur : undefined}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#443627] mb-1">Phone</label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#C5A46D', marginBottom: '6px', fontFamily: 'system-ui, sans-serif', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Phone</label>
                 <input
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   disabled={!editing}
-                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                  style={editing ? activeInputStyle : disabledInputStyle}
+                  onFocus={editing ? handleInputFocus : undefined}
+                  onBlur={editing ? handleInputBlur : undefined}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#443627] mb-1">State</label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#C5A46D', marginBottom: '6px', fontFamily: 'system-ui, sans-serif', letterSpacing: '0.5px', textTransform: 'uppercase' }}>State</label>
                 <input
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                   disabled={!editing}
-                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                  style={editing ? activeInputStyle : disabledInputStyle}
+                  onFocus={editing ? handleInputFocus : undefined}
+                  onBlur={editing ? handleInputBlur : undefined}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#443627] mb-1">District</label>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#C5A46D', marginBottom: '6px', fontFamily: 'system-ui, sans-serif', letterSpacing: '0.5px', textTransform: 'uppercase' }}>District</label>
                 <input
                   value={formData.district}
                   onChange={(e) => setFormData({ ...formData, district: e.target.value })}
                   disabled={!editing}
-                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                  style={editing ? activeInputStyle : disabledInputStyle}
+                  onFocus={editing ? handleInputFocus : undefined}
+                  onBlur={editing ? handleInputBlur : undefined}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#443627] mb-1">Preferred Language</label>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#C5A46D', marginBottom: '6px', fontFamily: 'system-ui, sans-serif', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Preferred Language</label>
               <select
                 value={formData.preferred_language}
                 onChange={(e) => setFormData({ ...formData, preferred_language: e.target.value })}
                 disabled={!editing}
-                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                style={editing ? { ...activeInputStyle, cursor: 'pointer' } : { ...disabledInputStyle }}
+                onFocus={editing ? handleInputFocus : undefined}
+                onBlur={editing ? handleInputBlur : undefined}
               >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="mr">Marathi</option>
-                <option value="ta">Tamil</option>
-                <option value="te">Telugu</option>
+                <option value="en" style={{ background: '#111111' }}>English</option>
+                <option value="hi" style={{ background: '#111111' }}>Hindi</option>
+                <option value="mr" style={{ background: '#111111' }}>Marathi</option>
+                <option value="ta" style={{ background: '#111111' }}>Tamil</option>
+                <option value="te" style={{ background: '#111111' }}>Telugu</option>
               </select>
             </div>
 
             {editing && (
               <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#443627] text-white py-3 rounded-xl hover:bg-[#725E54] transition font-medium shadow disabled:opacity-50"
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: loading ? 'rgba(212,175,55,0.4)' : 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#0B0B0B',
+                  fontWeight: '700',
+                  fontSize: '15px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  boxShadow: loading ? 'none' : '0 4px 20px rgba(212,175,55,0.4)',
+                  fontFamily: 'system-ui, sans-serif',
+                  transition: 'all 0.2s',
+                  marginTop: '4px',
+                }}
               >
                 {loading ? 'Saving...' : 'Save Changes'}
               </motion.button>
@@ -159,37 +266,49 @@ const ProfilePage = () => {
         </div>
 
         {/* Change Password */}
-        <div className="bg-white rounded-3xl p-8 shadow border border-[#D5DCF9] space-y-5">
-          <h2 className="text-xl font-semibold text-[#443627]">Change Password</h2>
-          <form onSubmit={handlePasswordChange} className="space-y-4">
-            <input
-              type="password"
-              placeholder="Current Password"
-              value={passwords.old_password}
-              onChange={(e) => setPasswords({ ...passwords, old_password: e.target.value })}
-              required
-              className={inputClass}
-            />
-            <input
-              type="password"
-              placeholder="New Password"
-              value={passwords.new_password}
-              onChange={(e) => setPasswords({ ...passwords, new_password: e.target.value })}
-              required
-              className={inputClass}
-            />
-            <input
-              type="password"
-              placeholder="Confirm New Password"
-              value={passwords.confirm}
-              onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
-              required
-              className={inputClass}
-            />
+        <div style={{ ...cardStyle }}>
+          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(197,164,109,0.6), transparent)' }} />
+
+          <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#E5E5E5', fontFamily: "'Georgia', 'Times New Roman', serif", marginBottom: '24px' }}>
+            Change Password
+          </h2>
+          <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {[
+              { placeholder: 'Current Password', key: 'old_password' },
+              { placeholder: 'New Password', key: 'new_password' },
+              { placeholder: 'Confirm New Password', key: 'confirm' },
+            ].map(({ placeholder, key }) => (
+              <input
+                key={key}
+                type="password"
+                placeholder={placeholder}
+                value={passwords[key]}
+                onChange={(e) => setPasswords({ ...passwords, [key]: e.target.value })}
+                required
+                style={activeInputStyle}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
+              />
+            ))}
             <button
               type="submit"
               disabled={loading}
-              className="bg-[#443627] text-white px-8 py-3 rounded-xl hover:bg-[#725E54] transition font-medium shadow disabled:opacity-50"
+              style={{
+                padding: '13px 32px',
+                background: loading ? 'rgba(212,175,55,0.4)' : 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                border: 'none',
+                borderRadius: '12px',
+                color: '#0B0B0B',
+                fontWeight: '700',
+                fontSize: '14px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                boxShadow: loading ? 'none' : '0 4px 20px rgba(212,175,55,0.35)',
+                fontFamily: 'system-ui, sans-serif',
+                alignSelf: 'flex-start',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { if (!loading) { e.target.style.boxShadow = '0 6px 28px rgba(212,175,55,0.55)'; e.target.style.transform = 'translateY(-1px)'; }}}
+              onMouseLeave={e => { e.target.style.boxShadow = '0 4px 20px rgba(212,175,55,0.35)'; e.target.style.transform = 'translateY(0)'; }}
             >
               {loading ? 'Updating...' : 'Update Password'}
             </button>

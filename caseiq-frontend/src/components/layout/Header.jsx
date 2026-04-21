@@ -11,43 +11,84 @@ const Header = () => {
   const { darkMode } = useSettings();
 
   return (
-    <header className={`sticky top-0 z-40 transition-all duration-300 ${
-      darkMode
-        ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700'
-        : 'bg-gradient-to-r from-[#D5DCF9] via-[#A7B0CA] to-[#D5DCF9] border-b border-[#A7B0CA]'
-    }`}>
-      <div className="px-6 py-2 flex justify-between items-center gap-4">
+    <header style={{
+      position: 'sticky',
+      top: 0,
+      zIndex: 40,
+      background: 'rgba(11,11,11,0.88)',
+      borderBottom: '1px solid rgba(212,175,55,0.18)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      transition: 'all 300ms',
+    }}>
+      <div style={{
+        padding: '10px 24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '16px',
+      }}>
 
         {/* Logo */}
         <div
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 cursor-pointer group shrink-0"
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flexShrink: 0 }}
         >
           <img
             src={logo}
             alt="CaseIQ"
-            className="h-16 w-auto object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+            style={{
+              height: '56px',
+              width: 'auto',
+              objectFit: 'contain',
+              transition: 'transform 300ms, filter 300ms',
+              filter: 'drop-shadow(0 0 10px rgba(212,175,55,0.28))',
+            }}
+            onMouseEnter={e => {
+              e.target.style.transform = 'scale(1.05)';
+              e.target.style.filter = 'drop-shadow(0 0 20px rgba(212,175,55,0.55))';
+            }}
+            onMouseLeave={e => {
+              e.target.style.transform = 'scale(1)';
+              e.target.style.filter = 'drop-shadow(0 0 10px rgba(212,175,55,0.28))';
+            }}
           />
         </div>
 
         {/* Global Search — center */}
-        <div className="flex-1 flex justify-center max-w-md">
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: '440px', margin: '0 auto' }}>
           <GlobalSearch />
         </div>
 
         {/* Right Side */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           {user && (
             <div
               onClick={() => navigate('/profile')}
-              className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                cursor: 'pointer',
+                padding: '6px 10px', borderRadius: '10px',
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8EDCE6] to-[#D5DCF9] flex items-center justify-center shadow text-[#443627] font-bold text-xs">
-                {(user.full_name || user.email || 'U')[0].toUpperCase()}
+              <div style={{
+                width: '34px', height: '34px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 10px rgba(212,175,55,0.4)',
+                flexShrink: 0,
+              }}>
+                <span style={{ color: '#0B0B0B', fontWeight: '800', fontSize: '13px', fontFamily: 'system-ui, sans-serif' }}>
+                  {(user.full_name || user.email || 'U')[0].toUpperCase()}
+                </span>
               </div>
-              <span className={`text-sm hidden md:block font-medium ${
-                darkMode ? 'text-slate-300' : 'text-[#443627]'
-              }`}>
+              <span style={{
+                fontSize: '13px', fontWeight: '500', color: '#E5E5E5',
+                fontFamily: 'system-ui, sans-serif',
+              }} className="hidden md:block">
                 {user.full_name || user.email}
               </span>
             </div>
@@ -55,24 +96,58 @@ const Header = () => {
 
           <button
             onClick={() => navigate('/settings')}
-            className="p-2 rounded-lg hover:bg-white/30 transition"
+            style={{
+              padding: '8px', borderRadius: '10px',
+              background: 'transparent', border: 'none',
+              cursor: 'pointer', transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <Settings size={16} className={darkMode ? 'text-white' : 'text-[#443627]'} />
+            <Settings size={17} color="#A1A1AA" />
           </button>
 
           {user && (
             <button
               onClick={logout}
-              className="p-2 rounded-lg hover:bg-red-200/40 transition"
+              style={{
+                padding: '8px', borderRadius: '10px',
+                background: 'transparent', border: 'none',
+                cursor: 'pointer', transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
-              <LogOut size={16} className="text-red-500" />
+              <LogOut size={17} color="#F87171" />
             </button>
           )}
 
           {!user && (
             <button
               onClick={() => navigate('/login')}
-              className="bg-[#443627] text-white px-4 py-1.5 rounded-xl text-sm hover:bg-[#725E54] transition font-medium shadow"
+              style={{
+                background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                color: '#0B0B0B',
+                padding: '8px 18px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '700',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 3px 14px rgba(212,175,55,0.4)',
+                transition: 'all 0.2s',
+                fontFamily: 'system-ui, sans-serif',
+              }}
+              onMouseEnter={e => {
+                e.target.style.boxShadow = '0 5px 20px rgba(212,175,55,0.6)';
+                e.target.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={e => {
+                e.target.style.boxShadow = '0 3px 14px rgba(212,175,55,0.4)';
+                e.target.style.transform = 'translateY(0)';
+              }}
             >
               Sign In
             </button>
@@ -80,11 +155,11 @@ const Header = () => {
         </div>
       </div>
 
-      <div className={`h-px ${
-        darkMode
-          ? 'bg-gradient-to-r from-transparent via-slate-500 to-transparent opacity-40'
-          : 'bg-gradient-to-r from-transparent via-[#725E54] to-transparent opacity-20'
-      }`} />
+      {/* Bottom gold shimmer line */}
+      <div style={{
+        height: '1px',
+        background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.55), transparent)',
+      }} />
     </header>
   );
 };

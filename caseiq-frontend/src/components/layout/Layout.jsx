@@ -9,41 +9,69 @@ const Layout = ({ children }) => {
 
   return (
     <div
-      style={{ fontSize: `${fontSize}px` }}
-      className={`
-        min-h-screen
-        flex flex-col
-        transition-colors duration-300
-        ${darkMode ? "bg-slate-900 text-slate-200" : "bg-slate-50 text-slate-800"}
-      `}
+      style={{
+        fontSize: `${fontSize}px`,
+        height: '100vh',          /* lock to viewport */
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#0B0B0B',
+        color: '#E5E5E5',
+        overflow: 'hidden',       /* nothing on the outer shell scrolls */
+        position: 'relative',
+      }}
     >
-      {/* HEADER */}
-      <Header />
+      {/* Global radial gold glow */}
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'radial-gradient(ellipse at 50% -10%, rgba(212,175,55,0.09) 0%, transparent 60%)',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
 
-      {/* MAIN LAYOUT AREA */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ── HEADER ── fixed height, never scrolls */}
+      <div style={{ flexShrink: 0, position: 'relative', zIndex: 40 }}>
+        <Header />
+      </div>
 
-        {/* SIDEBAR */}
-        <Sidebar />
+      {/* ── BODY ROW ── fills the remaining height */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        overflow: 'hidden',       /* children handle their own scroll */
+        position: 'relative',
+        zIndex: 1,
+      }}>
 
-        {/* SCROLLABLE CONTENT AREA */}
-        <main
-          className={`
-            flex-1
-            overflow-y-auto
-            p-8
-            transition-colors duration-300
-            ${darkMode ? "bg-slate-800" : "bg-slate-100"}
-          `}
-        >
+        {/* ── SIDEBAR ── fills full body height, never scrolls away */}
+        <div style={{
+          flexShrink: 0,
+          height: '100%',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+        }}>
+          <Sidebar />
+        </div>
+
+        {/* ── MAIN CONTENT ── only this panel scrolls */}
+        <main style={{
+          flex: 1,
+          height: '100%',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          padding: '32px',
+          background: 'transparent',
+        }}>
           {children}
+
+          {/* Footer appears at the natural bottom of page content */}
+          <div style={{ marginTop: '64px' }}>
+            <DisclaimerBar />
+            <Footer />
+          </div>
         </main>
 
       </div>
-
-      {/* Optional Footer / Disclaimer */}
-      <DisclaimerBar />
-      <Footer />
     </div>
   );
 };
