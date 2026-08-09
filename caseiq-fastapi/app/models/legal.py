@@ -1,7 +1,8 @@
+from datetime import date
 from enum import StrEnum
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -70,5 +71,14 @@ class QueryResponse(UUIDPk, Timestamped, Base):
     response_language: Mapped[str] = mapped_column(String(10), default="en")
     processing_time_ms: Mapped[int] = mapped_column(Integer, default=0)
     is_followup: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Part K / K4: which corpus snapshot was live when this answer was generated,
+    # so any past answer can be reproduced/audited. Nullable -- responses
+    # generated before Part K landed have no snapshot to point at.
+    corpus_version_id: Mapped[PgUUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("corpus_versions.id", ondelete="SET NULL")
+    )
+    # The date retrieval was filtered as-of (K3/K7) -- an answer must be able to
+    # state what date it was computed against, independent of when it was recorded.
+    as_of: Mapped[date | None] = mapped_column(Date)
 
     query: Mapped[LegalQuery] = relationship(back_populates="response")
