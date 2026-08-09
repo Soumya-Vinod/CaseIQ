@@ -19,5 +19,10 @@ class AuditLog(UUIDPk, Timestamped, Base):
     )
     action: Mapped[str] = mapped_column(String(100))
     details: Mapped[dict] = mapped_column(JSONB, default=dict)
-    ip_address: Mapped[str | None] = mapped_column(String(45))
+    # A truncated HMAC-SHA256 of the request IP, keyed with SECRET_KEY -- never
+    # the raw address. IP is personal data under India's DPDP Act 2023; a keyed
+    # hash still lets the same IP be correlated across rows (abuse/rate-limit
+    # investigation) without storing something reversible. See
+    # app/middleware/request_context.py:_hash_ip.
+    ip_hash: Mapped[str | None] = mapped_column(String(45))
     request_id: Mapped[str | None] = mapped_column(String(64))

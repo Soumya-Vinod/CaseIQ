@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = 6
     RAG_MIN_SIMILARITY: float = 0.25  # cosine similarity floor for a "match"
 
+    # --- Audit log retention (M2 hygiene) ---
+    # Unbounded audit-log growth was flagged as a defect (D6); rows older than
+    # this are deleted daily by app.tasks.worker.cleanup_audit_logs.
+    AUDIT_LOG_RETENTION_DAYS: int = 90
+
 
 @lru_cache
 def get_settings() -> Settings:

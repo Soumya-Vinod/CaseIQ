@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, status
 from app.api.deps import DB, OptionalUser, client_ip
 from app.core.exceptions import BlockedQueryError
 from app.core.logging import logger
+from app.core.security import hash_ip
 from app.models.audit import AuditLog
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
@@ -38,7 +39,10 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     if blocked:
         db.add(AuditLog(user_id=user.id if user else None, action="dark_query_blocked",
                         details={"query": payload.query, "pattern": pattern},
-                        ip_address=client_ip(request)))
+                        ip_hash=hash_ip(client_ip(request))))
+        # NOTE: LegalQuery.ip_address below still stores the raw IP -- a separate
+        # model from AuditLog, out of M2's explicit scope ("hash IPs" was scoped
+        # to audit logging). Flagged, not fixed here: same DPDP concern applies.
         db.add(LegalQuery(user_id=user.id if user else None, original_query=payload.query,
                           status=QueryStatus.BLOCKED, is_flagged=True,
                           flag_reason=f"pattern:{pattern}", session_id=payload.session_id,
