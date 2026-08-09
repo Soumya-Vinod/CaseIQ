@@ -11,8 +11,10 @@ PARSERS: dict[str, ActParser] = {
     # Act No. 45/2023 India Code print has no line-number gutter -- it parses
     # cleanly with the same GazetteParser as BNSS/BSA at default x_tolerance.
     "BNSS": GazetteParser(),
-    "BSA": GazetteParser(x_tolerance=1),  # this file's embedded font drops
-    # inter-word spaces at pdfplumber's default x_tolerance=3.
+    "BSA": GazetteParser(engine="pymupdf"),  # pdfplumber drops spaces on this
+    # file's embedded font (x_tolerance=1 works for the body) AND garbles its
+    # final pages (Chapter XII, the repeal clause) into unrecoverable noise
+    # at any tolerance -- PyMuPDF reads both correctly. See gazette_parser.py.
     "IPC": LegacyActParser(),
     "CrPC": LegacyActParser(),
 }

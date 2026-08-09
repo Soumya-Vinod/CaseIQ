@@ -64,13 +64,20 @@ def assert_ingestable(act: str, pdf_path: str) -> dict:
     return entry
 
 
-def get_verified_section_count(act: str) -> int | None:
-    """The manifest's recorded true section count for `act`, or None if not yet recorded.
-    Used by validate.py's coverage check -- an ingestion whose accepted-section count can't
-    be checked against a known-true count is not something the gate can vouch for.
+def get_highest_section_number(act: str) -> int | None:
+    """The manifest's recorded highest section NUMBER for `act` (e.g. IPC's
+    last section is 511), or None if not yet recorded. This is NOT a count of
+    sections -- a 165-year-old Act with lettered insertions (124A, 498A, ...)
+    and repealed ranges has more distinct entries than its highest number, and
+    fewer than its highest number once repeals are excluded. It's used only as
+    an informational sanity check in the validation report (does the highest
+    accepted number roughly match what the document itself claims as its last
+    section?), never as the primary coverage gate -- that's
+    parsing/toc.py's expected_section_numbers, a set derived from the
+    document's own table of contents.
     """
     entry = load_manifest().get(act) or {}
-    return entry.get("verified_section_count")
+    return entry.get("highest_section_number")
 
 
 if __name__ == "__main__":

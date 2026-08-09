@@ -19,6 +19,7 @@ class RawSection:
     section_text: str
     marginal_note: str | None = None
     page_start: int | None = None
+    is_repealed: bool = False
 
     @property
     def raw_char_count(self) -> int:
@@ -34,6 +35,12 @@ class ParseReport:
     parser_version: str
     source_path: str
     sections: list[RawSection] = field(default_factory=list)
+    # The full extracted text, carried forward so validate.py can derive
+    # expected_section_numbers from the document's OWN table of contents
+    # (parsing/toc.py) instead of depending on an externally supplied count.
+    # Empty string, not None, when a parser has no text to offer -- keeps
+    # callers from needing an extra None-check before slicing/searching it.
+    full_text: str = ""
 
 
 class ActParser(Protocol):
