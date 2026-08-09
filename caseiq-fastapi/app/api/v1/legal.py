@@ -1,4 +1,5 @@
 import time
+from datetime import date
 
 from fastapi import APIRouter, Request, status
 
@@ -58,7 +59,10 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         language = await llm_service.detect_language(payload.query)
 
     history = await _history(db, payload.session_id)
-    sections = await semantic_search(db, payload.query)
+    as_of = payload.as_of or date.today()
+    sections = await semantic_search(
+        db, payload.query, as_of=as_of, incident_date=payload.incident_date
+    )
     rag_context = build_rag_context(sections)
     sims = [s["similarity"] for s in sections if s["similarity"] is not None]
     retrieval_strength = max(sims) if sims else 0.0
@@ -89,6 +93,10 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         structured_data=result["structured_data"], retrieved_sections=sections,
         confidence_score=result["confidence_score"], response_language=language,
         processing_time_ms=took_ms, is_followup=result["is_followup"],
+        as_of=as_of,  # K7: the date retrieval was filtered as-of, stamped on the answer
+        # corpus_version_id intentionally not stamped yet -- see K6 admin API (task 8):
+        # corpus_versions should be created deliberately (e.g. after a successful
+        # ingest run), not implicitly on every query.
     ))
     q.status = QueryStatus.PROCESSED
     q.is_followup = result["is_followup"]

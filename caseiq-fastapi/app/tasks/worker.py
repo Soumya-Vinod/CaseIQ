@@ -3,7 +3,7 @@ of the original Celery setup, without dragging in a sync execution model.
 
 Three jobs mirror the original Celery beat schedule:
   * refresh_news        — pull real legal news (every 6h)
-  * backfill_embeddings — embed any LegalSection rows missing a vector
+  * backfill_embeddings — embed any section_versions rows missing a vector
   * cleanup_audit_logs  — delete audit_logs older than AUDIT_LOG_RETENTION_DAYS (daily)
 
 Run with:  arq app.tasks.worker.WorkerSettings
@@ -20,7 +20,7 @@ from app.core.config import settings
 from app.core.logging import configure_logging, logger
 from app.db.base import SessionLocal
 from app.models.audit import AuditLog
-from app.models.legal import LegalSection
+from app.models.corpus import SectionVersion
 from app.services.embeddings import embedder
 from app.services.news import fetch_and_save
 
@@ -33,12 +33,14 @@ async def refresh_news(ctx) -> int:
 
 
 async def backfill_embeddings(ctx, batch: int = 200) -> int:
+    # Part K: section_versions, not the retired legal_sections -- see
+    # app/services/retrieval.py's module docstring.
     async with SessionLocal() as db:
         rows = (await db.execute(
-            select(LegalSection).where(LegalSection.embedding.is_(None)).limit(batch)
+            select(SectionVersion).where(SectionVersion.embedding.is_(None)).limit(batch)
         )).scalars().all()
         for s in rows:
-            s.embedding = await embedder.embed(f"{s.section_title}. {s.section_text[:2000]}")
+            s.embedding = await embedder.embed(f"{s.marginal_note}. {s.section_text[:2000]}")
         await db.commit()
     logger.info("embeddings_backfilled", count=len(rows))
     return len(rows)
