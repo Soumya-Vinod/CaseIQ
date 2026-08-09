@@ -1,9 +1,18 @@
 import logging
 import time
+import json
 from groq import Groq
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+DARK_PATTERNS = [
+    'how to kill', 'how to murder someone', 'how to poison',
+    'how to make a bomb', 'how to destroy evidence', 'how to bribe a judge',
+    'how to forge documents', 'how to escape after killing',
+    'how to sexually assault', 'child abuse', 'how to traffick',
+    'contract killing',
+]
 
 
 class GroqService:
@@ -15,7 +24,7 @@ class GroqService:
         self.max_retries = 3
         self.retry_delay = 2
 
-    def _call_api(self, messages, temperature=None, max_tokens=2000):
+    def _call_api(self, messages, temperature=None, max_tokens=2500):
         for attempt in range(self.max_retries):
             try:
                 response = self.client.chat.completions.create(
@@ -32,243 +41,492 @@ class GroqService:
                 else:
                     raise
 
-    def process_legal_query(self, query, language='en', conversation_history=None, case_context=None):
+    def _parse_json(self, text):
+        """Robust JSON parser that handles markdown fences."""
+        text = text.strip()
+        if '```' in text:
+            parts = text.split('```')
+            for part in parts:
+                part = part.strip()
+                if part.startswith('json'):
+                    part = part[4:].strip()
+                if part.startswith('{') or part.startswith('['):
+                    text = part
+                    break
+        return json.loads(text)
+
+    def is_dark_query(self, query):
+        query_lower = query.lower()
+        for pattern in DARK_PATTERNS:
+            if pattern in query_lower:
+                return True, pattern
+        return False, None
+
+    def _build_rag_context(self, query):
+        try:
+            from apps.legal_query.models import BNSSSection
+            from django.db.models import Q
+
+            stop_words = {
+                'what', 'how', 'when', 'where', 'why', 'who', 'is', 'are',
+                'was', 'were', 'the', 'a', 'an', 'in', 'on', 'at', 'to',
+                'for', 'of', 'and', 'or', 'my', 'me', 'i', 'he', 'she',
+                'they', 'we', 'do', 'did', 'can', 'will', 'has', 'have',
+                'been', 'be', 'about', 'that', 'this', 'from', 'with',
+            }
+
+            words = [
+                w.strip('.,?!;:').lower()
+                for w in query.split()
+                if len(w) > 3 and w.lower() not in stop_words
+            ]
+
+            if not words:
+                return ''
+
+            q = Q()
+            for word in words[:6]:
+                q |= (
+                    Q(section_title__icontains=word) |
+                    Q(section_text__icontains=word) |
+                    Q(category__icontains=word)
+                )
+
+            sections = BNSSSection.objects.filter(q).distinct()[:6]
+
+            if not sections:
+                return ''
+
+            context_parts = ['--- RELEVANT LEGAL SECTIONS FROM DATABASE ---']
+            for s in sections:
+                context_parts.append(
+                    f'{s.act} Section {s.section_number} — {s.section_title}:\n'
+                    f'{s.section_text[:400]}'
+                )
+            context_parts.append('--- END OF RETRIEVED SECTIONS ---')
+
+            return '\n\n'.join(context_parts)
+
+        except Exception as e:
+            logger.warning(f'RAG context building failed: {e}')
+            return ''
+
+    def _detect_topic_change(self, query, conversation_history):
+        if not conversation_history or len(conversation_history) < 2:
+            return True
+
+        last_user_msgs = [
+            m['content'] for m in conversation_history
+            if m['role'] == 'user'
+        ]
+        if not last_user_msgs:
+            return True
+
+        crime_keywords = {
+            'theft', 'murder', 'assault', 'rape', 'fraud', 'cheating',
+            'robbery', 'dacoity', 'kidnapping', 'accident', 'domestic',
+            'violence', 'harassment', 'cybercrime', 'defamation', 'bail',
+            'arrest', 'fir', 'complaint', 'property', 'land', 'salary',
+            'consumer', 'divorce', 'dowry', 'cruelty', 'pocso', 'rti',
+            'employer', 'landlord', 'tenant', 'workplace', 'stalking',
+        }
+
+        current_terms = {w.lower().strip('.,?!') for w in query.split()} & crime_keywords
+        prev_terms = set()
+        for msg in last_user_msgs[-3:]:
+            prev_terms |= {w.lower().strip('.,?!') for w in msg.split()} & crime_keywords
+
+        if not current_terms and not prev_terms:
+            return False
+
+        overlap = current_terms & prev_terms
+        if overlap:
+            return False
+        if current_terms and not overlap:
+            return True
+        return False
+
+    def process_legal_query(self, query, language='en', conversation_history=None):
         """
-        Process a legal query with optional conversation history and case context.
-        
-        conversation_history: list of dicts like:
-            [{'role': 'user', 'content': '...'}, {'role': 'assistant', 'content': '...'}]
-        case_context: optional string summary of the user's active case situation
+        Returns structured response with:
+        - conversational_summary (short, 2-3 sentences for chat bubble)
+        - structured_data (full breakdown for structured card)
         """
+        if conversation_history is None:
+            conversation_history = []
 
-        # Build the case context injection if provided
-        case_injection = ''
-        if case_context:
-            case_injection = f"""
-ACTIVE USER CASE CONTEXT (use this to personalise your response):
-{case_context}
-Refer to this context when relevant. Do not repeat it back to the user verbatim.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
+        is_new_topic = self._detect_topic_change(query, conversation_history)
+        rag_context = self._build_rag_context(query)
 
-        system_prompt = f"""You are CaseIQ — India's most trusted AI legal knowledge assistant. You specialize in BNS 2023, BNSS 2023, BSA 2023, IPC 1860, CrPC 1973, and Indian constitutional law.
-{case_injection}
-Your responses must be EXCEPTIONAL — clear, structured, compassionate, and immediately useful to a common Indian citizen with no legal background. This person is likely stressed, scared, or confused. Be their knowledgeable friend who explains the law simply.
-
-IMPORTANT: This is a CONVERSATION. You have memory of what was said before. Reference prior messages naturally when relevant — for example "As we discussed about your situation..." or "Building on what you mentioned earlier...". Do not repeat information already given unless the user asks.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RESPONSE STRUCTURE — follow this exactly every time:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**📌 What This Situation Means**
-In 2-3 plain sentences, explain what is happening legally. Is this serious? Is this a criminal matter or civil? What category of law applies? Write as if you are calmly explaining to a worried family member.
-
----
-
-**⚖️ Laws That Apply**
-- **[Act Name, Section Number]** — In one sentence, what this law says and exactly why it applies to this situation
-- **[Act Name, Section Number]** — same format
-- **[Act Name, Section Number]** — same format
-(List 3-5 most directly relevant laws. Always prefer BNS 2023 over IPC 1860 as BNS replaced IPC from July 2024.)
-
----
-
-**🔴 Punishments & Consequences**
-What the accused/offender faces under Indian law:
-- **[Specific offence]** → Imprisonment: [X years] + Fine: [amount if specified]
-(Be exact. If bail is possible mention it. If non-bailable, say so clearly.)
-
----
-
-**✅ What You Can Do Right Now — Step by Step**
-1. **[Bold action title]** — Exactly what to do, where to go, what to bring, what to say.
-2. **[Bold action title]** — Same level of detail
-3. **[Bold action title]** — Same level of detail
-4. **[Bold action title]** — Same level of detail
-5. **[Bold action title]** — Same level of detail
-(Give 5-7 steps. Make each step specific and actionable.)
-
----
-
-**⏱️ Critical Deadlines — Do Not Miss These**
-- **[Time limit]** — What must be done and what happens if missed
-
----
-
-**💡 Your Rights in This Situation**
-- **Right 1** — Explained in plain language
-- **Right 2** — Explained in plain language
-
----
-
-**🆘 Who to Call for Help**
-- **[Helpline name]** — [Number] — When to use this
-
----
-⚠️ *This information is for legal awareness only. CaseIQ does not provide legal advice. Laws may have been amended. For case-specific guidance, consult a qualified advocate.*
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ABSOLUTE RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. NEVER say "you should", "I recommend", "I advise" in the main body
-2. ALWAYS cite exact section numbers
-3. ALWAYS include specific punishments with exact imprisonment duration and fine amounts
-4. ALWAYS tell the person whether the offence is Cognizable or Non-Cognizable, Bailable or Non-Bailable
-5. Write at the reading level of a Class 8 student
-6. Use BNS 2023 as PRIMARY reference
-7. Be empathetic in tone
-8. Never make up section numbers
-9. Hindi query → respond ENTIRELY in Hindi with same structure
-10. Marathi query → respond ENTIRELY in Marathi with same structure
-11. Maximum 2 lines per bullet point"""
+        if is_new_topic:
+            system_prompt = self._get_structured_system_prompt(rag_context)
+        else:
+            system_prompt = self._get_conversational_system_prompt(rag_context)
 
         lang_instruction = {
-            'hi': 'The user has asked in Hindi. Your ENTIRE response must be in Hindi with the same structure.',
-            'mr': 'The user has asked in Marathi. Your ENTIRE response must be in Marathi with the same structure.',
-            'ta': 'The user has asked in Tamil. Your ENTIRE response must be in Tamil with the same structure.',
+            'hi': 'Respond entirely in Hindi. Keep JSON keys in English.',
+            'mr': 'Respond entirely in Marathi. Keep JSON keys in English.',
+            'ta': 'Respond entirely in Tamil. Keep JSON keys in English.',
             'en': '',
         }.get(language, '')
 
-        # Build message array — start with system
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-        ]
-
-        # Inject conversation history (last 6 turns = 12 messages max)
+        messages = [{'role': 'system', 'content': system_prompt}]
         if conversation_history:
-            trimmed = conversation_history[-12:]  # keep last 6 user+assistant pairs
-            messages.extend(trimmed)
+            messages.extend(conversation_history[-12:])
 
-        # Add the current query
-        user_message = f"{lang_instruction}\n\nUser Query: {query}" if lang_instruction else f"User Query: {query}"
-        messages.append({'role': 'user', 'content': user_message})
+        user_content = f'{lang_instruction}\n\nUser Query: {query}' if lang_instruction else f'User Query: {query}'
+        messages.append({'role': 'user', 'content': user_content})
 
-        response_text = self._call_api(messages, max_tokens=2500)
+        response_text = self._call_api(messages, max_tokens=3000)
 
-        disclaimer = '⚠️ *This information is for legal awareness only. CaseIQ does not provide legal advice. Laws may have been amended. For case-specific guidance, consult a qualified advocate.*'
+        # Try to parse as structured JSON
+        try:
+            parsed = self._parse_json(response_text)
+            conversational = parsed.get('conversational_summary', '')
+            structured = parsed.get('structured_data', {})
 
-        main_text = response_text
-        if '⚠️' in response_text:
-            parts = response_text.split('⚠️')
-            main_text = parts[0].strip()
+            # Ensure structured data exists for new topics
+            if is_new_topic and not structured:
+                structured = {
+                    'situation_overview': conversational,
+                    'severity': 'medium',
+                    'laws_applicable': [],
+                    'punishments': [],
+                    'immediate_steps': [],
+                    'critical_deadlines': [],
+                    'your_rights': [],
+                    'helplines': [],
+                }
 
-        return {
-            'factual_summary': main_text,
-            'disclaimer': disclaimer,
-            'confidence_score': 0.92,
-            'language': language,
-        }
+            return {
+                'conversational_summary': conversational,
+                'structured_data': structured,
+                'confidence_score': 0.92,
+                'language': language,
+                'is_followup': not is_new_topic,
+            }
+        except Exception as e:
+            logger.warning(f'JSON parse failed, returning as text: {e}')
+            # Fallback: treat as plain text conversational reply
+            return {
+                'conversational_summary': response_text[:800],
+                'structured_data': {} if not is_new_topic else {
+                    'situation_overview': response_text[:400],
+                    'severity': 'medium',
+                    'laws_applicable': [],
+                    'punishments': [],
+                    'immediate_steps': [],
+                    'critical_deadlines': [],
+                    'your_rights': [],
+                    'helplines': [],
+                },
+                'confidence_score': 0.75,
+                'language': language,
+                'is_followup': not is_new_topic,
+            }
+
+    def _get_structured_system_prompt(self, rag_context=''):
+        base = """You are CaseIQ — India's most trusted AI legal knowledge assistant specializing in BNS 2023, BNSS 2023, BSA 2023, IPC 1860, CrPC 1973, and Indian constitutional law.
+
+This is a NEW legal situation. Return ONLY a valid JSON object, no markdown fences, no preamble.
+
+{rag_section}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REQUIRED JSON SCHEMA:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{{
+  "conversational_summary": "A warm, clear 2-3 sentence acknowledgment of the situation in plain language. Address the person directly. Do not list laws here — just acknowledge what happened and promise help. End with '👉 See the detailed breakdown on the right for applicable laws, steps, and your rights.'",
+  "structured_data": {{
+    "situation_overview": "2-3 sentences explaining the legal nature of this situation in plain language",
+    "severity": "low | medium | high | critical",
+    "severity_reason": "One sentence why this severity",
+    "laws_applicable": [
+      {{
+        "act": "BNS 2023",
+        "section": "303",
+        "title": "Theft",
+        "why_applies": "Explain why this law applies to the situation",
+        "ipc_equivalent": "IPC 378 (if relevant)"
+      }}
+    ],
+    "punishments": [
+      {{
+        "offence": "Theft",
+        "imprisonment": "Up to 3 years",
+        "fine": "As court decides",
+        "bailable": "Bailable",
+        "cognizable": "Cognizable"
+      }}
+    ],
+    "immediate_steps": [
+      {{
+        "step": 1,
+        "action": "Clear actionable step",
+        "details": "Where to go, what to bring, who to contact",
+        "urgency": "immediate | within_24h | within_week"
+      }}
+    ],
+    "critical_deadlines": [
+      {{
+        "deadline": "24 hours",
+        "what": "File the FIR at the nearest police station",
+        "consequence": "Delay may weaken your case"
+      }}
+    ],
+    "your_rights": [
+      {{
+        "right": "Right to free legal aid",
+        "explanation": "You can request a government lawyer if you cannot afford one",
+        "law": "Article 39A of the Constitution"
+      }}
+    ],
+    "helplines": [
+      {{
+        "name": "Police Emergency",
+        "number": "112",
+        "when": "Life-threatening situations"
+      }}
+    ],
+    "dos_and_donts": {{
+      "dos": ["Preserve all evidence", "Note witness details"],
+      "donts": ["Do not confront the accused", "Do not share case details publicly"]
+    }}
+  }}
+}}
+
+CRITICAL RULES:
+1. Return ONLY the JSON object. No markdown fences. No explanatory text.
+2. conversational_summary must be SHORT (2-3 sentences max) and warm
+3. Include 3-5 laws, prefer BNS 2023 over IPC 1860
+4. Include 5-7 immediate steps
+5. Include 3-5 rights relevant to the specific situation
+6. severity must be one of: low, medium, high, critical
+7. Never fabricate section numbers — use realistic, verified sections
+8. BNS 2023 replaced IPC from July 1, 2024 — use BNS for new crimes"""
+
+        rag_section = (
+            f'\nUse these retrieved legal sections as authoritative reference:\n{rag_context}\n'
+            if rag_context else ''
+        )
+        return base.format(rag_section=rag_section)
+
+    def _get_conversational_system_prompt(self, rag_context=''):
+        base = """You are CaseIQ with full memory of this conversation. The user is asking a FOLLOW-UP about the same situation.
+
+Return ONLY a valid JSON object:
+{{
+  "conversational_summary": "Conversational, direct answer to their follow-up. Reference what was discussed earlier naturally. Cite section numbers inline when relevant (e.g., 'Under BNS Section 303...'). Keep it focused — 3-6 sentences. Use markdown for emphasis if needed.",
+  "structured_data": {{}}
+}}
+
+{rag_section}
+
+RULES:
+1. Return ONLY JSON. No markdown fences.
+2. Empty structured_data object for follow-ups
+3. Be conversational but precise
+4. Cite exact section numbers inline when relevant
+5. If they're asking about a COMPLETELY NEW crime, still use this format but acknowledge the pivot"""
+
+        rag_section = (
+            f'\nRelevant sections from database:\n{rag_context}\n'
+            if rag_context else ''
+        )
+        return base.format(rag_section=rag_section)
 
     def detect_language(self, text):
-        prompt = f"""Detect the language of this text. Reply with ONLY one word from these options: en, hi, mr, ta, te
-
-Text: {text[:200]}
-
-Reply with only the language code, nothing else."""
-
+        prompt = f"""Detect language. Reply with ONLY one word: en, hi, mr, ta, or te.
+Text: {text[:200]}"""
         try:
             result = self._call_api(
                 [{'role': 'user', 'content': prompt}],
-                temperature=0.0,
-                max_tokens=5,
+                temperature=0.0, max_tokens=5,
             )
             result = result.strip().lower().replace('.', '').replace(',', '')
-            if result in ['en', 'hi', 'mr', 'ta', 'te']:
-                return result
-            return 'en'
-        except Exception as e:
-            logger.error(f'Language detection failed: {e}')
+            return result if result in ['en', 'hi', 'mr', 'ta', 'te'] else 'en'
+        except Exception:
             return 'en'
 
     def generate_complaint_draft(self, complaint_data):
-        prompt = f"""You are an expert Indian legal document writer. Generate a formal, professional FIR/complaint letter.
+        prompt = f"""You are an expert Indian legal document writer. Generate a formal complaint letter.
 
-The letter must be:
-- Written in formal legal English
-- Properly structured with all required sections
-- Ready to submit to a police station
-- Factual and precise
+Complainant: {complaint_data.get('complainant_name', 'N/A')}
+Address: {complaint_data.get('complainant_address', 'N/A')}
+Phone: {complaint_data.get('complainant_phone', 'N/A')}
 
-Complainant Details:
-- Name: {complaint_data.get('complainant_name', 'N/A')}
-- Address: {complaint_data.get('complainant_address', 'N/A')}
-- Phone: {complaint_data.get('complainant_phone', 'N/A')}
+Type: {complaint_data.get('complaint_type', 'Complaint').upper()}
+Police Station: {complaint_data.get('police_station_name', 'N/A')}
+Incident Date: {complaint_data.get('incident_date', 'N/A')}
+Location: {complaint_data.get('incident_location', 'N/A')}
+Description: {complaint_data.get('incident_description', 'N/A')}
+Accused: {complaint_data.get('accused_details', 'Unknown')}
+Witnesses: {complaint_data.get('witnesses', 'None')}
+Evidence: {complaint_data.get('evidence_description', 'None')}
+Sections: {', '.join(complaint_data.get('applicable_sections', [])) or 'To be determined'}
+Relief: {complaint_data.get('relief_sought', 'Registration and appropriate legal action')}
 
-Complaint Details:
-- Type: {complaint_data.get('complaint_type', 'FIR').upper()}
-- Police Station: {complaint_data.get('police_station_name', 'N/A')}
-- Incident Date: {complaint_data.get('incident_date', 'N/A')}
-- Location of Incident: {complaint_data.get('incident_location', 'N/A')}
-- Description: {complaint_data.get('incident_description', 'N/A')}
-- Accused: {complaint_data.get('accused_details', 'Unknown / Not identified')}
-- Witnesses: {complaint_data.get('witnesses', 'None known')}
-- Evidence Available: {complaint_data.get('evidence_description', 'None mentioned')}
-- Applicable Sections: {', '.join(complaint_data.get('applicable_sections', [])) or 'To be determined by investigating officer'}
-- Relief Sought: {complaint_data.get('relief_sought', 'Registration of FIR and appropriate legal action')}
-
-Generate the complaint letter with these sections in order:
-1. Header: To, The Station House Officer, [Police Station Name]
-2. Subject line (clear and specific)
-3. Respectful opening
-4. Complainant introduction paragraph
-5. Detailed incident narrative (chronological, factual)
-6. Accused details paragraph
-7. Evidence and witnesses paragraph
-8. Applicable legal sections paragraph
-9. Relief sought paragraph
-10. Declaration of truth
-11. Signature block with date and place
-
-Write formally. Do not add any commentary or notes outside the letter."""
+Generate: header, subject, detailed narrative, accused details, evidence, sections, relief sought, declaration, signature block. Formal legal language. No commentary."""
 
         return self._call_api(
             [{'role': 'user', 'content': prompt}],
-            temperature=0.05,
-            max_tokens=2000,
+            temperature=0.05, max_tokens=2000,
         )
 
-    def tag_news_with_sections(self, title, summary):
-        prompt = f"""Analyze this Indian legal news article and extract structured metadata.
+    def generate_related_questions(self, query, response_text):
+        prompt = f"""Generate exactly 3 natural follow-up questions.
 
-Title: {title}
-Summary: {summary}
+Original: {query}
+Response: {response_text[:300]}
 
-Return ONLY a JSON object with no markdown formatting:
-{{
-  "tags": ["tag1", "tag2", "tag3"],
-  "sections": ["BNS Section X", "BNSS Section Y"],
-  "is_featured": true or false,
-  "category": "criminal or civil or constitutional or consumer or cyber or family or property"
-}}
-
-Rules:
-- tags should be 3-5 short keywords
-- sections should only include laws directly mentioned or clearly implied
-- is_featured should be true only for Supreme Court judgments or landmark cases
-- category must be exactly one of the options listed"""
+Rules: Under 12 words each, written as common person, exploring different angles.
+Return ONLY a JSON array: ["q1", "q2", "q3"]"""
 
         try:
-            import json
             result = self._call_api(
                 [{'role': 'user', 'content': prompt}],
-                temperature=0.1,
-                max_tokens=200,
+                temperature=0.7, max_tokens=200,
             )
-            result = result.strip()
-            if '```' in result:
-                result = result.split('```')[1]
-                if result.startswith('json'):
-                    result = result[4:]
-            return json.loads(result.strip())
+            questions = self._parse_json(result)
+            return questions[:3] if isinstance(questions, list) else []
+        except Exception as e:
+            logger.error(f'Related questions failed: {e}')
+            return []
+
+    def generate_legal_timeline(self, situation_description):
+        prompt = f"""Generate a legal timeline for: {situation_description}
+
+Return ONLY a JSON array of 5-8 events:
+[
+  {{
+    "phase": "Past | Present | Next Steps",
+    "event": "Short title",
+    "description": "What happens at this point",
+    "law_reference": "BNS/BNSS Section",
+    "time_frame": "e.g. Within 24 hours, Day 7",
+    "status": "completed | current | upcoming"
+  }}
+]
+
+Cover: incident → FIR → investigation → charge sheet → trial → outcome."""
+
+        try:
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.2, max_tokens=1500,
+            )
+            return self._parse_json(result)
+        except Exception as e:
+            logger.error(f'Timeline failed: {e}')
+            return []
+
+    def generate_rights_card(self, situation_description):
+        prompt = f"""Generate a Rights Card for: {situation_description}
+
+Return ONLY valid JSON:
+{{
+  "situation_title": "Short title",
+  "rights": [
+    {{
+      "right": "Right title",
+      "explanation": "Practical one-sentence explanation",
+      "law_reference": "Article or Section",
+      "what_to_say": "Exact words to assert this right"
+    }}
+  ],
+  "emergency_contacts": [
+    {{"name": "Name", "number": "number", "when": "when to call"}}
+  ],
+  "important_warning": "Most critical thing to know"
+}}
+
+Generate 4-6 rights specific to this situation."""
+
+        try:
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.2, max_tokens=1000,
+            )
+            return self._parse_json(result)
+        except Exception as e:
+            logger.error(f'Rights card failed: {e}')
+            return {}
+
+    def generate_scenario_simulation(self, situation, scenario_type):
+        """NEW: What-If Simulator"""
+        prompt = f"""You are CaseIQ. Simulate this scenario outcome:
+
+Original situation: {situation}
+What-if scenario: {scenario_type}
+
+Return ONLY valid JSON:
+{{
+  "scenario_title": "Short description of the scenario",
+  "likelihood": "very_likely | likely | possible | unlikely",
+  "legal_outcome": "What happens legally in this scenario",
+  "consequences": [
+    "Specific consequence 1",
+    "Specific consequence 2"
+  ],
+  "laws_involved": ["BNS Section X", "BNSS Section Y"],
+  "what_to_do": "Best course of action in this scenario",
+  "risk_level": "low | medium | high | critical"
+}}"""
+
+        try:
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.3, max_tokens=1000,
+            )
+            return self._parse_json(result)
+        except Exception as e:
+            logger.error(f'Scenario simulation failed: {e}')
+            return {}
+
+    def verify_citation(self, act, section_number):
+        """NEW: Citation Verifier"""
+        try:
+            from apps.legal_query.models import BNSSSection
+            section = BNSSSection.objects.filter(
+                act__iexact=act,
+                section_number=str(section_number),
+            ).first()
+
+            if section:
+                return {
+                    'verified': True,
+                    'act': section.act,
+                    'section_number': section.section_number,
+                    'section_title': section.section_title,
+                    'section_text': section.section_text,
+                    'simplified_text': section.simplified_text,
+                    'category': section.category,
+                    'keywords': section.keywords,
+                }
+
+            return {
+                'verified': False,
+                'message': f'{act} Section {section_number} not found in our verified database.',
+            }
+        except Exception as e:
+            logger.error(f'Citation verification failed: {e}')
+            return {'verified': False, 'message': 'Verification service unavailable.'}
+
+    def tag_news_with_sections(self, title, summary):
+        prompt = f"""Analyze this legal news. Return ONLY valid JSON:
+{{"tags": ["tag1"], "sections": ["BNS Section X"], "is_featured": false, "category": "criminal|civil|constitutional|consumer|cyber"}}
+
+Title: {title}
+Summary: {summary}"""
+        try:
+            result = self._call_api(
+                [{'role': 'user', 'content': prompt}],
+                temperature=0.1, max_tokens=200,
+            )
+            return self._parse_json(result)
         except Exception as e:
             logger.error(f'News tagging failed: {e}')
-            return {
-                'tags': [],
-                'sections': [],
-                'is_featured': False,
-                'category': 'general',
-            }
+            return {'tags': [], 'sections': [], 'is_featured': False, 'category': 'general'}
 
     def generate_embeddings_text(self, text):
         return text[:8000] if text else ''

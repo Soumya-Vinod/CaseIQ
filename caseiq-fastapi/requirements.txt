@@ -1,0 +1,37 @@
+# --- Web ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic[email]==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# --- DB ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10        # alembic (sync) only
+alembic==1.14.0
+pgvector==0.3.6
+
+# --- Auth ---
+pyjwt==2.10.1
+passlib[argon2]==1.7.4
+
+# --- LLM / embeddings / news ---
+groq==0.13.1
+google-generativeai==0.8.3
+httpx==0.28.1
+
+# --- Infra ---
+redis==5.2.1
+arq==0.26.3
+slowapi==0.1.9
+structlog==24.4.0
+anyio==4.7.0
+
+# --- PDF / parsing ---
+reportlab==4.2.5
+pdfplumber==0.11.4
+
+# --- Dev/test ---
+pytest==8.3.4
+pytest-asyncio==0.25.0

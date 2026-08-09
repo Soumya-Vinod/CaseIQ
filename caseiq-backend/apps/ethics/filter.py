@@ -1,78 +1,86 @@
-import re
 import logging
-from apps.ethics.models import EthicsRule, DisclaimerTemplate
+import re
 
 logger = logging.getLogger(__name__)
 
-ADVISORY_PATTERNS = [
-    r'\byou should\b',
-    r'\byou must\b',
-    r'\bi recommend\b',
-    r'\bi advise\b',
-    r'\byou ought to\b',
-    r'\byou need to\b',
-    r'\bmy advice\b',
-    r'\bmy recommendation\b',
-    r'\bplease file\b',
-    r'\bgo to the police\b',
-    r'\bhire a lawyer\b',
-    r'\bconsult a lawyer\b',
-    r'\byou are entitled to\b',
-    r'\byou can sue\b',
-    r'\byou should sue\b',
-    r'\btake legal action\b',
-    r'\bfile a case\b',
-]
-
-DISCLAIMER = (
-    "⚠️ KNOWLEDGE ONLY: This information is provided for legal awareness purposes only. "
-    "CaseIQ does not provide legal advice. Laws may have been amended. "
-    "Please consult a qualified advocate for guidance specific to your situation."
-)
-
 
 class EthicsFilter:
+    """
+    Filters AI responses for ethical compliance.
+    Returns clean text string, never a dict or JSON.
+    """
 
-    def filter_response(self, response_text, context='legal_query'):
-        flags = []
-        filtered = response_text
+    BLOCKED_PHRASES = [
+        'how to kill',
+        'how to murder',
+        'how to poison someone',
+        'how to make a bomb',
+        'how to destroy evidence',
+        'how to bribe',
+        'how to forge',
+        'how to traffick',
+        'contract killing',
+    ]
 
-        # Check advisory patterns
-        for pattern in ADVISORY_PATTERNS:
-            if re.search(pattern, filtered, re.IGNORECASE):
-                flags.append(f"Advisory language detected: {pattern}")
-                filtered = re.sub(pattern, '[information redacted]', filtered, flags=re.IGNORECASE)
+    def filter_response(self, text: str) -> str:
+        """
+        Takes a string, returns a clean string.
+        Handles cases where text might be a JSON dict accidentally.
+        """
+        if not text:
+            return ''
 
-        # Check database rules
-        try:
-            rules = EthicsRule.objects.filter(is_active=True, rule_type='block_phrase')
-            for rule in rules:
-                if re.search(rule.pattern, filtered, re.IGNORECASE):
-                    flags.append(f"Rule violated: {rule.name}")
-                    replacement = rule.replacement or '[redacted]'
-                    filtered = re.sub(rule.pattern, replacement, filtered, flags=re.IGNORECASE)
-        except Exception as e:
-            logger.warning(f"Ethics DB check failed: {e}")
+        # If text is actually a dict (shouldn't happen but guard anyway)
+        if isinstance(text, dict):
+            # Try to extract the actual text content
+            for key in ('filtered_text', 'text', 'response', 'content', 'summary'):
+                if key in text and isinstance(text[key], str):
+                    text = text[key]
+                    break
+            else:
+                import json
+                text = json.dumps(text)
 
-        is_ethical = len(flags) == 0
+        text = str(text)
 
-        return {
-            'filtered_text': filtered,
-            'is_ethical': is_ethical,
-            'flags': flags,
-            'disclaimer': self._get_disclaimer(context),
-        }
+        # Strip JSON wrapper if the text starts with { and contains filtered_text
+        # This handles the case where filter_response was called on already-processed text
+        if text.strip().startswith('{') and 'filtered_text' in text:
+            try:
+                import json
+                parsed = json.loads(text)
+                if 'filtered_text' in parsed:
+                    text = parsed['filtered_text']
+            except Exception:
+                # If JSON parse fails, try regex extraction
+                match = re.search(r'"filtered_text"\s*:\s*"(.*?)"(?:,|\})', text, re.DOTALL)
+                if match:
+                    text = match.group(1).replace('\\"', '"').replace('\\n', '\n')
 
-    def _get_disclaimer(self, context):
-        try:
-            template = DisclaimerTemplate.objects.get(context=context, is_active=True)
-            return template.english_text
-        except DisclaimerTemplate.DoesNotExist:
-            return DISCLAIMER
+        # Basic content check — just log, don't block (blocking is done in views.py)
+        text_lower = text.lower()
+        for phrase in self.BLOCKED_PHRASES:
+            if phrase in text_lower:
+                logger.warning(f'Ethics filter flagged phrase in response: {phrase}')
+                break
 
-    def inject_disclaimer(self, text, context='legal_query'):
-        disclaimer = self._get_disclaimer(context)
-        return f"{text}\n\n---\n{disclaimer}"
+        # Clean up any disclaimer duplication
+        disclaimer_marker = '⚠️'
+        if text.count(disclaimer_marker) > 1:
+            parts = text.split(disclaimer_marker)
+            text = disclaimer_marker.join(parts[:2])
+
+        return text.strip()
+
+    def is_ethical_query(self, query: str) -> tuple:
+        """Returns (is_ethical: bool, reason: str)"""
+        if not query:
+            return True, ''
+        query_lower = query.lower()
+        for phrase in self.BLOCKED_PHRASES:
+            if phrase in query_lower:
+                return False, f'Query matches blocked pattern: {phrase}'
+        return True, ''
 
 
 ethics_filter = EthicsFilter()

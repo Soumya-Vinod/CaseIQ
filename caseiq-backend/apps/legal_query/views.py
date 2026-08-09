@@ -1,173 +1,141 @@
-import json
-import time
 import logging
+import time
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.conf import settings
+from rest_framework.permissions import IsAuthenticated
 
-from services.groq_service import groq_service
-from apps.ethics.filter import ethics_filter
 from apps.users.permissions import OptionalAuthentication
-from .models import LegalQuery, QueryResponse, BNSSSection, QuerySectionMapping
-from .serializers import (
-    LegalQueryRequestSerializer, LegalQuerySerializer,
-    BNSSSectionSerializer, LegalQueryHistorySerializer
-)
+from .models import LegalQuery, QueryResponse, BNSSSection
+from .serializers import LegalQuerySerializer, BNSSSectionSerializer
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 12  # 6 user + 6 assistant turns
 
-
-def _build_conversation_history(session_id, exclude_query_id=None):
-    """
-    Fetch the last N messages for a session and format them
-    as Groq-compatible conversation history.
-    Returns a list of {'role': 'user'|'assistant', 'content': str} dicts.
-    """
+def _get_conversation_history(session_id):
     if not session_id:
         return []
-
     try:
-        qs = LegalQuery.objects.filter(
+        queries = LegalQuery.objects.filter(
             session_id=session_id,
             status='processed',
-        ).select_related('response').order_by('-created_at')
-
-        if exclude_query_id:
-            qs = qs.exclude(id=exclude_query_id)
-
-        # Take the last 6 processed queries (= last 6 back-and-forth turns)
-        recent = list(reversed(qs[:6]))
+        ).select_related('response').order_by('created_at')
 
         history = []
-        for q in recent:
-            history.append({
-                'role': 'user',
-                'content': q.original_query,
-            })
+        for q in queries:
+            history.append({'role': 'user', 'content': q.original_query})
             if hasattr(q, 'response') and q.response:
-                # Use raw_response so the AI sees its own unfiltered output
                 history.append({
                     'role': 'assistant',
-                    'content': q.response.raw_response,
+                    'content': q.response.factual_summary
                 })
-
         return history
-
     except Exception as e:
-        logger.warning(f'Could not build conversation history: {e}')
+        logger.warning(f'Failed to fetch conversation history: {e}')
         return []
-
-
-def _get_case_context(user):
-    """
-    If the user has an active case, return a short context string
-    for injection into the system prompt.
-    """
-    if not user or not user.is_authenticated:
-        return None
-    try:
-        # Import here to avoid circular imports — UserCase added in Step 3
-        from apps.cases.models import UserCase
-        case = UserCase.objects.filter(
-            user=user,
-            is_active=True,
-        ).order_by('-created_at').first()
-        if case:
-            return case.get_context_summary()
-    except Exception:
-        # cases app may not exist yet — graceful fallback
-        pass
-    return None
 
 
 @api_view(['POST'])
 @permission_classes([OptionalAuthentication])
 def process_legal_query(request):
-    serializer = LegalQueryRequestSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    query_text = request.data.get('query', '').strip()
+    language = request.data.get('language', 'en')
+    session_id = request.data.get('session_id', '')
 
-    query_text = serializer.validated_data['query']
-    language = serializer.validated_data.get('language', 'en')
-    session_id = serializer.validated_data.get('session_id', '')
+    if not query_text:
+        return Response({'error': 'Query is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Also accept session_id from request data directly (frontend sends it)
-    if not session_id:
-        session_id = request.data.get('session_id', '')
+    if len(query_text) > 2000:
+        return Response({'error': 'Query too long. Maximum 2000 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from services.groq_service import groq_service
+
+    # Dark query check
+    is_dark, dark_pattern = groq_service.is_dark_query(query_text)
+    if is_dark:
+        try:
+            from apps.audit.models import AuditLog
+            AuditLog.objects.create(
+                user=request.user if request.user.is_authenticated else None,
+                action='dark_query_blocked',
+                details={
+                    'query': query_text,
+                    'pattern_matched': dark_pattern,
+                    'ip': request.META.get('REMOTE_ADDR'),
+                },
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+        except Exception as e:
+            logger.error(f'Audit log failed: {e}')
+
+        LegalQuery.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            original_query=query_text,
+            status='blocked',
+            is_flagged=True,
+            flag_reason=f'Dark pattern: {dark_pattern}',
+            session_id=session_id,
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+
+        return Response({
+            'error': 'blocked',
+            'message': (
+                'Your query has been flagged as potentially harmful. '
+                'CaseIQ helps citizens understand their legal rights — not facilitate harmful activity. '
+                'This incident has been logged.'
+            ),
+            'blocked': True,
+        }, status=status.HTTP_403_FORBIDDEN)
 
     start_time = time.time()
 
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    ip = x_forwarded_for.split(',')[0] if x_forwarded_for else request.META.get('REMOTE_ADDR')
-
-    user = request.user if request.user.is_authenticated else None
-
-    # Create query record
-    legal_query = LegalQuery.objects.create(
-        user=user,
-        original_query=query_text,
-        detected_language=language,
-        status='pending',
-        ip_address=ip,
-        session_id=session_id,
-    )
-
     try:
-        # --- Build conversation history ---
-        conversation_history = _build_conversation_history(
+        from apps.ethics.filter import ethics_filter
+
+        detected_language = language
+        if language == 'en':
+            detected_language = groq_service.detect_language(query_text)
+
+        conversation_history = _get_conversation_history(session_id)
+
+        query_obj = LegalQuery.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            original_query=query_text,
+            detected_language=detected_language,
+            status='processing',
             session_id=session_id,
-            exclude_query_id=legal_query.id,
+            ip_address=request.META.get('REMOTE_ADDR'),
         )
 
-        # --- Get case context if user is authenticated ---
-        case_context = _get_case_context(request.user)
-
-        # --- Call Groq with history and context ---
-        raw_response = groq_service.process_legal_query(
+        # Process with Groq — returns structured response
+        response_data = groq_service.process_legal_query(
             query_text,
-            language=language,
+            language=detected_language,
             conversation_history=conversation_history,
-            case_context=case_context,
         )
 
-        # Parse response
-        if isinstance(raw_response, dict):
-            parsed = raw_response
-        else:
-            try:
-                parsed = json.loads(raw_response)
-            except (json.JSONDecodeError, TypeError):
-                parsed = {
-                    'factual_summary': str(raw_response),
-                    'disclaimer': '',
-                    'confidence_score': 0.8,
-                    'language': language,
-                }
+        conversational_summary = response_data.get('conversational_summary', '')
+        structured_data = response_data.get('structured_data', {})
+        is_followup = response_data.get('is_followup', False)
 
-        detected_language = parsed.get('detected_language', language)
-        factual_summary = parsed.get('factual_summary', '')
-        confidence_score = parsed.get('confidence_score', 0.85)
+        # Ethics filter on summary
+        filtered_summary = ethics_filter.filter_response(conversational_summary)
 
-        # Ethics filter
-        ethics_result = ethics_filter.filter_response(factual_summary, context='legal_query')
-        filtered_summary = ethics_result['filtered_text']
-        disclaimer = ethics_result['disclaimer']
-
-        # Try to match DB sections
-        legal_sections = []
+        # Keyword RAG — sections matched from DB
+        matched_sections = []
         try:
-            keywords = query_text.lower().split()[:5]
             from django.db.models import Q
-            q_filter = Q()
-            for word in keywords:
-                if len(word) > 3:
-                    q_filter |= Q(section_title__icontains=word) | Q(section_text__icontains=word)
-            sections = BNSSSection.objects.filter(q_filter, is_active=True)[:5]
-            legal_sections = [
+            words = [
+                w.strip('.,?!;:').lower()
+                for w in query_text.split()
+                if len(w) > 3
+            ]
+            q = Q()
+            for word in words[:5]:
+                q |= Q(section_title__icontains=word) | Q(section_text__icontains=word)
+            sections = BNSSSection.objects.filter(q).distinct()[:5]
+            matched_sections = [
                 {
                     'act': s.act,
                     'section': s.section_number,
@@ -180,98 +148,147 @@ def process_legal_query(request):
         except Exception as e:
             logger.warning(f'Section matching failed: {e}')
 
-        # Update query record
-        processing_time = int((time.time() - start_time) * 1000)
-        legal_query.detected_language = detected_language
-        legal_query.status = 'processed'
-        legal_query.confidence_score = confidence_score
-        legal_query.processing_time_ms = processing_time
-        legal_query.save()
+        # Related questions only for new topics
+        related_questions = []
+        if not is_followup:
+            try:
+                related_questions = groq_service.generate_related_questions(
+                    query_text, conversational_summary
+                )
+            except Exception as e:
+                logger.warning(f'Related questions failed: {e}')
 
-        # Save response — store raw_response so history works correctly
-        full_response = f"{filtered_summary}\n\n---\n{disclaimer}"
+        processing_time = int((time.time() - start_time) * 1000)
+
         QueryResponse.objects.create(
-            query=legal_query,
-            raw_response=factual_summary,      # unfiltered — used for AI history
-            filtered_response=full_response,   # filtered — shown to user
-            disclaimer_added=True,
-            sections_mapped=legal_sections,
-            confidence_score=confidence_score,
-            is_ethical=ethics_result['is_ethical'],
-            ethics_flags=ethics_result['flags'],
+            query=query_obj,
+            factual_summary=filtered_summary,
+            disclaimer='',
+            confidence_score=response_data.get('confidence_score', 0.0),
+            related_sections=matched_sections,
+            response_language=detected_language,
+            processing_time_ms=processing_time,
+            is_followup=is_followup,
         )
 
-        # Map to BNSSSection records
-        for section_data in legal_sections:
-            try:
-                section = BNSSSection.objects.get(
-                    act=section_data.get('act'),
-                    section_number=section_data.get('section'),
-                )
-                QuerySectionMapping.objects.create(
-                    query=legal_query,
-                    section=section,
-                    relevance_score=section_data.get('confidence', 0.5),
-                    mapping_reason=section_data.get('relevance', ''),
-                )
-            except BNSSSection.DoesNotExist:
-                pass
+        query_obj.status = 'processed'
+        query_obj.is_followup = is_followup
+        query_obj.save()
 
         return Response({
-            'query_id': str(legal_query.id),
-            'status': 'processed',
-            'detected_language': detected_language,
-            'legal_sections': legal_sections,
-            'factual_summary': filtered_summary,
-            'disclaimer': disclaimer,
-            'confidence_score': round(confidence_score, 3),
+            'query_id': str(query_obj.id),
+            'original_query': query_text,
+            'conversational_summary': filtered_summary,
+            'structured_data': structured_data,
+            'confidence_score': response_data.get('confidence_score', 0.0),
+            'legal_sections': matched_sections,
+            'language': detected_language,
+            'related_questions': related_questions,
+            'is_followup': is_followup,
             'processing_time_ms': processing_time,
-            'session_id': session_id,
-            'history_depth': len(conversation_history) // 2,  # number of prior turns
-            'is_authenticated': request.user.is_authenticated,
-        }, status=status.HTTP_200_OK)
+        })
 
     except Exception as e:
-        legal_query.status = 'failed'
-        legal_query.save()
         logger.error(f'Legal query processing failed: {e}', exc_info=True)
+        if 'query_obj' in locals():
+            query_obj.status = 'failed'
+            query_obj.save()
         return Response(
-            {'error': 'Failed to process query. Please try again.', 'detail': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            {'error': 'Failed to process query. Please try again.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def query_history(request):
-    queries = LegalQuery.objects.filter(
-        user=request.user,
-    ).order_by('-created_at')[:50]
-    serializer = LegalQueryHistorySerializer(queries, many=True)
-    return Response({
-        'count': queries.count(),
-        'results': serializer.data,
-    })
+@api_view(['POST'])
+@permission_classes([OptionalAuthentication])
+def generate_legal_timeline(request):
+    situation = request.data.get('situation', '').strip()
+    if not situation:
+        return Response({'error': 'Situation required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        from services.groq_service import groq_service
+        return Response({'timeline': groq_service.generate_legal_timeline(situation)})
+    except Exception as e:
+        logger.error(f'Timeline failed: {e}')
+        return Response({'error': 'Failed.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([OptionalAuthentication])
+def generate_rights_card(request):
+    situation = request.data.get('situation', '').strip()
+    if not situation:
+        return Response({'error': 'Situation required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        from services.groq_service import groq_service
+        return Response({'rights_card': groq_service.generate_rights_card(situation)})
+    except Exception as e:
+        logger.error(f'Rights card failed: {e}')
+        return Response({'error': 'Failed.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([OptionalAuthentication])
+def simulate_scenario(request):
+    """NEW: What-If Scenario Simulator"""
+    situation = request.data.get('situation', '').strip()
+    scenario = request.data.get('scenario', '').strip()
+    if not situation or not scenario:
+        return Response({'error': 'Both situation and scenario required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        from services.groq_service import groq_service
+        return Response({'simulation': groq_service.generate_scenario_simulation(situation, scenario)})
+    except Exception as e:
+        logger.error(f'Simulation failed: {e}')
+        return Response({'error': 'Failed.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 @permission_classes([OptionalAuthentication])
-def get_query_detail(request, query_id):
+def verify_citation(request):
+    """NEW: Citation Verifier"""
+    act = request.query_params.get('act', '').strip()
+    section = request.query_params.get('section', '').strip()
+    if not act or not section:
+        return Response({'error': 'act and section required.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        filters = {'id': query_id}
-        if request.user.is_authenticated:
-            filters['user'] = request.user
-        query = LegalQuery.objects.get(**filters)
-        serializer = LegalQuerySerializer(query)
-        return Response(serializer.data)
-    except LegalQuery.DoesNotExist:
-        return Response({'error': 'Query not found.'}, status=status.HTTP_404_NOT_FOUND)
+        from services.groq_service import groq_service
+        return Response(groq_service.verify_citation(act, section))
+    except Exception as e:
+        logger.error(f'Verification failed: {e}')
+        return Response({'error': 'Failed.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class QueryHistoryView(generics.ListAPIView):
+    serializer_class = LegalQuerySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return LegalQuery.objects.filter(
+            user=self.request.user,
+            status='processed',
+        ).select_related('response').order_by('-created_at')
+
+
+class QueryDetailView(generics.RetrieveAPIView):
+    serializer_class = LegalQuerySerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'id'
+
+    def get_queryset(self):
+        return LegalQuery.objects.filter(user=self.request.user)
 
 
 class BNSSSectionListView(generics.ListAPIView):
-    queryset = BNSSSection.objects.filter(is_active=True)
     serializer_class = BNSSSectionSerializer
     permission_classes = [OptionalAuthentication]
     filterset_fields = ['act', 'category']
-    search_fields = ['section_number', 'section_title', 'keywords']
+    search_fields = ['section_title', 'section_number', 'section_text', 'keywords']
     ordering_fields = ['act', 'section_number']
+
+    def get_queryset(self):
+        queryset = BNSSSection.objects.filter(is_active=True)
+        act = self.request.query_params.get('act')
+        if act:
+            queryset = queryset.filter(act__iexact=act)
+        return queryset

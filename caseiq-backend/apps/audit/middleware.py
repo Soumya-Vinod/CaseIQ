@@ -1,5 +1,4 @@
 import time
-import hashlib
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +13,6 @@ class AuditLogMiddleware:
         response = self.get_response(request)
         processing_time = int((time.time() - start_time) * 1000)
 
-        # Only log API requests
         if request.path.startswith('/api/'):
             try:
                 from apps.audit.models import AuditLog
@@ -25,12 +23,14 @@ class AuditLogMiddleware:
                 AuditLog.objects.create(
                     user=user,
                     action=self._get_action(request.path),
-                    endpoint=request.path,
-                    method=request.method,
-                    response_status=response.status_code,
+                    details={
+                        'method': request.method,
+                        'path': request.path,
+                        'status': response.status_code,
+                        'processing_time_ms': processing_time,
+                        'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
+                    },
                     ip_address=ip,
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
-                    processing_time_ms=processing_time,
                 )
             except Exception as e:
                 logger.warning(f"Audit log failed: {e}")
@@ -53,4 +53,4 @@ class AuditLogMiddleware:
             return 'knowledge_search'
         if 'awareness' in path:
             return 'news_fetch'
-        return 'legal_query'
+        return 'api_request'

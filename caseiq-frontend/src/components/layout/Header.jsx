@@ -1,152 +1,216 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useSettings } from '../../context/SettingsContext';
-import { Settings, LogOut } from 'lucide-react';
-import GlobalSearch from '../ui/GlobalSearch';
+import { Settings, LogOut, Menu, X } from 'lucide-react';
 import logo from '../../assets/logo.png';
 
-const Header = () => {
+const Header = ({ onToggleSidebar, sidebarOpen }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { darkMode } = useSettings();
 
   return (
     <header style={{
       position: 'sticky',
       top: 0,
-      zIndex: 40,
-      background: 'rgba(11,11,11,0.88)',
-      borderBottom: '1px solid rgba(212,175,55,0.18)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      transition: 'all 300ms',
+      zIndex: 100,
+      background: 'rgba(11,11,11,0.94)',
+      backdropFilter: 'blur(24px)',
+      WebkitBackdropFilter: 'blur(24px)',
+      borderBottom: '1px solid rgba(212,175,55,0.12)',
     }}>
       <div style={{
-        padding: '10px 24px',
+        maxWidth: '1280px',
+        margin: '0 auto',
+        padding: '0 20px',
+        height: '60px',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: '16px',
       }}>
-
-        {/* Logo */}
-        <div
-          onClick={() => navigate('/')}
-          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flexShrink: 0 }}
-        >
-          <img
-            src={logo}
-            alt="CaseIQ"
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            onClick={onToggleSidebar}
+            aria-label="Toggle menu"
             style={{
-              height: '56px',
-              width: 'auto',
-              objectFit: 'contain',
-              transition: 'transform 300ms, filter 300ms',
-              filter: 'drop-shadow(0 0 10px rgba(212,175,55,0.28))',
+              padding: '8px',
+              borderRadius: '10px',
+              border: '1px solid rgba(212,175,55,0.25)',
+              background: sidebarOpen ? 'rgba(212,175,55,0.18)' : 'rgba(212,175,55,0.06)',
+              cursor: 'pointer',
+              color: sidebarOpen ? '#FFD700' : '#D4AF37',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 0 12px rgba(212,175,55,0.15)',
             }}
-            onMouseEnter={e => {
-              e.target.style.transform = 'scale(1.05)';
-              e.target.style.filter = 'drop-shadow(0 0 20px rgba(212,175,55,0.55))';
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#FFD700';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.5)';
+              e.currentTarget.style.background = 'rgba(212,175,55,0.15)';
+              e.currentTarget.style.boxShadow = '0 0 18px rgba(212,175,55,0.3)';
             }}
-            onMouseLeave={e => {
-              e.target.style.transform = 'scale(1)';
-              e.target.style.filter = 'drop-shadow(0 0 10px rgba(212,175,55,0.28))';
+            onMouseLeave={(e) => {
+              if (!sidebarOpen) {
+                e.currentTarget.style.color = '#D4AF37';
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.25)';
+                e.currentTarget.style.background = 'rgba(212,175,55,0.06)';
+                e.currentTarget.style.boxShadow = '0 0 12px rgba(212,175,55,0.15)';
+              }
             }}
-          />
+          >
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+
+          <div
+            onClick={() => navigate('/')}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
+          >
+            <img
+              src={logo}
+              alt="CaseIQ"
+              style={{
+                height: '40px',
+                width: 'auto',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 12px rgba(212,175,55,0.3))',
+              }}
+            />
+            <span style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: '1.3rem',
+              fontWeight: 700,
+              fontStyle: 'italic',
+              background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              letterSpacing: '0.5px',
+            }}>
+              CaseIQ
+            </span>
+          </div>
         </div>
 
-        {/* Global Search — center */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: '440px', margin: '0 auto' }}>
-          <GlobalSearch />
-        </div>
-
-        {/* Right Side */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {user && (
             <div
               onClick={() => navigate('/profile')}
               style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
                 cursor: 'pointer',
-                padding: '6px 10px', borderRadius: '10px',
-                transition: 'background 0.2s',
+                padding: '6px 14px 6px 8px',
+                borderRadius: '20px',
+                border: '1px solid rgba(212,175,55,0.15)',
+                background: 'rgba(212,175,55,0.04)',
+                transition: 'all 0.2s ease',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.08)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.35)';
+                e.currentTarget.style.background = 'rgba(212,175,55,0.08)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.15)';
+                e.currentTarget.style.background = 'rgba(212,175,55,0.04)';
+              }}
             >
               <div style={{
-                width: '34px', height: '34px', borderRadius: '50%',
-                background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 10px rgba(212,175,55,0.4)',
-                flexShrink: 0,
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #B8960C, #D4AF37)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#0B0B0B',
               }}>
-                <span style={{ color: '#0B0B0B', fontWeight: '800', fontSize: '13px', fontFamily: 'system-ui, sans-serif' }}>
-                  {(user.full_name || user.email || 'U')[0].toUpperCase()}
-                </span>
+                {(user.full_name || user.email || 'U')[0].toUpperCase()}
               </div>
               <span style={{
-                fontSize: '13px', fontWeight: '500', color: '#E5E5E5',
-                fontFamily: 'system-ui, sans-serif',
-              }} className="hidden md:block">
-                {user.full_name || user.email}
+                fontSize: '0.78rem',
+                color: '#C9A84C',
+                fontWeight: 500,
+                maxWidth: '120px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {user.full_name || user.email?.split('@')[0]}
               </span>
             </div>
           )}
 
           <button
             onClick={() => navigate('/settings')}
+            aria-label="Settings"
             style={{
-              padding: '8px', borderRadius: '10px',
-              background: 'transparent', border: 'none',
-              cursor: 'pointer', transition: 'all 0.2s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '8px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.06)',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: '#555560',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'all 0.2s ease',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#C9A84C';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#555560';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
+            }}
           >
-            <Settings size={17} color="#A1A1AA" />
+            <Settings size={15} />
           </button>
 
-          {user && (
+          {user ? (
             <button
               onClick={logout}
+              aria-label="Sign out"
               style={{
-                padding: '8px', borderRadius: '10px',
-                background: 'transparent', border: 'none',
-                cursor: 'pointer', transition: 'all 0.2s',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '8px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: '#555560',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'all 0.2s ease',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ff6b6b';
+                e.currentTarget.style.borderColor = 'rgba(255,100,100,0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#555560';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
+              }}
             >
-              <LogOut size={17} color="#F87171" />
+              <LogOut size={15} />
             </button>
-          )}
-
-          {!user && (
+          ) : (
             <button
               onClick={() => navigate('/login')}
               style={{
-                background: 'linear-gradient(135deg, #D4AF37, #FFD700)',
+                background: 'linear-gradient(135deg, #B8960C 0%, #D4AF37 50%, #FFD700 100%)',
                 color: '#0B0B0B',
+                fontSize: '0.72rem',
+                fontWeight: 700,
                 padding: '8px 18px',
-                borderRadius: '10px',
-                fontSize: '13px',
-                fontWeight: '700',
                 border: 'none',
+                borderRadius: '10px',
                 cursor: 'pointer',
-                boxShadow: '0 3px 14px rgba(212,175,55,0.4)',
-                transition: 'all 0.2s',
-                fontFamily: 'system-ui, sans-serif',
-              }}
-              onMouseEnter={e => {
-                e.target.style.boxShadow = '0 5px 20px rgba(212,175,55,0.6)';
-                e.target.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={e => {
-                e.target.style.boxShadow = '0 3px 14px rgba(212,175,55,0.4)';
-                e.target.style.transform = 'translateY(0)';
+                letterSpacing: '0.4px',
+                textTransform: 'uppercase',
+                boxShadow: '0 4px 16px rgba(212,175,55,0.25)',
               }}
             >
               Sign In
@@ -155,10 +219,9 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Bottom gold shimmer line */}
       <div style={{
         height: '1px',
-        background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.55), transparent)',
+        background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.25), transparent)',
       }} />
     </header>
   );

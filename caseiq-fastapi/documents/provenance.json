@@ -1,0 +1,87 @@
+{
+  "_schema_note": "Manual provenance manifest for the five source-of-truth act PDFs in this directory (checklist item B4). Fields that carry a truth claim about the document (document_type, act_number, content_as_on, consolidation_source, source_url) are wrapped as {value, verified} -- verified:false is written explicitly wherever a claim is inferred/unconfirmed rather than read directly out of the document, so 'not yet verified' is a queryable fact and not just an absent field. filename and source_sha256 are direct measurements of the file on disk and are not wrapped. scripts/provenance.py's assert_ingestable() checks document_type.value == 'act' before ingestion; it does not currently gate on the *_verified flags -- unverified-but-plausible fields are allowed to ingest, they are just flagged for follow-up.",
+  "_content_as_on_note": "content_as_on is the real-world date the document's TEXT reflects (i.e. what should seed Part K's section_versions.valid_from), which is NOT the same as retrieved_at (when this repo got the file) or ingestion time (transaction_time in the bitemporal model). For a plain Gazette original with no later consolidation, content_as_on is the assent/notification date. For an India-Code-style consolidated reprint, content_as_on is that reprint's stated 'as on' date and may postdate assent by incorporating amendments.",
+  "acts": {
+    "BNS": {
+      "filename": "BNS_2023.pdf",
+      "act_title": "The Bharatiya Nyaya Sanhita, 2023",
+      "document_type": {"value": "act", "verified": true},
+      "act_number": {"value": "45 of 2023", "verified": true},
+      "assented_on": "2023-12-25",
+      "content_as_on": {"value": "2025-10-06", "verified": true},
+      "consolidation_source": {"value": "india_code", "verified": true},
+      "source_url": {
+        "value": "https://www.indiacode.nic.in/bitstream/123456789/20062/1/a202345.pdf",
+        "verified": true
+      },
+      "source_sha256": "ff92dcc72778944011807644b6033b1140ddbe6d7e9f82ac32fd419dae03aa86",
+      "retrieved_at": "2026-08-09",
+      "verified_section_count": 358,
+      "notes": "Re-sourced 2026-08-09 from India Code. Content is the consolidated 'as on 6 Oct 2025' text, i.e. it may already include amendments enacted after 25 Dec 2023 -- do not assume this equals the original assent-day text. The file previously at this path was Lok Sabha Bill No. 121 of 2023, WITHDRAWN 2023-12-12 and never enacted (356 sections, differs in content from the Act -- see docs/incidents/2026-08-09-withdrawn-bns-bill-ingested.md). That file is preserved at documents/quarantined/BNS_2023_BILL121_WITHDRAWN.pdf for audit purposes; it must never be re-ingested."
+    },
+    "BNSS": {
+      "filename": "BNSS_2023.pdf",
+      "act_title": "The Bharatiya Nagarik Suraksha Sanhita, 2023",
+      "document_type": {"value": "act", "verified": true},
+      "act_number": {"value": "46 of 2023", "verified": true},
+      "assented_on": "2023-12-25",
+      "content_as_on": {"value": "2023-12-25", "verified": true},
+      "consolidation_source": {"value": "gazette_original", "verified": true},
+      "source_url": {"value": null, "verified": false},
+      "source_sha256": "5e60e2afe30d0fe7eca4f8126301146b76c86a444e690581f81eb564843517fe",
+      "retrieved_at": null,
+      "file_present_since": "2025-05-21",
+      "verified_section_count": 531,
+      "verified_section_count_source": "Supplied by project owner as an M1 acceptance-criterion target on 2026-08-09, not independently re-derived by this session from an official section-count listing.",
+      "gazette_notification_no": "54, New Delhi, Monday, December 25, 2023",
+      "notes": "Confirmed enacted Act, not a Bill -- verified 2026-08-09 from the PDF's own embedded Gazette Extraordinary header and in-body 'NO. 46 OF 2023' declaration. content_as_on = assented_on because this is the original notification text with no 'as on' consolidation stamp -- treat as NOT incorporating any post-assent amendments. source_url unverified: pre-existing file, original download origin not recorded. Follow-up: re-download from India Code for a verified source_url."
+    },
+    "BSA": {
+      "filename": "BSA_2023.pdf",
+      "act_title": "The Bharatiya Sakshya Adhiniyam, 2023",
+      "document_type": {"value": "act", "verified": true},
+      "act_number": {"value": "47 of 2023", "verified": true},
+      "assented_on": "2023-12-25",
+      "content_as_on": {"value": "2023-12-25", "verified": true},
+      "consolidation_source": {"value": "gazette_original", "verified": true},
+      "source_url": {"value": null, "verified": false},
+      "source_sha256": "13e2b6eb66add222c7262ccaa0b08d58e48ca22cdf0953f6541123ef039de239",
+      "retrieved_at": null,
+      "file_present_since": "2025-05-21",
+      "verified_section_count": 170,
+      "verified_section_count_source": "Supplied by project owner as an M1 acceptance-criterion target on 2026-08-09, not independently re-derived by this session from an official section-count listing.",
+      "gazette_notification_no": "55, New Delhi, Monday, December 25, 2023",
+      "notes": "Confirmed enacted Act, not a Bill -- verified 2026-08-09 from the PDF's own embedded Gazette Extraordinary header and in-body 'NO. 47 OF 2023' declaration. content_as_on = assented_on, same reasoning as BNSS. Extraction requires pdfplumber x_tolerance=1 (default x_tolerance=3 drops spaces on this file's embedded font). source_url unverified: pre-existing file, original download origin not recorded. Follow-up: re-download from India Code for a verified source_url."
+    },
+    "IPC": {
+      "filename": "IPC_1860.pdf",
+      "act_title": "The Indian Penal Code",
+      "document_type": {"value": "act", "verified": true},
+      "act_number": {"value": "45 of 1860", "verified": true},
+      "content_as_on": {"value": null, "verified": false},
+      "consolidation_source": {"value": null, "verified": false},
+      "source_url": {"value": null, "verified": false},
+      "source_sha256": "39a9a403de2a50ff9424d6a874f6fcca209272d466addd35157e809e501e8d7f",
+      "retrieved_at": null,
+      "file_present_since": "2025-02-19",
+      "verified_section_count": 511,
+      "verified_section_count_source": "Supplied by project owner as an M1 acceptance-criterion target on 2026-08-09, not independently re-derived by this session from an official section-count listing.",
+      "notes": "document_type/act_number confirmed from the PDF's own in-body 'ACT NO. 45 OF 1860' declaration. content_as_on/consolidation_source are NOT verified: no 'as on' date is present in the scanned cover pages, but body text does contain amendment footnotes up to at least Act 13 of 2013, so this is clearly some consolidated vintage, just an undated one in this extraction -- do not assume it is current. IPC 1860 was repealed and replaced by BNS effective 2024-07-01 for offences on/after that date; still authoritative for pre-BNS-cutover offences (Part K, K3). Follow-up task: re-source from India Code with a verified source_url and a dated consolidation."
+    },
+    "CrPC": {
+      "filename": "CrPC_1973.pdf",
+      "act_title": "The Code of Criminal Procedure, 1973",
+      "document_type": {"value": "act", "verified": false},
+      "act_number": {"value": null, "verified": false},
+      "content_as_on": {"value": null, "verified": false},
+      "consolidation_source": {"value": null, "verified": false},
+      "source_url": {"value": null, "verified": false},
+      "source_sha256": "5bb6514251a9ec6375b2c894cef5280dab0d1c3cca1e0f4a1e57f29b54033d72",
+      "retrieved_at": null,
+      "file_present_since": "2025-02-19",
+      "verified_section_count": 484,
+      "verified_section_count_source": "Supplied by project owner as an M1 acceptance-criterion target on 2026-08-09, not independently re-derived by this session from an official section-count listing.",
+      "notes": "document_type='act' is inferred from title, structure, and section-body content matching the known Code of Criminal Procedure text -- marked verified:false because, unlike every other file here, this PDF's extracted cover pages (0-20 scanned) carry no explicit 'ACT NO. X OF Y' stamp to confirm it against. act_number is commonly cited externally as Act 2 of 1974 but that is not written here because it was not read directly out of this document -- do not fill it in from memory. CrPC 1973 was repealed and replaced by BNSS effective 2024-07-01 for offences on/after that date (Part K, K3). Follow-up task: re-source from India Code with a verified source_url and confirm act_number against the source."
+    }
+  }
+}

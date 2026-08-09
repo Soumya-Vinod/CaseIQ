@@ -7,14 +7,12 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('caseiq_access_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Auto-refresh on 401
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -40,7 +38,6 @@ api.interceptors.response.use(
 
 export default api;
 
-// ─── AUTH ───────────────────────────────────────────
 export const authAPI = {
   register: (data) => api.post('/auth/register/', data),
   login: async (email, password) => {
@@ -65,16 +62,18 @@ export const authAPI = {
   changePassword: (data) => api.post('/auth/change-password/', data),
 };
 
-// ─── LEGAL QUERY ────────────────────────────────────
-
 export const legalAPI = {
   submitQuery: (query, language = 'en', sessionId = '') =>
     api.post('/legal/query/', { query, language, session_id: sessionId }),
   getHistory: () => api.get('/legal/query/history/'),
   getSections: (params) => api.get('/legal/sections/', { params }),
+  generateTimeline: (situation) => api.post('/legal/timeline/', { situation }),
+  generateRightsCard: (situation) => api.post('/legal/rights-card/', { situation }),
+  simulateScenario: (situation, scenario) => api.post('/legal/simulate/', { situation, scenario }),
+  verifyCitation: (act, section) =>
+    api.get('/legal/verify-citation/', { params: { act, section } }),
 };
 
-// ─── KNOWLEDGE BASE ─────────────────────────────────
 export const knowledgeAPI = {
   search: (query, top_k = 5) => api.post('/knowledge/search/', { query, top_k }),
   getProvisions: (params) => api.get('/knowledge/provisions/', { params }),
@@ -82,7 +81,6 @@ export const knowledgeAPI = {
   getRights: () => api.get('/knowledge/rights/'),
 };
 
-// ─── COMPLAINTS ─────────────────────────────────────
 export const complaintsAPI = {
   generateDraft: (data) => api.post('/complaints/draft/', data),
   getHistory: () => api.get('/complaints/history/'),
@@ -92,7 +90,7 @@ export const complaintsAPI = {
     const url = window.URL.createObjectURL(new Blob([res.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `CaseIQ_FIR_${complainantName || id}.pdf`);
+    link.setAttribute('download', `CaseIQ_Complaint_${complainantName || id}.pdf`);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -100,7 +98,6 @@ export const complaintsAPI = {
   },
 };
 
-// ─── AWARENESS ──────────────────────────────────────
 export const awarenessAPI = {
   getNews: (params) => api.get('/awareness/news/', { params }),
   getEducation: (params) => api.get('/awareness/education/', { params }),

@@ -93,7 +93,7 @@ const NewsPage = () => {
         }}>
           <p style={{ fontWeight: '600', color: '#FDE68A', fontFamily: 'system-ui, sans-serif' }}>Could not load news</p>
           <p style={{ fontSize: '13px', color: '#A1A1AA', marginTop: '6px', fontFamily: 'system-ui, sans-serif' }}>
-            Make sure your NewsAPI key is configured in the backend.
+            Make sure you are connected to the internet and the backend server is running. Contact your admin if the issue persists.
           </p>
         </div>
       )}
