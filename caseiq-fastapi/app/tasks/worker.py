@@ -1,10 +1,15 @@
 """Background worker using arq (async-native, Redis-backed) — the modern equivalent
 of the original Celery setup, without dragging in a sync execution model.
 
-Three jobs mirror the original Celery beat schedule:
+Four jobs mirror the original Celery beat schedule (plus Part K's K5):
   * refresh_news        — pull real legal news (every 6h)
   * backfill_embeddings — embed any section_versions rows missing a vector
   * cleanup_audit_logs  — delete audit_logs older than AUDIT_LOG_RETENTION_DAYS (daily)
+  * check_for_updates   — K5 change detection (daily). Currently a no-op end to
+                           end: app.legal_corpus.change_detection.poll_sources()
+                           is a stub (see that module's docstring for why).
+                           Scheduled now so the wiring is real and ready the
+                           moment a source poller is implemented.
 
 Run with:  arq app.tasks.worker.WorkerSettings
 """
@@ -19,6 +24,7 @@ from sqlalchemy import delete, select
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
 from app.db.base import SessionLocal
+from app.legal_corpus.change_detection import run_change_detection
 from app.models.audit import AuditLog
 from app.models.corpus import SectionVersion
 from app.services.embeddings import embedder
@@ -56,16 +62,24 @@ async def cleanup_audit_logs(ctx) -> int:
     return deleted
 
 
+async def check_for_updates(ctx) -> int:
+    async with SessionLocal() as db:
+        staged = await run_change_detection(db)
+    logger.info("change_detection_run", staged=staged)
+    return staged
+
+
 async def startup(ctx) -> None:
     configure_logging()
 
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
-    functions = [refresh_news, backfill_embeddings, cleanup_audit_logs]
+    functions = [refresh_news, backfill_embeddings, cleanup_audit_logs, check_for_updates]
     on_startup = startup
     cron_jobs = [
         cron(refresh_news, hour={0, 6, 12, 18}, minute=0),
         cron(backfill_embeddings, minute={5, 35}),
         cron(cleanup_audit_logs, hour=3, minute=0),  # daily, off-peak
+        cron(check_for_updates, hour=4, minute=0),   # daily, off-peak
     ]

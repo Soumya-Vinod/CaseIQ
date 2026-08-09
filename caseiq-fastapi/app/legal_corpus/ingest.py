@@ -75,7 +75,7 @@ async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, res
     )).scalars().all()
     current_by_number = {r.section_number: r for r in current_rows}
 
-    for s in result.accepted:
+    for i, s in enumerate(result.accepted, start=1):
         current = current_by_number.get(s.section_number)
 
         if current is None:
@@ -109,7 +109,15 @@ async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, res
                                outcome=outcome)
             outcome.new_versions += 1
 
-    await db.commit()
+        if i % 50 == 0 or i == len(result.accepted):
+            # Incremental commit, not one giant end-of-act transaction:
+            # (a) visible progress -- a run that looks stalled can be checked
+            #     against the DB directly instead of guessing from CPU/memory;
+            #     (b) a crash partway through doesn't lose everything already
+            #     processed for this act.
+            await db.commit()
+            print(f"[{act_code}] progress: {i}/{len(result.accepted)}", flush=True)
+
     return outcome
 
 

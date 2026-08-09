@@ -54,6 +54,9 @@ class QueryOut(BaseModel):
     related_questions: list[str]
     is_followup: bool
     processing_time_ms: int
+    # Part K / K7: the date retrieval was filtered as-of -- an answer must be
+    # able to state what date it was computed against.
+    as_of: date
 
 
 class SituationIn(BaseModel):

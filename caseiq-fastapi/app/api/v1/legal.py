@@ -106,5 +106,5 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         conversational_summary=result["conversational_summary"],
         structured_data=result["structured_data"], confidence_score=result["confidence_score"],
         legal_sections=sections, language=language, related_questions=related,
-        is_followup=result["is_followup"], processing_time_ms=took_ms,
+        is_followup=result["is_followup"], processing_time_ms=took_ms, as_of=as_of,
     )
