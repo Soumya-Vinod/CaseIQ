@@ -57,14 +57,18 @@
       "act_title": "The Indian Penal Code",
       "document_type": {"value": "act", "verified": true},
       "act_number": {"value": "45 of 1860", "verified": true},
+      "assented_on": "1860-10-06",
       "content_as_on": {"value": null, "verified": false},
-      "consolidation_source": {"value": null, "verified": false},
-      "source_url": {"value": null, "verified": false},
-      "source_sha256": "39a9a403de2a50ff9424d6a874f6fcca209272d466addd35157e809e501e8d7f",
-      "retrieved_at": null,
+      "consolidation_source": {"value": "india_code", "verified": true},
+      "source_url": {
+        "value": "https://www.indiacode.nic.in/bitstream/123456789/15290/1/ipc.pdf",
+        "verified": true
+      },
+      "source_sha256": "967f3125fb1937cc12608e56c03f926440b86ecfbb468a1d2ca9e876e19e418e",
+      "retrieved_at": "2026-08-10",
       "file_present_since": "2025-02-19",
       "highest_section_number": 511,
-      "notes": "document_type/act_number confirmed from the PDF's own in-body 'ACT NO. 45 OF 1860' declaration. content_as_on/consolidation_source are NOT verified: no 'as on' date is present in the scanned cover pages, but body text does contain amendment footnotes up to at least Act 13 of 2013, so this is clearly some consolidated vintage, just an undated one in this extraction -- do not assume it is current. IPC 1860 was repealed and replaced by BNS effective 2024-07-01 for offences on/after that date; still authoritative for pre-BNS-cutover offences (Part K, K3). Follow-up task: re-source from India Code with a verified source_url and a dated consolidation."
+      "notes": "REPLACED 2026-08-10 -- the file previously at this path was CONFIRMED STALE, not merely unverified: its s.1 extent-of-application clause still read 3[extend to the whole of India 4[except the State of Jammu and Kashmir]] as LIVE bracketed text. The current India Code copy (this file) shows that same clause as 4*** -- India Code's convention for text omitted by amendment -- consistent with the Jammu and Kashmir Reorganisation Act, 2019 removing such carve-outs from central Acts. The old file is preserved at documents/superseded/IPC_1860_pre-2026-08-10_stale-jk-clause.pdf for audit; do not re-ingest it. document_type/act_number reconfirmed from THIS file's own in-body 'ACT NO. 45 OF 1860 [6th October, 1860.]' declaration (assented_on added accordingly). content_as_on stays verified:false -- searched thoroughly (all pages, patterns for 'as on'/'updated'/'consolidat'/'reprint') and this India Code copy carries NO dated consolidation stamp anywhere, same as the file it replaces. It is not undateable, though: the omitted s.1 clause is independent textual evidence that content postdates the J&K Reorganisation Act's relevant commencement (2019-10-31), which is why the OLD file's content_as_on being unverified was precisely the reason it could not be placed on the bitemporal timeline as a legitimate earlier version (see resolve_valid_from) -- it was simply wrong, not an earlier-but-valid state, so this is a same-valid_from in-place correction on re-ingest, not a forked version. Re-parsing this file required two new parser fixes: (1) app/legal_corpus/parsing/state_amendments.py -- this reprint appends 11 state-specific inserted sections (354E, 376F, 379A, 379B, 382B-382F, 509A, 509B under J&K/Chhattisgarh/Gujarat/Tripura headings) inline using the Act's own header format; these are real, valid state law but not pan-India, so they are structurally detected and excluded from this corpus (never silently -- see validate.py's print_report), tracked as backlog item C9. (2) LegacyActParser v4 -- s.17 ('Government' definition, the one General-Explanations entry with no period after its number) used a font-substituted opening-quote glyph (U+2015 '―') this reprint's font doesn't share with the rest of the document; the header regex's quote lookahead was broadened to match. IPC 1860 was repealed and replaced by BNS effective 2024-07-01 for offences on/after that date; still authoritative for pre-BNS-cutover offences (Part K, K3)."
     },
     "CrPC": {
       "filename": "CrPC_1973.pdf",

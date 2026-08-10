@@ -44,9 +44,14 @@ _REPEALED_RE = re.compile(
 # with the surrounding offence-section style, e.g. "18. "India".-..." which
 # does have one two lines later in the same PDF) -- accept either a literal
 # period, or the number being followed directly by whitespace then an opening
-# quote mark, as valid separators.
+# quote mark, as valid separators. The 2026 India Code reprint (re-sourced
+# 2026-08-10) renders that same opening quote glyph as U+2015 HORIZONTAL BAR
+# ("―") rather than a curly/straight quote -- a font-substitution artifact of
+# that specific print run, not a new grammatical shape -- so s.17 (the one
+# General-Explanations entry with no period) silently fell back to its
+# near-empty ToC stub and was reported "missing" until this was added.
 _HEADER_RE = re.compile(
-    r"(?:^|\n)\s*(\d{1,3}[A-Z]{0,2})(?:\.\s+(?:\(1\)\s+)?|\s+(?=[“\"']))([^\n]{5,200})",
+    r"(?:^|\n)\s*(\d{1,3}[A-Z]{0,2})(?:\.\s+(?:\(1\)\s+)?|\s+(?=[“\"'―]))([^\n]{5,200})",
     re.MULTILINE,
 )
 
@@ -58,10 +63,18 @@ _HEADER_RE = re.compile(
 
 class LegacyActParser:
     name = "LegacyActParser"
-    version = "3"  # bumped: footnote excision now bounds each footnote's own span at
-                    # its line end, not the next regex match -- fixes CrPC s.57
-                    # (last footnote in a run was swallowing the real section text
-                    # that followed it, all the way to the next section's header)
+    version = "4"
+    # v4: header quote-lookahead now also accepts U+2015 "―" (the 2026 India
+    #     Code IPC reprint's font-substituted opening-quote glyph) -- fixes
+    #     IPC s.17 ("Government" definition, no period after the number)
+    #     silently falling back to its near-empty ToC stub. char_start is now
+    #     recorded on every RawSection too, for
+    #     parsing/state_amendments.py's structural exclusion of state-
+    #     amendment schedules appended inline in the same reprint.
+    # v3: footnote excision now bounds each footnote's own span at
+    #     its line end, not the next regex match -- fixes CrPC s.57
+    #     (last footnote in a run was swallowing the real section text
+    #     that followed it, all the way to the next section's header)
 
     def parse(self, path: Path) -> ParseReport:
         text = self._extract_text(path)
