@@ -213,9 +213,20 @@ def enforce_gate(result: ValidationResult) -> None:
 
 
 def print_report(result: ValidationResult) -> None:
-    total = len(result.accepted) + len(result.repealed) + len(result.rejected)
+    # "parsed" must equal every raw candidate the parser actually found --
+    # accepted + repealed + rejected + excluded_state_amendments. It
+    # previously omitted excluded_state_amendments (a real candidate the
+    # parser DID find, just not pan-India), which silently broke that
+    # identity: IPC's re-source printed "parsed=574" when the parser had
+    # actually produced 585 raw candidates, undercounting by exactly the 11
+    # excluded sections. An accurate "parsed" figure is precisely what the
+    # count-reconciliation discipline this gate exists for depends on --
+    # see the 2026-08-10 IPC re-source reconciliation.
+    total = (len(result.accepted) + len(result.repealed) + len(result.rejected)
+              + len(result.excluded_state_amendments))
     print(f"[{result.act}] parsed={total} accepted={len(result.accepted)} "
           f"repealed={len(result.repealed)} rejected={len(result.rejected)} "
+          f"excluded_state_amendments={len(result.excluded_state_amendments)} "
           f"({result.rejection_rate:.1%})")
     reasons: dict[str, int] = {}
     for r in result.rejected:
