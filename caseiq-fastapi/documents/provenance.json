@@ -72,13 +72,16 @@
       "document_type": {"value": "act", "verified": false},
       "act_number": {"value": "2 of 1974", "verified": true},
       "content_as_on": {"value": null, "verified": false},
-      "consolidation_source": {"value": null, "verified": false},
-      "source_url": {"value": null, "verified": false},
+      "consolidation_source": {"value": "india_code", "verified": true},
+      "source_url": {
+        "value": "https://www.indiacode.nic.in/bitstream/123456789/15272/1/the_code_of_criminal_procedure,_1973.pdf",
+        "verified": true
+      },
       "source_sha256": "5bb6514251a9ec6375b2c894cef5280dab0d1c3cca1e0f4a1e57f29b54033d72",
       "retrieved_at": null,
       "file_present_since": "2025-02-19",
       "highest_section_number": 484,
-      "notes": "document_type='act' is inferred from title, structure, and section-body content matching the known Code of Criminal Procedure text -- marked verified:false because, unlike every other file here, THIS file's own extracted cover pages (0-20 scanned) carry no explicit 'ACT NO. X OF Y' stamp. act_number 2 of 1974 verified 2026-08-09, but against an INDEPENDENT India Code copy (indiacode.nic.in/bitstream/123456789/6796/1/ccp1973.pdf, cover reads 'ACT NO. 2 OF 1974 [25th January, 1974.]', commencement 1 April 1974) found via web search -- not against this specific PDF's own text, which still lacks the stamp. CrPC 1973 was repealed and replaced by BNSS effective 2024-07-01 for offences on/after that date (Part K, K3). Follow-up task: re-source from India Code with a verified source_url so this file's own content_as_on/source_url can be verified too."
+      "notes": "document_type='act' is inferred from title, structure, and section-body content matching the known Code of Criminal Procedure text -- marked verified:false because, unlike every other file here, THIS file's own extracted cover pages (0-20 scanned) carry no explicit 'ACT NO. X OF Y' stamp. act_number 2 of 1974 verified 2026-08-09, but against an INDEPENDENT India Code copy (indiacode.nic.in/bitstream/123456789/6796/1/ccp1973.pdf, cover reads 'ACT NO. 2 OF 1974 [25th January, 1974.]', commencement 1 April 1974) found via web search -- not against this specific PDF's own text, which still lacks the stamp. source_url verified 2026-08-10: downloaded indiacode.nic.in/bitstream/123456789/15272/1/the_code_of_criminal_procedure,_1973.pdf fresh and its sha256 is BYTE-IDENTICAL to the file already on disk here -- this file IS that India Code bitstream, not merely similar to it. No 'as on' consolidation-date stamp found anywhere in the first 15 pages, so content_as_on stays unverified/null (searched but not found, not simply unchecked). CrPC 1973 was repealed and replaced by BNSS effective 2024-07-01 for offences on/after that date (Part K, K3)."
     }
   }
 }
