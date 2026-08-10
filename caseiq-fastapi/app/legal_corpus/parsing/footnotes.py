@@ -11,7 +11,7 @@ up again through a different mechanism: dedup-keep-longest picking whichever
 candidate is longest, with no defense against a long footnote beating a short
 real section.
 
-Two footnote vocabularies observed across the five source documents:
+Three footnote vocabularies observed across the five source documents:
   - amendment-history style (IPC/CrPC's per-page footnotes): "Ins. by Act 21
     of 2000...". The verb does NOT reliably open the sentence -- most
     observed cases are "The <description> <verb> by ..." (e.g. "The proviso
@@ -23,6 +23,16 @@ Two footnote vocabularies observed across the five source documents:
     reprints, e.g. BNS_2023.pdf, which GazetteParser previously had zero
     defence against): "...vide notification No. S.O. 850(E)..., see Gazette
     of India, Extraordinary...".
+  - extension/application-history style (IPC's per-page footnotes recording
+    which territories a provision was extended to, e.g. "1. The Indian Penal
+    Code has been extended to Berar by the Berar Laws Act, 1941 ... and has
+    been declared in force in Sonthal Parganas, by ..."). Found 2026-08-10,
+    still sitting live in the corpus as IPC s.1's stored text (flagged but
+    not fixed during the original 2026-08-09 hand-verification pass, see
+    docs/m1-verification.md): this footnote happened to be page-locally
+    numbered "1", the exact same collision mechanism as the amendment-style
+    footnotes, just a vocabulary neither existing check recognised, so it
+    won its dedup-longest contest against the real (much shorter) s.1 body.
 
 Checked against a BOUNDED prefix of a candidate's text (its header line, or
 the first ~200 chars) -- NOT the full body -- so a long, genuine operative
@@ -46,9 +56,25 @@ _NOTIFICATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "has been extended"/"has been declared" (past-perfect passive) is
+# distinctive to this editorial-history phrasing and does not collide with
+# genuine operative text, which describes what a provision DOES ("shall
+# extend to...", "extends to causing death") rather than a territorial
+# application history. "extended/declared under s. N" catches the same
+# footnote's later sentences (e.g. "extended under s. 5 of the same Act to
+# the Lushai Hills") in case the scan window starts partway through one.
+_EXTENSION_HISTORY_RE = re.compile(
+    r"\bhas been (?:extended|declared)\b|\b(?:extended|declared) under s\.\s*\d",
+    re.IGNORECASE,
+)
+
 HEADER_SCAN_CHARS = 220  # a bit past the 200-char title-capture width elsewhere
 
 
 def is_footnote_shaped(text_prefix: str) -> bool:
     scan = text_prefix[:HEADER_SCAN_CHARS]
-    return bool(_AMENDMENT_VERB_RE.search(scan) or _NOTIFICATION_RE.search(scan))
+    return bool(
+        _AMENDMENT_VERB_RE.search(scan)
+        or _NOTIFICATION_RE.search(scan)
+        or _EXTENSION_HISTORY_RE.search(scan)
+    )

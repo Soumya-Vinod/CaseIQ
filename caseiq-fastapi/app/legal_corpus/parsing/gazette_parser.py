@@ -43,7 +43,13 @@ _HEADER_RE = re.compile(
 
 class GazetteParser:
     name = "GazetteParser"
-    version = "4"
+    version = "5"
+    # v5: footnotes.py gained a third footnote vocabulary (extension/
+    #     application-history, e.g. IPC's "has been extended to Berar
+    #     by..." -- see legacy_parser.py v5 / footnotes.py for the concrete
+    #     bug this closes). No observed effect on BNS/BNSS/BSA text, but the
+    #     shared check runs uniformly and the version bump records that its
+    #     behaviour changed.
     # v4: footnote excision now bounds each footnote's own span at its line end,
     #     not the next regex match (see legacy_parser.py's matching fix / CrPC
     #     s.57 for the concrete bug this closes -- the last footnote in a run

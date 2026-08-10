@@ -63,7 +63,17 @@ _HEADER_RE = re.compile(
 
 class LegacyActParser:
     name = "LegacyActParser"
-    version = "4"
+    version = "5"
+    # v5: footnotes.py now also recognises extension/application-history
+    #     footnotes ("has been extended to Berar by...", "has been declared
+    #     in force in..."), a third vocabulary distinct from amendment- and
+    #     notification-style footnotes -- fixes IPC s.1, whose real operative
+    #     "Title and extent of operation" text was losing the dedup-longest
+    #     contest to a page footnote that happened to share its number by
+    #     the same per-page-footnote-numbering collision as every other
+    #     footnote bug in this parser. Flagged but not fixed in the original
+    #     2026-08-09 hand-verification pass (docs/m1-verification.md);
+    #     closed 2026-08-10 rather than carried forward into the corpus.
     # v4: header quote-lookahead now also accepts U+2015 "―" (the 2026 India
     #     Code IPC reprint's font-substituted opening-quote glyph) -- fixes
     #     IPC s.17 ("Government" definition, no period after the number)
