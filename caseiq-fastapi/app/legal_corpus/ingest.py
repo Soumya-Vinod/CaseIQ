@@ -83,23 +83,21 @@ async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, res
                                source_url=source_url, source_sha256=source_sha256,
                                content_as_on=content_as_on, parser=parser, resume=resume,
                                outcome=outcome)
-            continue
-
-        if current.valid_from == valid_from:
+        elif current.valid_from == valid_from:
             if resume and current.section_text == s.section_text and current.embedding is not None:
                 outcome.skipped_resume += 1
-                continue
-            current.marginal_note = s.section_title or current.marginal_note
-            current.section_text = s.section_text
-            current.is_repealed = s.is_repealed
-            current.source_url = source_url
-            current.source_sha256 = source_sha256
-            current.content_as_on = content_as_on
-            current.parser_name = parser.name
-            current.parser_version = parser.version
-            current.embedding = await embedder.embed(f"{current.marginal_note}. {s.section_text[:2000]}")
-            await asyncio.sleep(0.7)
-            outcome.updated_in_place += 1
+            else:
+                current.marginal_note = s.section_title or current.marginal_note
+                current.section_text = s.section_text
+                current.is_repealed = s.is_repealed
+                current.source_url = source_url
+                current.source_sha256 = source_sha256
+                current.content_as_on = content_as_on
+                current.parser_name = parser.name
+                current.parser_version = parser.version
+                current.embedding = await embedder.embed(f"{current.marginal_note}. {s.section_text[:2000]}")
+                await asyncio.sleep(0.7)
+                outcome.updated_in_place += 1
         else:
             # genuine new version -- valid_from advanced, close the old one
             current.valid_to = valid_from
@@ -109,12 +107,18 @@ async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, res
                                outcome=outcome)
             outcome.new_versions += 1
 
+        # Incremental commit, not one giant end-of-act transaction -- runs
+        # unconditionally every iteration regardless of which branch above
+        # fired (previously this was reachable only from the update/new-version
+        # branches because the fresh-insert and resume-skip branches used
+        # `continue`, so a first-time ingest of an act -- e.g. CrPC, before
+        # any section_versions rows exist for it -- silently never committed
+        # anything until the session closed and threw the whole batch away):
+        # (a) visible progress -- a run that looks stalled can be checked
+        #     against the DB directly instead of guessing from CPU/memory;
+        #     (b) a crash partway through doesn't lose everything already
+        #     processed for this act.
         if i % 50 == 0 or i == len(result.accepted):
-            # Incremental commit, not one giant end-of-act transaction:
-            # (a) visible progress -- a run that looks stalled can be checked
-            #     against the DB directly instead of guessing from CPU/memory;
-            #     (b) a crash partway through doesn't lose everything already
-            #     processed for this act.
             await db.commit()
             print(f"[{act_code}] progress: {i}/{len(result.accepted)}", flush=True)
 
