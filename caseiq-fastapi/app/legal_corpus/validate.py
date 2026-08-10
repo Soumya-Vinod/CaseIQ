@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass, field
 
 from .parsing.base import ParseReport, RawSection
+from .parsing.state_amendments import find_and_exclude
 from .parsing.toc import extract_expected_numbers, extract_repealed_ranges
 from .provenance import get_highest_section_number
 
@@ -55,6 +56,11 @@ class ValidationResult:
     unexpected: list[str] = field(default_factory=list)       # accepted - expected
     repealed_ranges: list[tuple[str, str]] = field(default_factory=list)
     highest_section_number: int | None = None
+    # (section_number, heading_name) for every accepted-but-not-in-ToC
+    # candidate structurally identified as a state amendment (see
+    # parsing/state_amendments.py) and removed from `accepted`/`unexpected`
+    # -- never silent, always reported (see print_report). Tracked as C9.
+    excluded_state_amendments: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def rejection_rate(self) -> float:
@@ -134,6 +140,13 @@ def validate(act: str, report: ParseReport) -> ValidationResult:
         else:
             expected_source = "unavailable"
 
+    excluded_state_amendments: list[tuple[str, str]] = []
+    if expected_numbers is not None:
+        accepted, excluded_state_amendments = find_and_exclude(
+            accepted, report.full_text, expected_numbers
+        )
+        accepted_numbers = {s.section_number for s in accepted}
+
     missing: list[str] = []
     unexpected: list[str] = []
     if expected_numbers is not None:
@@ -153,6 +166,7 @@ def validate(act: str, report: ParseReport) -> ValidationResult:
         unexpected=unexpected,
         repealed_ranges=extract_repealed_ranges(report.full_text),
         highest_section_number=highest,
+        excluded_state_amendments=excluded_state_amendments,
     )
 
 
@@ -220,6 +234,15 @@ def print_report(result: ValidationResult) -> None:
               f"{len(result.missing)} {result.missing}")
         print(f"[{result.act}] unexpected (accepted, not in ToC): "
               f"{len(result.unexpected)} {result.unexpected}")
+    if result.excluded_state_amendments:
+        by_heading: dict[str, list[str]] = {}
+        for number, heading in result.excluded_state_amendments:
+            by_heading.setdefault(heading, []).append(number)
+        for heading, numbers in by_heading.items():
+            numbers_sorted = sorted(numbers, key=_sort_key)
+            print(f"[{result.act}] excluded {len(numbers_sorted)} state-amendment section(s) "
+                  f"({', '.join(numbers_sorted)}) under schedule heading {heading!r} "
+                  f"-- not pan-India, see C9.")
     if result.repealed:
         print(f"[{result.act}] repealed sections recorded: "
               f"{sorted((s.section_number for s in result.repealed), key=_sort_key)}")

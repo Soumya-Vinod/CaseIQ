@@ -146,6 +146,7 @@ class GazetteParser:
                     section_number=m.group(1).strip(),
                     section_title=None,  # Gazette body text doesn't reliably separate
                     section_text=body[:5000],  # a marginal-note title from operative text
+                    char_start=m.start(),
                 )
             )
         return out

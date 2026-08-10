@@ -156,6 +156,7 @@ class LegacyActParser:
                     section_title=re.sub(r"\s+", " ", m.group(2)).strip()[:500],
                     section_text=body[:5000],
                     is_repealed=bool(_REPEALED_RE.match(body)),
+                    char_start=m.start(),
                 )
             )
         return out

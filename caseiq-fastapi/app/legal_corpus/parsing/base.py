@@ -20,6 +20,11 @@ class RawSection:
     marginal_note: str | None = None
     page_start: int | None = None
     is_repealed: bool = False
+    # Character offset of this section's header match within the parser's
+    # own ParseReport.full_text, or -1 when a parser doesn't track it (safe
+    # default -- callers that need it, like state_amendments.py, must treat
+    # -1 as "position unknown" and skip, never as offset 0).
+    char_start: int = -1
 
     @property
     def raw_char_count(self) -> int:
