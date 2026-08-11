@@ -55,6 +55,11 @@ async def approve(staging_id: str, payload: ApproveIn, db: DB, user: CurrentUser
         await db.flush()
         amendment_id = amendment.id
 
+    # No judicial_status filter here (opt-out, not an oversight): this reads
+    # whatever the CURRENT row is -- struck-down or not -- purely to close it
+    # out and carry its marginal_note forward. It's write-path bookkeeping,
+    # never returned to a caller; K2's hard rule is about presenting content
+    # to a reader, which doesn't happen on this line.
     current = (await db.execute(
         select(SectionVersion).where(
             SectionVersion.act_id == change.act_id, SectionVersion.section_number == change.section_number,
@@ -120,6 +125,14 @@ async def list_versions(db: DB, limit: int = Query(50, le=200)):
 
 @router.get("/sections/{act_code}/{section_number}/history", response_model=list[SectionHistoryEntry])
 async def section_history(act_code: str, section_number: str, db: DB):
+    # No judicial_status filter here (opt-out, not an oversight): the whole
+    # POINT of this endpoint is a complete, unfiltered version timeline for
+    # audit -- ADMIN-ONLY (router-level require_role(Role.ADMIN) above), and
+    # deliberately shows every version including any that were later
+    # superseded because a court struck the provision down. Excluding
+    # struck-down rows here would defeat the endpoint's purpose. K2's hard
+    # rule is about not presenting struck-down text to an end user as live
+    # law -- an admin reviewing full history isn't that.
     act = (await db.execute(select(Act).where(Act.act_code == act_code))).scalar_one_or_none()
     if act is None:
         raise HTTPException(404, f"no act {act_code!r}")
