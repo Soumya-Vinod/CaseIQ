@@ -164,15 +164,27 @@ just at ingestion.
      `amendment`/`amendment_effects` rows, re-embed only changed sections, bump `corpus_version`,
      invalidate semantic cache entries touching those sections.
   8. Emit a structured log + optional notification for affected topics.
-- [ ] **K6.** **Admin surface.** Minimal authenticated endpoints (admin role only):
+- [x] **K6.** **Admin surface.** Minimal authenticated endpoints (admin role only):
   `GET /admin/corpus/pending` (review queue with diffs), `POST /admin/corpus/{id}/approve`,
   `POST /admin/corpus/{id}/reject`, `GET /admin/corpus/versions`,
-  `GET /admin/sections/{act}/{section}/history` (full version timeline).
-- [ ] **K7.** **User-facing behaviour.** Every cited section displays its in-force date and
+  `GET /admin/sections/{act}/{section}/history` (full version timeline). Done 2026-08-11
+  (`app/api/v1/admin_corpus.py`) — `approve()` now also bumps a `CorpusVersion` snapshot (K5 step
+  7), which nothing did before, so `GET /admin/corpus/versions` was silently always empty until
+  today.
+- [x] **K7.** **User-facing behaviour.** Every cited section displays its in-force date and
   version. If a cited provision changed within the last 12 months, show a "recently amended" badge
   with the old/new diff available. If a provision is struck down or read down, show that
   prominently with the case citation — never silently omit it. Answers state the as-of date they
-  were computed against.
+  were computed against. Done 2026-08-11: `version_no`/`valid_from`/`valid_to`/`recently_amended`
+  on every retrieved section; `as_of` and `corpus_version_id` stamped on every answer
+  (`app/legal_corpus/corpus_version.py` — also found and fixed that nothing had ever created a
+  `CorpusVersion` row, so this was always `None`); read-down status flows into the LLM prompt with
+  case citation + scope note. Struck-down provisions stay fully excluded from organic
+  retrieval (semantic/keyword search, `list_sections` browsing — the latter had no judicial_status
+  check at all until today) per K2's hard rule; a **separate** explicit lookup,
+  `GET /knowledge/sections/{act}/{section}`, is the one path that can surface a struck-down
+  section, always with judicial_status attached and never silently omitted, and also carries the
+  previous version's text for the old/new diff when recently amended.
 
 ---
 

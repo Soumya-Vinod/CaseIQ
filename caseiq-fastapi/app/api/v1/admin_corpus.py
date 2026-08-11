@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DB, require_role
+from app.legal_corpus.corpus_version import create_corpus_version
 from app.models.corpus import Act, Amendment, CorpusStagingChange, CorpusVersion, SectionVersion
 from app.models.user import Role
 from app.schemas.corpus import ApproveIn, CorpusVersionOut, RejectIn, SectionHistoryEntry, StagingChangeOut
@@ -83,8 +84,17 @@ async def approve(staging_id: str, payload: ApproveIn, db: DB, user: CurrentUser
     change.status = "approved"
     change.reviewed_by_id = user.id
     change.reviewed_at = datetime.now(timezone.utc)
+
+    # K5 step 7 / K4: an approval changes what's live, so it gets its own
+    # snapshot -- same reasoning as scripts/ingest_sections.py, just
+    # triggered by a single-section change instead of a full re-ingest.
+    version = await create_corpus_version(
+        db, label=f"approve-{change.section_number}-{new_version.id}",
+        notes=f"approved staging change {change.id} for {change.section_number}",
+    )
     await db.commit()
-    return {"status": "approved", "new_section_version_id": str(new_version.id)}
+    return {"status": "approved", "new_section_version_id": str(new_version.id),
+            "corpus_version_id": str(version.id)}
 
 
 @router.post("/corpus/{staging_id}/reject")

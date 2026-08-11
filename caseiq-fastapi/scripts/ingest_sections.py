@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.db.base import SessionLocal, engine
+from app.legal_corpus.corpus_version import create_corpus_version
 from app.legal_corpus.ingest import ingest_act
 from app.legal_corpus.parsing.registry import PARSERS
 from app.legal_corpus.provenance import ProvenanceError
@@ -49,11 +51,13 @@ async def main() -> None:
     targets = DEFAULTS if args.all else {args.act: args.pdf or DEFAULTS.get(args.act)}
 
     exit_code = 0
+    attempted: list[str] = []
     async with SessionLocal() as db:
         for act, pdf in targets.items():
             if not (act and pdf and Path(pdf).exists()):
                 print(f"skip {act}: missing pdf {pdf}")
                 continue
+            attempted.append(act)
             try:
                 outcome = await ingest_act(db, act, pdf, PARSERS[act], resume=args.resume)
                 print(outcome)
@@ -65,6 +69,18 @@ async def main() -> None:
                 await db.rollback()
                 print(f"[{act}] BLOCKED (validation gate): {e}")
                 exit_code = 1
+
+        # K4/K6: snapshot the corpus's actual resulting state -- even on a
+        # partial failure (exit_code=1), since a snapshot records what's
+        # really in section_versions right now, not what the run intended.
+        # Skipped only if nothing was attempted at all (e.g. bad --act name).
+        if attempted:
+            label = f"ingest-{datetime.now(UTC):%Y-%m-%dT%H:%M:%SZ}"
+            notes = f"acts attempted: {', '.join(attempted)}" + (" (partial failure)" if exit_code else "")
+            version = await create_corpus_version(db, label=label, notes=notes)
+            await db.commit()
+            print(f"corpus_version: {version.id} ({version.section_count} sections, "
+                  f"checksum={version.checksum[:12]}...)")
     await engine.dispose()
     raise SystemExit(exit_code)
 

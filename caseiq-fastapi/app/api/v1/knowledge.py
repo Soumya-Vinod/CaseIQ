@@ -1,12 +1,13 @@
 from datetime import date
 
-from fastapi import APIRouter, Query
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_, select
 
 from app.api.deps import DB, OptionalUser
-from app.models.corpus import Act, SectionVersion
-from app.schemas.legal import RetrievedSection, SectionOut
-from app.services.retrieval import semantic_search
+from app.models.corpus import Act, JudicialStatus, SectionVersion
+from app.schemas.legal import RetrievedSection, SectionDetailOut, SectionOut
+from app.services.retrieval import get_section_with_history, in_force, judicial_status_dict, \
+    not_struck_down, semantic_search
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge Base"])
 
@@ -21,13 +22,22 @@ async def list_sections(
     """Browses the section IN FORCE as of `as_of` (default today) -- see
     app/services/retrieval.py's module docstring. Never queries the retired
     legal_sections table.
+
+    K2 hard rule applies HERE too, not just to semantic_search/keyword_search:
+    a browse listing that showed IPC s.497 with no indication it's struck
+    down would violate the same "never present as live law" rule through a
+    different door. Found 2026-08-11 while finishing K7 -- this endpoint had
+    no judicial_status join or exclusion at all until now.
     """
     as_of = as_of or date.today()
     stmt = (
         select(SectionVersion, Act.act_code)
         .join(Act, SectionVersion.act_id == Act.id)
-        .where(SectionVersion.valid_from <= as_of,
-               (SectionVersion.valid_to.is_(None)) | (SectionVersion.valid_to > as_of))
+        .outerjoin(JudicialStatus, and_(
+            JudicialStatus.act_id == SectionVersion.act_id,
+            JudicialStatus.section_number == SectionVersion.section_number,
+        ))
+        .where(in_force(as_of), not_struck_down())
     )
     if act:
         stmt = stmt.where(Act.act_code.ilike(act))
@@ -44,6 +54,25 @@ async def list_sections(
         }
         for sv, act_code in rows
     ]
+
+
+@router.get("/sections/{act}/{section_number}", response_model=SectionDetailOut)
+async def get_section(
+    act: str, section_number: str, db: DB, user: OptionalUser,
+    as_of: date | None = Query(None, description="defaults to today -- see Part K K3"),
+):
+    """K7's explicit, direct-citation lookup -- the one path in this app that
+    CAN return a struck-down section, always with its judicial_status
+    attached (never silently omitted, per K7), unlike list_sections/
+    semantic_search/keyword_search which exclude struck-down entirely (K2's
+    hard rule for organic/ranked results). Also carries the previous
+    version's text when recently_amended, for K7's old/new diff.
+    """
+    result = await get_section_with_history(db, act.upper(), section_number, as_of)
+    if result is None:
+        raise HTTPException(404, f"no in-force version of {act} {section_number} as of "
+                                  f"{as_of or date.today()}")
+    return result
 
 
 @router.post("/semantic-search", response_model=list[RetrievedSection])
