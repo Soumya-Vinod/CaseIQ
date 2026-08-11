@@ -20,16 +20,37 @@ def _swap_scheme(url: str, driver: str) -> str:
     return url.replace("postgresql://", f"postgresql+{driver}://", 1)
 
 
-def _strip_sslmode(url: str) -> str:
-    """asyncpg does NOT accept `sslmode=require` as a URL query parameter the
-    way psycopg2 does -- passing Neon's stock connection string straight into
-    an asyncpg engine fails. SSL is instead passed via connect_args (see
-    app/db/base.py and alembic/env.py's async engine construction), so strip
-    the param here rather than leaving it for asyncpg to choke on. psycopg2
-    URLs are left untouched by _swap_scheme alone -- psycopg2 handles
-    sslmode in the URL fine, no stripping needed for that driver."""
+# Query-string params that break asyncpg when the URL goes through
+# SQLAlchemy's asyncpg dialect. Discovered empirically during the deployment
+# spike (2026-08-11), not documented anywhere in advance:
+#   sslmode          -- the well-known one (raw asyncpg.connect() rejects it
+#                        outright, whether called directly or via SQLAlchemy).
+#   channel_binding  -- NEWER: Neon's current connection strings include
+#                        `channel_binding=require` (SCRAM channel binding).
+#                        Raw `asyncpg.connect(url, ...)` tolerates it fine --
+#                        a direct test connected successfully with it still
+#                        in the URL. But SQLAlchemy's asyncpg dialect parses
+#                        the URL's query string itself and forwards every
+#                        param as a kwarg straight to asyncpg.connect(),
+#                        which does NOT accept a `channel_binding` kwarg --
+#                        TypeError, not a connection error, and only through
+#                        SQLAlchemy (create_async_engine), not asyncpg
+#                        itself. Confirms the spike's own warning that this
+#                        class of gotcha needs to be explicit in code with
+#                        comments, not fixed once and forgotten -- a NEWER
+#                        Neon default already needed a second fix beyond
+#                        what the spike instructions anticipated.
+_ASYNCPG_INCOMPATIBLE_QUERY_PARAMS = {"sslmode", "channel_binding"}
+
+
+def _strip_asyncpg_incompatible_params(url: str) -> str:
+    """SSL is instead passed via connect_args (see app/db/base.py and
+    alembic/env.py's async engine construction). psycopg2 URLs are left
+    untouched by _swap_scheme alone -- psycopg2 handles both of these params
+    in the URL fine, no stripping needed for that driver."""
     parts = urlsplit(url)
-    query = [(k, v) for k, v in parse_qsl(parts.query) if k.lower() != "sslmode"]
+    query = [(k, v) for k, v in parse_qsl(parts.query)
+             if k.lower() not in _ASYNCPG_INCOMPATIBLE_QUERY_PARAMS]
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
@@ -86,7 +107,7 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL(self) -> str:
         if self.DATABASE_URL_RAW:
-            return _swap_scheme(_strip_sslmode(self.DATABASE_URL_RAW), "asyncpg")
+            return _swap_scheme(_strip_asyncpg_incompatible_params(self.DATABASE_URL_RAW), "asyncpg")
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -102,7 +123,7 @@ class Settings(BaseSettings):
         configured (never the pooled one, unlike DATABASE_URL above)."""
         direct = self.DATABASE_URL_DIRECT or self.DATABASE_URL_RAW
         if direct:
-            return _swap_scheme(_strip_sslmode(direct), "asyncpg")
+            return _swap_scheme(_strip_asyncpg_incompatible_params(direct), "asyncpg")
         return self.DATABASE_URL
 
     @computed_field  # type: ignore[prop-decorator]
