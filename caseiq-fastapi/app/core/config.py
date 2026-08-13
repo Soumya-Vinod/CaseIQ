@@ -142,6 +142,22 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def DATABASE_HOST_FOR_LOGGING(self) -> str:
+        """host:port/dbname the app actually resolved for DATABASE_URL --
+        NEVER credentials. Logged once at startup (app/main.py's lifespan)
+        so "which database did this resolve to" is one glance at the log,
+        not a traceback dig -- added after a 2026-08-13 Render deploy hit
+        ConnectionRefusedError with no host in the traceback at all
+        (ConnectionRefusedError's args are just the errno + "Connection
+        refused", asyncio doesn't attach the target address), and the only
+        way to tell "wrong DATABASE_URL_RAW value" apart from "DB is
+        actually down" was to add this rather than guess from the
+        traceback. See docs/deployment.md."""
+        parts = urlsplit(self.DATABASE_URL)
+        return f"{parts.hostname}:{parts.port or 5432}{parts.path}"
+
     # --- Redis / Cache / Rate limit ---
     REDIS_URL: str = "redis://localhost:6379/0"
 
