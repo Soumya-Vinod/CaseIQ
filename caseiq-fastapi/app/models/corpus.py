@@ -21,8 +21,8 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Computed, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -91,6 +91,20 @@ class SectionVersion(UUIDPk, Timestamped, Base):
     parser_version: Mapped[str | None] = mapped_column(String(20))
 
     embedding: Mapped[list[float] | None] = mapped_column(Vector(settings.EMBEDDING_DIM))
+
+    # Hybrid retrieval (2026-08-30, migration 0005): Postgres full-text search
+    # alongside the vector embedding above, fused with RRF -- see
+    # app/services/retrieval.py. `Computed(..., persisted=True)` tells the ORM
+    # this is a GENERATED ALWAYS ... STORED column (never included in
+    # INSERT/UPDATE, Postgres keeps it in sync automatically); the expression
+    # here documents what the DB actually computes, it isn't re-run by the ORM.
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english', coalesce(marginal_note, '') || ' ' || coalesce(section_text, ''))",
+            persisted=True,
+        ),
+    )
 
     act: Mapped[Act] = relationship(back_populates="sections", foreign_keys=[act_id])
 

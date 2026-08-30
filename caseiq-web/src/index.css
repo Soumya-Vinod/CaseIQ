@@ -34,6 +34,11 @@
   /* constrained measure for long-form statutory reading */
   --measure: 68ch;
 
+  /* Apple/Google's minimum comfortable tap target -- applied to every
+     interactive element (tabs, pills, buttons, inputs). See tap-target
+     audit note in App.module.css and friends. */
+  --tap-min: 44px;
+
   color-scheme: dark;
 }
 
@@ -56,6 +61,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* Safety net, not a fix for a known bug: real statutory text/citations can
+     contain a long unbroken run (a URL, a compound citation) that would
+     otherwise force horizontal scroll on the whole page at 360-390px. */
+  overflow-wrap: break-word;
+  overflow-x: hidden;
 }
 
 #root {

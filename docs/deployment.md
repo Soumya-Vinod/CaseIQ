@@ -16,6 +16,50 @@ deployed" at the bottom.
 - [ ] Cold-start / warm latency measured (in progress — warm samples being taken now, cold-start
   pending a 15+ minute idle window)
 
+### `GET /knowledge/sections` ~6s latency — investigated 2026-08-30, timeboxed 20 min, not fixed
+
+Reported: Browse-by-act consistently takes ~3.3–10s per request against Neon. Ran `EXPLAIN
+(ANALYZE, BUFFERS)` on the exact query `list_sections` builds (act filter, `in_force`/
+`not_struck_down` predicates, the judicial_status join, ORDER BY + LIMIT 200) before changing
+anything, per instruction. Result: **the query itself is not the problem.**
+
+```
+Execution Time: 49.920 ms
+Planning Time: 36.876 ms
+```
+
+Ruling out the four suspected causes in order:
+1. **Missing index** — not the cause. `ix_section_versions_lookup (act_id, section_number,
+   valid_from, valid_to)` and `ix_judicial_status_lookup (act_id, section_number)` both exist and
+   the judicial_status join uses the latter via an efficient indexed nested loop (563 index
+   searches, ~0.004ms each per the plan).
+2. **`as_of` bitemporal predicate forcing a seq scan** — partially true but not the cost: the
+   planner does seq-scan `section_versions` for the `valid_from`/`valid_to` filter (2155 rows,
+   no single index covers that OR'd range condition well), but that scan costs ~45ms of the 50ms
+   total — not multi-second.
+3. **Selecting full `section_text` for 200 rows** — not shown as a cost driver in the plan
+   (`width=1092` per row, unremarkable).
+4. **N+1 for `judicial_status`** — doesn't apply as suspected: it's one query with one JOIN, not
+   per-row round-trips from the app.
+
+**What's actually slow, measured directly**: a fresh `asyncpg.connect()` to Neon's pooled
+endpoint takes **~1.3s** (TLS + PgBouncer handshake) before any query runs, and even a bare
+`SELECT 1` round-trip costs **~0.21s** — both consistent with real network latency to Neon's
+Ohio region (this session is not running from Ohio) and the RTT this doc already flagged
+elsewhere. That accounts for roughly 1.5s of the total. It does **not** fully explain the
+remaining ~2–8.5s: three consecutive requests through the running app measured 10.0s, 3.6s, 3.3s
+— faster after the first (some warmup effect, e.g. the connection pool or DNS), but nowhere near
+the ~50ms+1.5s ≈ 1.6s that "real query cost + one connection handshake" would predict if the
+pool (`pool_size=10`, `pool_pre_ping=True` in `app/db/base.py`) were reusing warm connections as
+designed.
+
+**Not resolved in the timebox**: why pooled reuse isn't eliminating most of that cost is an open
+question — worth checking next: whether `pool_pre_ping`'s liveness check is itself round-tripping
+to Neon on every checkout (an extra ~0.2s+ each), whether Neon's PgBouncer is dropping idle pooled
+connections faster than this app's pool expects, and what the per-request `get_db()` commit (even
+for a pure GET) costs. Browse is the least-used tab per instruction — documenting rather than
+continuing to chase this.
+
 ## The `ConnectionRefusedError` (root cause + fix)
 
 First deploy attempt crashed on startup with `ConnectionRefusedError: [Errno 111] Connection

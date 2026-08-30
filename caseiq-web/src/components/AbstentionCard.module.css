@@ -46,6 +46,8 @@
 .action {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
   gap: 0.45rem;
   font-size: 0.82rem;
   font-weight: 600;

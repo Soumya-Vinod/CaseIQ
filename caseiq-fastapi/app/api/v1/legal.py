@@ -12,18 +12,36 @@ from app.models.corpus import CorpusVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
 from app.services.llm import llm_service
-from app.services.retrieval import build_rag_context, is_abstention, semantic_search
+from app.services.retrieval import (
+    build_rag_context,
+    is_abstention,
+    is_civil_scope_mismatch,
+    semantic_search,
+)
 from app.services.safety import screen_query
 from sqlalchemy import select
 
 # Fixed abstention response text -- deliberately not LLM-generated (see
 # is_abstention's docstring: the whole point is to skip the LLM call, not
 # just to prompt it more carefully). A considered "no" with a next step, not
-# an error message.
+# an error message. Two variants: the scope one fires when is_civil_scope_mismatch
+# recognises the query as a named civil-law domain this corpus doesn't cover;
+# the generic one is the fallback for everything else that's weakly retrieved
+# but not recognisably civil (Titan's methane question, e.g.) -- it still states
+# the corpus's actual scope rather than a bare "not confident".
 _ABSTENTION_MESSAGE = (
     "I couldn't find a confident match for this in the BNS, BNSS, BSA, IPC or CrPC text "
-    "I have -- rather than guess, I'm not going to answer this one. For guidance specific "
-    "to your situation, please consult a lawyer or your nearest legal aid clinic (NALSA "
+    "I have. CaseIQ's corpus covers Indian criminal law and procedure only -- it doesn't "
+    "include civil matters (property, contract, tenancy, family, inheritance) or other law "
+    "outside those five acts. Rather than guess, I'm not going to answer this one. For "
+    "guidance specific to your situation, please consult a lawyer or your nearest legal aid "
+    "clinic (NALSA helpline: 15100, or https://nalsa.gov.in)."
+)
+_CIVIL_SCOPE_MESSAGE = (
+    "CaseIQ covers Indian criminal law and procedure (BNS, BNSS, BSA, IPC, CrPC). This "
+    "appears to be a civil matter -- property, tenancy, contract, family, or inheritance law "
+    "-- which is outside this corpus, so I'm not going to answer it. For guidance specific to "
+    "your situation, please consult a lawyer or your nearest legal aid clinic (NALSA "
     "helpline: 15100, or https://nalsa.gov.in)."
 )
 
@@ -77,7 +95,14 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     )
     sims = [s["similarity"] for s in sections if s["similarity"] is not None]
     retrieval_strength = max(sims) if sims else 0.0
-    abstained = is_abstention(sections)
+    # Two independent, both-imperfect signals, OR'd together: similarity alone
+    # cannot separate a civil easement question (0.4768 max similarity) from
+    # "punishment for theft" (0.478) or "punishment for defamation" (0.478) on
+    # this corpus -- verified 2026-08-30, see docs/evaluation.md. No single
+    # threshold catches the former without also catching the latter two. The
+    # civil-phrase check is a second, narrower net for exactly that gap.
+    civil_scope_mismatch = is_civil_scope_mismatch(payload.query)
+    abstained = is_abstention(sections) or civil_scope_mismatch
     if abstained:
         # No fabricated citations alongside a refusal -- see is_abstention's
         # docstring for exactly what counts as "not enough evidence".
@@ -97,7 +122,7 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         # questions" for an out-of-scope query (2026-08-30). See config.py's
         # ABSTENTION_SIMILARITY_THRESHOLD for where the cutoff came from.
         result = {
-            "conversational_summary": _ABSTENTION_MESSAGE,
+            "conversational_summary": _CIVIL_SCOPE_MESSAGE if civil_scope_mismatch else _ABSTENTION_MESSAGE,
             "structured_data": {},
             # Same formula as llm.py's confidence, computed here since the LLM
             # (and therefore that function) is never called on this path.

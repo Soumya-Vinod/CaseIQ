@@ -15,11 +15,23 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import logger
 
-_STRUCTURED_PROMPT = """You are CaseIQ — India's AI legal-awareness assistant specialising in \
-BNS 2023, BNSS 2023, BSA 2023, IPC 1860, CrPC 1973 and constitutional law.
+_STRUCTURED_PROMPT = """You are CaseIQ — India's AI legal-awareness assistant. Your ONLY source of \
+statutory law is BNS 2023, BNSS 2023, BSA 2023, IPC 1860 and CrPC 1973 -- criminal law and \
+procedure. You do NOT cover constitutional law, or civil matters (property, contract, tenancy, \
+family, inheritance, or similar) -- if this situation is one of those, say so plainly in \
+conversational_summary instead of answering from general knowledge.
 
 This is a NEW legal situation. Return ONLY a valid JSON object, no markdown fences, no preamble.
 {rag_section}
+GROUNDING (read before writing anything): the sections listed above under "RETRIEVED LEGAL \
+SECTIONS" (if any) are the ONLY sections, legal doctrines, or citations you may reference. If \
+that list is empty, or none of it actually addresses what the user asked, do NOT invent a \
+section number, a doctrine, or a punishment from your own knowledge to fill the gap -- say in \
+conversational_summary that you don't have a grounded answer for this, and leave laws_applicable \
+and punishments as empty arrays. An answer with no supporting retrieved section is exactly the \
+failure this project exists to prevent -- a partial or absent answer is always preferable to one \
+you supplied from memory.
+
 REQUIRED SCHEMA:
 {{
   "conversational_summary": "Warm 2-3 sentence acknowledgement in plain language. End with 'See the detailed breakdown for applicable laws, steps, and your rights.'",
@@ -36,12 +48,18 @@ REQUIRED SCHEMA:
     "dos_and_donts": {{"dos": ["..."], "donts": ["..."]}}
   }}
 }}
-RULES: Return ONLY JSON. 3-5 laws (prefer BNS 2023 over IPC). 5-7 steps. Never fabricate section \
-numbers — prefer the retrieved sections above. BNS replaced IPC from 1 July 2024."""
+RULES: Return ONLY JSON. 3-5 laws (prefer BNS 2023 over IPC), ONLY from the retrieved sections --
+never a section number, doctrine, or citation you were not given above. 5-7 steps. BNS replaced
+IPC from 1 July 2024."""
 
 _FOLLOWUP_PROMPT = """You are CaseIQ with full memory of this conversation. The user is asking a \
-FOLLOW-UP about the same situation.
+FOLLOW-UP about the same situation. Your only source of law is BNS/BNSS/BSA/IPC/CrPC -- criminal \
+law and procedure only.
 {rag_section}
+Cite ONLY sections listed above under "RETRIEVED LEGAL SECTIONS" -- never a section number or \
+doctrine from your own knowledge. If that list is empty or doesn't address the follow-up, say so \
+rather than answering from memory.
+
 Return ONLY valid JSON:
 {{"conversational_summary": "Direct 3-6 sentence answer. Cite sections inline (e.g. 'Under BNS 303...').", "structured_data": {{}}}}"""
 
@@ -147,6 +165,14 @@ class LLMService:
         except (json.JSONDecodeError, AttributeError) as exc:
             logger.warning("llm_json_parse_failed", error=str(exc))
             summary, structured = raw[:800], {}
+
+        # Stripped, not fixed by hardcoding a number: `helplines` is LLM-generated
+        # free text, not backed by a verified table (checklist item C4 was never
+        # built) -- found giving NALSA's number as "1800-111-222" (real number:
+        # 15100, 2026-08-30). A wrong emergency/legal-aid phone number in a legal
+        # tool is worse than none. Remove until C4 exists; every other field here
+        # is at least grounded in retrieved sections, this one never was.
+        structured.pop("helplines", None)
 
         # Honest confidence: a direct function of retrieval strength, no artificial
         # floor. The previous formula (0.55 + 0.4*strength) meant confidence could

@@ -19,6 +19,7 @@ Two independent filters apply to every query here, always:
 """
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 
 from sqlalchemy import and_, func, or_, select
@@ -27,6 +28,54 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.corpus import Act, JudicialStatus, SectionVersion
 from app.services.embeddings import embedder
+
+# Hand-curated stopgap for a semantic-embedding gap, added 2026-08-30 after
+# "how do I file an FIR" / "dowry harassment" missed their correct section on
+# EVERY phrasing tried, hybrid retrieval included (see docs/evaluation.md).
+# The statute uses a different word for the same concept than a citizen would
+# ("cruelty" for what a citizen calls dowry harassment; "information in
+# cognizable cases" for what everyone calls an FIR) -- lexical search can only
+# find a literal word, and this corpus's LocalEmbedder has no real notion of
+# synonymy either. This is NOT a classifier and does NOT generalise beyond the
+# phrases listed: it is a fixed lookup table, nothing is learned or inferred.
+# A real embedding model would make this unnecessary -- see docs/evaluation.md
+# for why it isn't a fix, just a documented patch over a known, narrow gap.
+_SYNONYM_EXPANSIONS: dict[str, str] = {
+    "fir": "information in cognizable cases",
+    "first information report": "information in cognizable cases",
+    "dowry harassment": "cruelty",
+    "eve teasing": "outraging modesty",
+    "molestation": "assault with intent to outrage modesty",
+    "cheating": "cheating and dishonestly inducing delivery of property",
+}
+
+
+def expand_query_synonyms(query: str) -> str:
+    """Appends the statutory term for any curated phrase found in `query` --
+    does NOT replace the user's own words, so both the original phrasing and
+    the statutory term are available to retrieval. Word-boundary matched
+    (`\\bfir\\b`), not substring -- otherwise "fir" would misfire inside
+    "first" before that key is even checked.
+
+    Joined with literal " or ", not a plain space: `websearch_to_tsquery`
+    (Postgres) ANDs every space-separated term by default, so a plain
+    concatenation made the lexical query MORE restrictive, not less --
+    "file an FIR" + "information in cognizable cases" required ALL SIX words
+    in one section, matching nothing (confirmed via EXPLAIN, 2026-08-30).
+    " or " is websearch syntax for a real disjunction: `(file & fir) |
+    (information & cognizable & case)`. The stray "or" token is harmless
+    noise to the vector embedder (bag-of-words, no boolean semantics), so the
+    same expanded string is reused for both rankers rather than building two.
+    """
+    q_lower = query.lower()
+    additions = [
+        expansion
+        for phrase, expansion in _SYNONYM_EXPANSIONS.items()
+        if re.search(rf"\b{re.escape(phrase)}\b", q_lower) and expansion.lower() not in q_lower
+    ]
+    if not additions:
+        return query
+    return query + " or " + " or ".join(additions)
 
 # K3 temporal routing. Indian Evidence Act, 1872 (BSA's pre-cutover
 # counterpart) isn't in this corpus, so the "old regime" bucket is IPC/CrPC
@@ -154,19 +203,27 @@ def _is_recently_amended(sv: SectionVersion, as_of: date) -> bool:
     return sv.version_no > 1 and (as_of - sv.valid_from) <= RECENTLY_AMENDED_WINDOW
 
 
-async def semantic_search(
-    db: AsyncSession, query: str, top_k: int | None = None,
-    as_of: date | None = None, incident_date: date | None = None,
-) -> list[dict]:
-    top_k = top_k or settings.RAG_TOP_K
-    as_of = as_of or date.today()
-    qvec = await embedder.embed(query)
+_RRF_K = 60  # standard RRF constant (Cormack et al.) -- not tuned for this corpus
+_CANDIDATE_POOL = 20  # each ranker's own top-N feeding the fusion, before top_k is taken
 
+
+def _judicial_cols():
+    return (JudicialStatus.status, JudicialStatus.case_name, JudicialStatus.citation,
+            JudicialStatus.court, JudicialStatus.decided_on, JudicialStatus.scope_note)
+
+
+async def _vector_candidates(
+    db: AsyncSession, qvec: list[float], as_of: date, incident_date: date | None, k: int,
+) -> list[tuple[tuple, SectionVersion, str, float, dict | None]]:
+    """Ranked by cosine distance ascending. Returns (key, sv, act_code, similarity,
+    judicial_status_dict) tuples, best first. No RAG_MIN_SIMILARITY floor here --
+    that floor decided pass/fail for the OLD vector-only path; RRF's own rank
+    (not the raw score) is what matters for fusion, so a wide candidate pool is
+    more useful than a hard cosine cutoff.
+    """
     distance = SectionVersion.embedding.cosine_distance(qvec).label("distance")
     stmt = (
-        select(SectionVersion, Act.act_code, distance, JudicialStatus.status,
-               JudicialStatus.case_name, JudicialStatus.citation, JudicialStatus.court,
-               JudicialStatus.decided_on, JudicialStatus.scope_note)
+        select(SectionVersion, Act.act_code, distance, *_judicial_cols())
         .join(Act, SectionVersion.act_id == Act.id)
         .outerjoin(JudicialStatus, and_(
             JudicialStatus.act_id == SectionVersion.act_id,
@@ -176,16 +233,93 @@ async def semantic_search(
     )
     if incident_date is not None:
         stmt = stmt.where(Act.act_code.in_(acts_for_incident_date(incident_date)))
-    stmt = stmt.order_by(distance).limit(top_k)
+    stmt = stmt.order_by(distance).limit(k)
     rows = (await db.execute(stmt)).all()
 
-    results: list[dict] = []
+    out = []
     for sv, act_code, dist, j_status, j_case, j_citation, j_court, j_decided, j_scope in rows:
-        similarity = 1.0 - float(dist)
-        if similarity < settings.RAG_MIN_SIMILARITY:
-            continue
-        results.append(_serialise(sv, act_code, round(similarity, 4), as_of,
-                                   judicial_status_dict(j_status, j_case, j_citation, j_court, j_decided, j_scope)))
+        similarity = round(1.0 - float(dist), 4)
+        js = judicial_status_dict(j_status, j_case, j_citation, j_court, j_decided, j_scope)
+        out.append(((sv.act_id, sv.section_number), sv, act_code, similarity, js))
+    return out
+
+
+async def _lexical_candidates(
+    db: AsyncSession, query: str, as_of: date, incident_date: date | None, k: int,
+) -> list[tuple[tuple, SectionVersion, str, dict | None]]:
+    """Ranked by ts_rank_cd descending -- real Postgres full-text search against
+    the generated `search_vector` column (migration 0005), not the old ILIKE
+    substring match. Finds "theft" in BNS 303's own text directly; this is the
+    entire failure LocalEmbedder has on this query (see docs/evaluation.md,
+    2026-08-30) -- a literal word match that a hashing embedder has no way to
+    make, because the query's hash and the section's hash land in different
+    buckets regardless of the shared word.
+    """
+    tsquery = func.websearch_to_tsquery("english", query)
+    rank = func.ts_rank_cd(SectionVersion.search_vector, tsquery).label("rank")
+    stmt = (
+        select(SectionVersion, Act.act_code, *_judicial_cols())
+        .join(Act, SectionVersion.act_id == Act.id)
+        .outerjoin(JudicialStatus, and_(
+            JudicialStatus.act_id == SectionVersion.act_id,
+            JudicialStatus.section_number == SectionVersion.section_number,
+        ))
+        .where(in_force(as_of), not_struck_down(), SectionVersion.search_vector.op("@@")(tsquery))
+    )
+    if incident_date is not None:
+        stmt = stmt.where(Act.act_code.in_(acts_for_incident_date(incident_date)))
+    stmt = stmt.order_by(rank.desc()).limit(k)
+    rows = (await db.execute(stmt)).all()
+
+    out = []
+    for sv, act_code, j_status, j_case, j_citation, j_court, j_decided, j_scope in rows:
+        js = judicial_status_dict(j_status, j_case, j_citation, j_court, j_decided, j_scope)
+        out.append(((sv.act_id, sv.section_number), sv, act_code, js))
+    return out
+
+
+async def semantic_search(
+    db: AsyncSession, query: str, top_k: int | None = None,
+    as_of: date | None = None, incident_date: date | None = None,
+) -> list[dict]:
+    """Hybrid retrieval: pgvector cosine search + Postgres full-text search,
+    fused by Reciprocal Rank Fusion (RRF) over each ranker's own rank position,
+    not the raw scores -- cosine similarity and ts_rank are not on comparable
+    scales, so summing rank-based scores (1/(k+rank)) avoids having to
+    normalise two incompatible numbers. `similarity` on a returned section is
+    the vector cosine value ONLY if that section was one of the vector
+    ranker's candidates; a section found only by the lexical ranker keeps
+    similarity=None -- the same "found by different mechanism, no cosine
+    number to show" convention the old ILIKE keyword_search fallback used, so
+    is_abstention's semantics didn't need to change for this.
+    """
+    top_k = top_k or settings.RAG_TOP_K
+    as_of = as_of or date.today()
+    # Curated synonym stopgap (see expand_query_synonyms) -- feeds the SAME
+    # expanded text to both rankers. The original `query` is untouched for
+    # everything else (is_civil_scope_mismatch, storage, display).
+    expanded_query = expand_query_synonyms(query)
+    qvec = await embedder.embed(expanded_query)
+
+    vector_hits = await _vector_candidates(db, qvec, as_of, incident_date, _CANDIDATE_POOL)
+    lexical_hits = await _lexical_candidates(db, expanded_query, as_of, incident_date, _CANDIDATE_POOL)
+
+    scores: dict[tuple, float] = {}
+    rows: dict[tuple, tuple[SectionVersion, str, float | None, dict | None]] = {}
+
+    for rank, (key, sv, act_code, similarity, js) in enumerate(vector_hits, start=1):
+        scores[key] = scores.get(key, 0.0) + 1.0 / (_RRF_K + rank)
+        rows[key] = (sv, act_code, similarity, js)  # vector row: carries a real similarity
+
+    for rank, (key, sv, act_code, js) in enumerate(lexical_hits, start=1):
+        scores[key] = scores.get(key, 0.0) + 1.0 / (_RRF_K + rank)
+        rows.setdefault(key, (sv, act_code, None, js))  # lexical-only: no cosine number
+
+    ordered_keys = sorted(scores, key=lambda k: scores[k], reverse=True)[:top_k]
+    results = [
+        _serialise(*rows[key][:2], rows[key][2], as_of, rows[key][3])
+        for key in ordered_keys
+    ]
 
     if results:
         return results
@@ -266,6 +400,38 @@ def is_abstention(sections: list[dict]) -> bool:
     if not vector_sims:
         return False  # keyword-fallback-only: treat as evidence, don't abstain
     return max(vector_sims) < settings.ABSTENTION_SIMILARITY_THRESHOLD
+
+
+# Multi-word phrases essentially unique to civil-law domains this corpus does not
+# cover (property, tenancy, family, succession, contract) -- deliberately NOT
+# single words like "property" (theft is legitimately "property" too) or
+# "right" (many criminal rights exist). Added 2026-08-30 after finding that
+# LocalEmbedder's hash-based similarity CANNOT separate this from real criminal
+# queries by score alone: a civil easement/right-of-way question measured
+# 0.4768 max similarity, statistically indistinguishable from "punishment for
+# theft" (0.478) and "punishment for defamation" (0.478) on the same corpus --
+# see docs/evaluation.md. No similarity threshold that keeps those two
+# answering can also catch this one; a threshold high enough to catch it
+# (tested 0.55, 0.60) abstains on theft/FIR/dowry too. This is a second,
+# independent, imprecise-by-design signal, not a replacement for the threshold.
+_CIVIL_ONLY_PHRASES = (
+    "right of way", "easement", "adverse possession", "prescriptive easement",
+    "tenancy", "eviction", "landlord", "lease agreement", "rent dispute",
+    "divorce", "child custody", "alimony", "maintenance under hindu",
+    "inheritance", "succession certificate", "will and testament", "partition suit",
+    "breach of contract", "specific performance", "civil suit", "property dispute",
+)
+
+
+def is_civil_scope_mismatch(query: str) -> bool:
+    """True when the query names a civil-law domain by a fairly unambiguous
+    phrase. A heuristic, not a classifier -- false negatives (a civil question
+    phrased without any of these phrases) are expected and not caught here;
+    see is_abstention's similarity check for the other, equally imperfect,
+    layer. Both together are still not a real scope classifier.
+    """
+    q = query.lower()
+    return any(phrase in q for phrase in _CIVIL_ONLY_PHRASES)
 
 
 def build_rag_context(sections: list[dict]) -> str:

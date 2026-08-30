@@ -20,7 +20,11 @@ export function QueryPage() {
     setError(null);
     try {
       const { data, error: apiError } = await api.POST("/api/v1/legal/query", {
-        body: { query: trimmed },
+        // language/session_id are optional server-side (Pydantic defaults) but
+        // openapi-typescript emits fields with a `default` as required-with-default,
+        // not optional -- supplying the same defaults explicitly here satisfies
+        // the generated type without fighting the generator.
+        body: { query: trimmed, language: "en", session_id: "" },
       });
       if (apiError) {
         setError("Something went wrong reaching the backend. Please try again.");

@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 
 const url = process.argv[2] ?? "http://localhost:5173";
-const out = process.argv[3] ?? "judicial-status-390.png";
+const out = process.argv[3] ?? "browse-390.png";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
@@ -11,16 +11,16 @@ page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()
 page.on("pageerror", (err) => errors.push(String(err)));
 
 await page.goto(url, { waitUntil: "load" });
-await page.click("text=Look up a section");
-// Section-lookup form defaults to IPC 497 (struck down) — just submit it.
-const lookupButton = page.getByRole("button", { name: "Look up", exact: true });
-await lookupButton.scrollIntoViewIfNeeded();
-await lookupButton.click();
-await page.waitForSelector("text=Struck down", { timeout: 15000 });
+await page.click("text=Browse by act");
+await page.click("button:has-text('IPC')");
+await page.waitForSelector("text=§", { timeout: 15000 });
 await page.waitForTimeout(300);
-
-const result = page.locator("article", { hasText: "IPC" }).last();
-await result.screenshot({ path: out });
+// Expand the first card to prove the click-to-expand interaction works too.
+await page.locator("article").first().click();
+await page.waitForTimeout(200);
+// Viewport-only screenshot (not fullPage) -- 200 rendered sections makes a
+// full-page capture ~39000px tall and useless to actually look at.
+await page.screenshot({ path: out });
 
 console.log("console/page errors:", JSON.stringify(errors));
 await browser.close();

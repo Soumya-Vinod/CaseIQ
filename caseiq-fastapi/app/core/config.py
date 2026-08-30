@@ -193,13 +193,41 @@ class Settings(BaseSettings):
     # That last row is the honest problem with this cutoff: ANY single
     # threshold that catches the garbage query above also catches this real,
     # in-scope one -- 0.252 < 0.398, so no cutoff separates them correctly.
-    # Chosen deliberately to err toward catching the garbage query (a
-    # confident-sounding wrong answer is worse than an honest abstention on
-    # a borderline-but-real one) at 0.40 -- meaning some legitimate queries
-    # with weak lexical/hash overlap under LocalEmbedder WILL be incorrectly
-    # routed to abstention. A real embedding model would very likely widen
-    # this gap; that's a concrete argument for the Gemini/hybrid retrieval
-    # work in Priority 4, not just an aesthetic upgrade.
+    # The relationship INVERTS: nonsense retrieved better than a real
+    # question. See docs/evaluation.md's "similarity does not separate
+    # in-scope from out-of-scope" finding.
+    #
+    # Raised 0.20 -> 0.40 (2026-08-30, later same day). 0.20 caught NOTHING --
+    # a civil easement/right-of-way question (not in this corpus at all) came
+    # back at 66% confidence, cited against IPC 376/BNS 64 (rape), IPC 466
+    # (forgery) -- nonsense citations presented as an answer. Before changing
+    # the number, tested 0.55 and 0.60 (as asked) against real queries on the
+    # live corpus:
+    #   civil   ("right of way" / easement, OUT of scope):    max similarity 0.4768
+    #   garbage ("boiling point of methane on Titan"):         max similarity 0.398
+    #   legit   ("punishment for theft"):                      max similarity 0.478
+    #   legit   ("punishment for defamation"):                 max similarity 0.478
+    #   legit   ("dowry harassment punishment"):                max similarity 0.489
+    #   legit   ("FIR filing procedure"):                       max similarity 0.535
+    # Both 0.55 and 0.60 are ABOVE every one of those in-scope, legitimate
+    # queries -- they would abstain on theft, defamation, dowry, AND the FIR
+    # question, the most basic criminal-law queries this product exists to
+    # answer. Evidence says don't use either value; a threshold that high
+    # breaks the product, it doesn't fix the easement case.
+    #
+    # The harder finding: the civil easement question (0.4768) sits BETWEEN
+    # the garbage query (0.398) and the legitimate ones (0.478-0.535) --
+    # closer to "theft" (0.478, a 0.0012 gap) than to Titan. No single
+    # threshold value separates "in-scope" from "out-of-scope" here; this
+    # embedder's similarity score is not a scope signal for this specific
+    # kind of case. Settled on 0.40 -- restores catching pure gibberish
+    # (Titan, 0.398) without abstaining on any tested legitimate query -- and
+    # added a SEPARATE, independent signal for cases like the easement one:
+    # see is_civil_scope_mismatch in retrieval.py. Neither signal alone is
+    # adequate; both together are still a heuristic, not a classifier. A real
+    # embedding model remains the actual fix -- a concrete argument for the
+    # Gemini/hybrid retrieval work in Priority 4. Still not tuned or
+    # validated against a golden set -- none exists yet.
     ABSTENTION_SIMILARITY_THRESHOLD: float = 0.40
 
     # --- Audit log retention (M2 hygiene) ---
