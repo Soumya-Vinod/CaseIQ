@@ -187,22 +187,110 @@ unresolved.
 
 ## Known limitations (not corruption, but worth recording)
 
-- **5000-char truncation cap**: `RawSection.section_text` is capped at 5000 characters in both
-  parsers. This affects only the longest sections observed (BNS 356, BNS 358, BNSS 531, CrPC
-  484) — all "repeal and savings" clauses or long definitional sections. Content up to the cap
-  is verified correct in every case checked; content *beyond* the cap has not been verified and
-  may be silently dropped for these specific sections. Worth revisiting before this corpus is
-  treated as complete.
-- **Marginal-note/chapter-heading prefix bleed** (BNS 63, BNS 356, BNSS 1, BSA 169): a heading or
-  marginal note from the surrounding layout gets glued onto the front or back of the real
-  section text. Cosmetic — doesn't corrupt the operative text — but not clean.
-- **Gazette masthead noise** (BSA 1 especially, BNSS 173/531 to a lesser extent): registration
-  numbers, bilingual headers, and page-break furniture appear mid-body. Worth a follow-up cleanup
-  pass; not corrupting.
-- **Last-section absorption** (BNS 358, similar for other acts' final sections): since nothing
-  bounds the very last section's end besides end-of-document, trailing non-section matter
-  (schedules, "Statement of Objects and Reasons") gets appended. Low severity — doesn't affect
-  the section's own correctness, just adds noise after it.
+- ~~**5000-char truncation cap**~~ — **fixed 2026-08-14, see "Post-M1 follow-up" below.** Left
+  struck through rather than deleted: this pass's own verification of BNS 356 concluded "Correct,
+  complete... Hits the 5000-char cap" without actually confirming the text reached a natural
+  stopping point past the cap. It didn't. See below for why that happened and what closed it.
+- ~~**Marginal-note/chapter-heading prefix bleed**~~ / ~~**Gazette masthead noise**~~ — the
+  *trailing* form of this (furniture bled onto the *end* of a section) is **fixed 2026-08-14**,
+  see below. Leading-edge prefix bleed (a heading glued onto the *front* of a section, e.g. BNS
+  63/356's "Of sexual offences"/"Of defamation" chapter-sub-heading prefix) is **not** fixed —
+  out of scope for the boundary-trim fix below, which only ever trims trailing runs.
+- **Last-section absorption** (BNS 358, BNSS 531, CrPC 484, similarly BSA's last section): since
+  nothing bounds the very last section's end besides end-of-document, trailing non-section matter
+  (schedules, "Statement of Objects and Reasons") gets appended. Confirmed still present after the
+  2026-08-14/15 fixes below — CrPC 484 specifically absorbs the real First Schedule table that
+  follows it (61 "Ditto" occurrences), which is why `tests/test_legal_corpus_parsing.py`'s
+  schedule-marker regression test excludes s.484 by name rather than fixing it as part of that
+  test's scope. Tracked, not fixed this session — see "Tracked, not fixed" below.
+
+## Post-M1 follow-up (2026-08-14/15): three more defect classes, found by a new structural check
+
+Found while grounding `eval/golden_set.jsonl` questions in verified section text (D1) — pulling
+BNS 303 (Theft) and re-checking BNS 356 (Defamation, this pass's own Tier-1 spot-check) against
+the database showed both ending **mid-sentence**, not at a natural stopping point. That directly
+contradicts this report's own Tier-1 entry for BNS 356 above ("Correct, complete... Hits the
+5000-char cap") — the cap was correctly *observed*, but "hits the cap" was wrongly read as "and
+therefore harmlessly, since the content up to the cap looked fine," rather than checked. It
+wasn't fine: the cap cut off mid-clause, and the stratified-sample methodology this pass used
+(42 of ~2,150 sections) had no mechanism to catch that anywhere it didn't happen to look.
+
+That prompted building `app/legal_corpus/parsing/completeness.py`, a structural (not
+hand-verification, not LLM-judgment) check wired into `validate.py` that runs on **every**
+accepted section, not a sample, and **gates** ingestion (`enforce_gate` raises) rather than just
+flagging for review. It checks three signals: text ending mid-sentence/mid-word, length at or
+near any hardcoded cap, and text shorter than the same section's own ToC entry implies. Running
+it against the full (then-5000-char-capped) corpus surfaced two further defect classes beyond the
+cap itself, all three now fixed:
+
+1. **5000-char cap** (all 5 acts, 38 sections including BNS 303 and BNS 356) — the cap was raised
+   to `MAX_SECTION_TEXT_CHARS = 20_000` (a safety ceiling, not expected to be hit by any real
+   section) in `app/legal_corpus/parsing/base.py`. Both BNS 303 and BNS 356 confirmed complete
+   afterward (punishment subsections present, clean sentence-final endings).
+2. **Trailing furniture bleed** (~330 sections, ~15% of the corpus, all 5 acts) — chapter
+   headings, Gazette mastheads, dash/asterisk separators, and standalone page numbers bled onto
+   the *end* of otherwise-complete section text. Not cosmetic: this text is embedded and fed to
+   the LLM as retrieval context, so e.g. an IPC 378 vector that also contained
+   "CHAPTER XVIII OF OFFENCES RELATING TO DOCUMENTS" was a vector for two unrelated topics
+   blended together. Fixed via `app/legal_corpus/parsing/section_boundary.py`
+   (`trim_trailing_furniture`), a backward-scan from each section's naive end that only commits a
+   trim if the trailing run it collects contains a strict, unambiguous furniture anchor (or is
+   entirely bare page numbers immediately after a line that already ends cleanly). A first design
+   (trim at the *first* furniture-shaped line found anywhere) caused 12–31% real-content loss per
+   act on long, page-spanning sections where furniture can legitimately appear *mid*-section —
+   caught by the completeness gate itself before it reached the corpus, not by hand.
+3. **Schedule/section-number collision** (CrPC s.126, s.276 confirmed corrupted; 13 candidates
+   total structurally excluded) — CrPC's First Schedule tabulates rows *by IPC section number*,
+   which collide with CrPC's own numbering (e.g. a Schedule row about "voluntarily allowing
+   prisoner to escape," tabulating an IPC offence, is numbered "126" in the table, same as CrPC's
+   own real s.126 "Procedure"). The longer Schedule row was winning dedup-keep-longest against
+   the real section, silently replacing correct procedural text. Fixed structurally (not a
+   hardcoded fix for the two known rows) via `app/legal_corpus/parsing/schedule_exclusion.py`:
+   detects the Schedule region's boundary (last occurrence of "FIRST SCHEDULE" in the document,
+   which is the real table, not the ToC's earlier mention of it) and excludes every candidate
+   found at or after it **before** `_dedupe_keep_longest` runs — a different ordering than
+   `state_amendments.py`'s equivalent exclusion, which safely runs *after* dedup because a state
+   amendment's number is new, not colliding. Verified against source PDF: s.126 now reads
+   "Procedure.—(1) Proceedings under section 125 may be taken..."; s.276 now reads "Record in
+   trial before Court of Session.—(1) In all trials before a Court of Session..." — both correct,
+   sensible content. Regression-covered by
+   `tests/test_legal_corpus_parsing.py::test_no_crpc_section_contains_schedule_table_markers` and
+   `::test_crpc_126_and_276_are_the_real_procedural_sections`.
+
+**On the completeness check earning its place**: across this follow-up, it found three distinct
+defect classes — the 5000-char cap, ~330 furniture-bleed cases, and the schedule collision — every
+one of which the existing count/set-diff gate (`missing`/`unexpected` == 0) passed throughout,
+exactly as it did for the three bugs this pass's hand-verification found. Hand-verification
+doesn't scale to the full corpus (this pass sampled 42 of ~2,150 sections and still missed BNS
+356's own truncation); the completeness check runs on every section, every ingestion, and gates
+rather than merely flags. It has earned its place in the pipeline as a standing, non-optional
+step, not a one-time audit.
+
+### Tracked, not fixed this session
+
+- **IPC inline-glued marginal-note headings** (~50+ sections): IPC's font sometimes glues a
+  section's marginal note directly onto the number with no space at all (distinct from the
+  already-handled `"2.(1)"`/no-space-before-capital shapes `_HEADER_RE` accepts) — needs
+  collapsed-string matching to detect reliably, which carries its own over-trim risk given how
+  the first furniture-boundary design regressed 12–31% of content per act. Not to be attempted
+  without checking in again first.
+- **BSA marginal-note-cascade** (16 sections): already a known M1-era limitation (see
+  "Marginal-note/chapter-heading prefix bleed" above) — a leading-edge, not trailing-edge, defect,
+  so out of scope for `section_boundary.py`'s trailing-only trim.
+- **CrPC 484 / BNSS 531 EOF absorption**: already a known M1-era limitation ("Last-section
+  absorption" above), confirmed still present after this follow-up's fixes. Distinct mechanism
+  from the schedule collision above — no *other* candidate for the same number exists for the
+  Schedule row to beat, so `schedule_exclusion.py`'s collision-based approach doesn't apply here.
+- **BNS 255 empty capture — flagged HIGHER priority than the other three above**: reveals a gap
+  in the gate itself, not just one bad row. `_is_title_echo()` (`validate.py`) can structurally
+  never fire for any `GazetteParser`-based act (BNS/BNSS/BSA), because `section_title` is always
+  `None` there (`GazetteParser`'s own body text doesn't reliably separate a marginal-note title
+  from operative text, so it never sets one — see `gazette_parser.py`'s `RawSection` construction)
+  and `_is_title_echo()` returns `False` immediately whenever `section_title is None`. A ToC-row
+  echoed as a section's entire body — the exact defect class `_is_title_echo()` exists to catch —
+  can currently pass silently for any BNS/BNSS/BSA section. Needs its own follow-up: either a
+  title-echo check that doesn't depend on `section_title` being set, or extracting a title for
+  Gazette-format sections in the first place.
 
 ## Final gate status (after all fixes in this pass)
 

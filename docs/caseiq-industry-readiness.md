@@ -75,6 +75,8 @@ Each item moves a class of fact *out* of the model and *into* your system.
 - [ ] **C7.** **Constrained generation.** Enforce the response JSON schema at decode time and validate every section reference against the DB before the response is assembled.
 - [ ] **C8.** **Clarifying questions.** When key facts are missing (date, amount, state, relationship of parties), ask before answering rather than guessing.
 - [ ] **C9.** **State amendments.** IPC/BNS have state-specific variations. Store `applicable_states` and surface Maharashtra-specific provisions for Mumbai users.
+  **Confirmed structurally, 2026-08-10** while re-sourcing IPC from India Code (see `documents/provenance.json`'s IPC entry): India Code's consolidated PDF appends state amendments *inline*, headed literally `STATE AMENDMENT` followed by the jurisdiction name (e.g. "Jammu and Kashmir and Ladakh (UTs)", "Tripura.—"), immediately before the inserted section(s) — and those inserted sections use the **exact same numbered-header format** as the Act's own provisions (e.g. IPC's India Code copy has 17 such headings covering J&K/Ladakh, Chhattisgarh, Gujarat, Tripura, Kerala, Maharashtra, Orissa, of which 11 insert brand-new lettered sections: `354E`, `376F`, `379A`, `379B`, `382B`–`382F`, `509A`, `509B`). A structural parser cannot tell these apart from pan-India provisions by shape alone.
+  For now these are **detected and excluded** from ingestion (never silently — always reported), using the document's own ToC as the anchor for where a state-amendment block ends and the real Act resumes: `app/legal_corpus/parsing/state_amendments.py`, wired into `app/legal_corpus/validate.py`. This is exclusion, not the C9 feature — the real state-amendment *text* is currently being thrown away, just visibly instead of invisibly. Implementing C9 properly means: a schema to store this text against `(act, section_number, applicable_states)` rather than discarding it, a retrieval-time decision for how/when to surface it (ask the user's state? show as an annotation on the pan-India section?), and a decision on whether `GazetteParser` (BNS/BNSS/BSA) needs the same treatment if a future India Code consolidated reprint of those Acts starts appending state amendments the same way (their current source files don't have any, but that's a property of *this* reprint, not a guarantee).
 - [ ] **C10.** **Limitation periods.** Time-bars for filing are concrete, checkable, high-value, and absent from every competing tool.
 
 ---
@@ -162,15 +164,27 @@ just at ingestion.
      `amendment`/`amendment_effects` rows, re-embed only changed sections, bump `corpus_version`,
      invalidate semantic cache entries touching those sections.
   8. Emit a structured log + optional notification for affected topics.
-- [ ] **K6.** **Admin surface.** Minimal authenticated endpoints (admin role only):
+- [x] **K6.** **Admin surface.** Minimal authenticated endpoints (admin role only):
   `GET /admin/corpus/pending` (review queue with diffs), `POST /admin/corpus/{id}/approve`,
   `POST /admin/corpus/{id}/reject`, `GET /admin/corpus/versions`,
-  `GET /admin/sections/{act}/{section}/history` (full version timeline).
-- [ ] **K7.** **User-facing behaviour.** Every cited section displays its in-force date and
+  `GET /admin/sections/{act}/{section}/history` (full version timeline). Done 2026-08-11
+  (`app/api/v1/admin_corpus.py`) — `approve()` now also bumps a `CorpusVersion` snapshot (K5 step
+  7), which nothing did before, so `GET /admin/corpus/versions` was silently always empty until
+  today.
+- [x] **K7.** **User-facing behaviour.** Every cited section displays its in-force date and
   version. If a cited provision changed within the last 12 months, show a "recently amended" badge
   with the old/new diff available. If a provision is struck down or read down, show that
   prominently with the case citation — never silently omit it. Answers state the as-of date they
-  were computed against.
+  were computed against. Done 2026-08-11: `version_no`/`valid_from`/`valid_to`/`recently_amended`
+  on every retrieved section; `as_of` and `corpus_version_id` stamped on every answer
+  (`app/legal_corpus/corpus_version.py` — also found and fixed that nothing had ever created a
+  `CorpusVersion` row, so this was always `None`); read-down status flows into the LLM prompt with
+  case citation + scope note. Struck-down provisions stay fully excluded from organic
+  retrieval (semantic/keyword search, `list_sections` browsing — the latter had no judicial_status
+  check at all until today) per K2's hard rule; a **separate** explicit lookup,
+  `GET /knowledge/sections/{act}/{section}`, is the one path that can surface a struck-down
+  section, always with judicial_status attached and never silently omitted, and also carries the
+  previous version's text for the old/new diff when recently amended.
 
 ---
 
@@ -231,20 +245,51 @@ Survey evidence: **privacy is the joint-top concern about AI legal tools (35%)**
 
 ## PART G — Frontend & product 🚩
 
-**You have a React app (`caseiq-frontend`) still wired to the retired Django API. End to end, the product does not currently run.** This is the most visible gap of all.
+**Replaced 2026-08-11** (source: `docs/caseiq-expo-deployment.md` Section A). The previous version of
+this Part assumed rewiring the existing React app (`caseiq-frontend`) to the FastAPI endpoints; that
+app is wired to the retired Django API and is being **replaced**, not repaired — React Native has no
+DOM, so there is no incremental path from a `<div>`-based web app to a universal app. Treat the old
+app as reference for *information architecture only* (screens, flows, what data each view needs), not
+as code to port.
 
-- [ ] **G1.** 🚩 **Rewire the frontend to the FastAPI endpoints.** Response shapes changed from Django.
-- [ ] **G2.** **Source panel** — show retrieved sections with the actual statutory text, expandable. Survey: 4.35/5 importance, #1 trust factor at 40%. This is your headline UI element, not a footnote.
-- [ ] **G3.** **Visible confidence + abstention state** — when the system doesn't know, the UI should say so prominently.
-- [ ] **G4.** **Persistent disclaimer** — "This is legal information, not legal advice."
-- [ ] **G5.** ⭐ **Browse mode.** Survey finding: only 25% had a legal need in the last two years, yet "just to learn about my rights in general" was the top use case at 70%. **Demand is preventive, not acute.** Build for browsing rights by category, not just crisis queries.
-- [ ] **G6.** ⭐ **Feedback loop** — thumbs up/down plus "was this section relevant?" on each citation. This quietly generates your next golden-set entries and is a genuinely senior product instinct.
-- [ ] **G7.** **Query history** for logged-in users.
-- [ ] **G8.** **i18n scaffolding** — Hindi and Marathi first. Note the survey language data is unreliable (sample was 100% English-comfortable), so don't over-invest until you have non-English-first respondents.
-- [ ] **G9.** **Accessibility** — WCAG 2.1 AA, keyboard navigation, screen-reader labels. Relevant to the access-to-justice framing.
-- [ ] **G10.** **Low-bandwidth performance budget** — the tool targets people who may not have flagship phones.
-- [ ] **G11.** **Empty/loading/error states** designed, not default.
-- [ ] **G12.** **Top-category shortcuts** based on survey demand: consumer complaints (70%), cybercrime (65%), women's safety (55%), police procedure (45%), motor vehicle (45%).
+**Architecture:** one Expo Router codebase → web export deployed to Vercel, native builds via EAS. Web
+is the primary deliverable; native is a stretch goal, not a blocker.
+
+- [ ] **G1.** 🚩 Scaffold Expo Router app (TypeScript) with NativeWind. Verify `expo export --platform web`
+  produces a working static build before writing any feature code.
+- [ ] **G2.** 🚩 Typed API client layer against the FastAPI endpoints. Generate types from the OpenAPI
+  schema rather than hand-writing them — the response shape will change across M3–M6 and hand-written
+  types will silently drift.
+- [ ] **G3.** ⭐ **Sources panel.** Retrieved sections with actual statutory text, expandable, showing
+  in-force date, version, and judicial-status warnings (Part K, K7). Survey: 4.35/5 importance, #1
+  trust factor at 40%. This is the headline UI element, not a footnote.
+- [ ] **G4.** ⭐ **Confidence and abstention states.** When the system declines to answer, that must be
+  a designed screen, not an error. Survey: "tell me when to see a real lawyer" scored 4.35/5.
+- [ ] **G5.** Persistent disclaimer — legal information, not legal advice.
+- [ ] **G6.** ⭐ **Browse mode.** Only 25% of survey respondents had a legal need in two years, but
+  "just to learn about my rights in general" was the top use case at 70%. **Demand is preventive,
+  not acute** — browsing by category is a first-class surface, not a secondary tab.
+- [ ] **G7.** ⭐ **Feedback capture** — thumbs up/down plus per-citation "was this relevant?".
+  Feeds the golden set (Part D). Cheap to build, compounding value.
+- [ ] **G8.** Incident-date input, with a clarifying prompt when the query implies a past event and no
+  date is given (Part K, K3). This is the temporal-routing feature made visible.
+- [ ] **G9.** Query history for authenticated users.
+- [ ] **G10.** Empty, loading, and error states designed — not framework defaults.
+- [ ] **G11.** Category shortcuts by survey demand: consumer complaints (70%), cybercrime (65%),
+  women's safety (55%), police procedure (45%), motor vehicle (45%).
+- [ ] **G12.** Accessibility — screen-reader labels, focus order, contrast. Relevant to the
+  access-to-justice framing, and Expo's accessibility props work across web and native.
+- [ ] **G13.** Low-bandwidth budget — measure the web bundle, lazy-load routes. The tool targets
+  people who may not have flagship phones.
+- [ ] **G14.** i18n scaffolding (Hindi, Marathi first). Note the survey's language data is unreliable
+  — the sample was 100% English-comfortable by construction — so scaffold now, prioritise later.
+- [ ] **G15.** 🚩 Web export deployed to Vercel, URL in the README.
+- [ ] **G16.** *(stretch)* EAS native builds for Android. Distribution via internal testing link is
+  enough for a portfolio; app-store submission adds review cycles and fees for little evaluative gain.
+
+**Sequencing note:** do not start G3 onward until M3 (bitemporal cutover) and the Part C correctness
+layers have landed. Building UI against a response shape that is about to change twice is wasted work.
+G1, G2 and the deployment spike (`docs/deployment.md`) are safe to do now.
 
 ---
 
@@ -312,7 +357,10 @@ B1 → B2 → B3 → B4/B5 → F2 → D1 → D4
 C1 → C2 → C3 → C4 → C5 → C6 → E3 → E4 → D5
 
 **Tier 3 — make it a real product**
-G1 → G2 → G3 → G5 → G6 → F1 → F3 → A1 → A2
+G1 → G2 → G3 → G4 → G6 → G7 → F1 → F3 → A1 → A2
+(renumbered 2026-08-11 for the Expo Part G rewrite: scaffold → API client → sources panel →
+confidence/abstention → browse mode → feedback capture -- same intent as before, G5's disclaimer
+folded in wherever's convenient rather than sequenced, as it was previously)
 
 **Tier 4 — make it credible**
 I1 → I2 → I3 → H1 → H2 → H5 → J1 → J2 → A3

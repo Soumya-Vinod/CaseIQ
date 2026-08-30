@@ -18,8 +18,9 @@ import re
 from dataclasses import dataclass, field
 
 from .parsing.base import ParseReport, RawSection
+from .parsing.completeness import check_completeness
 from .parsing.state_amendments import find_and_exclude
-from .parsing.toc import extract_expected_numbers, extract_repealed_ranges
+from .parsing.toc import extract_expected_entries, extract_repealed_ranges
 from .provenance import get_highest_section_number
 
 REJECTION_RATE_LIMIT = 0.05           # M1 acceptance criterion
@@ -61,6 +62,20 @@ class ValidationResult:
     # parsing/state_amendments.py) and removed from `accepted`/`unexpected`
     # -- never silent, always reported (see print_report). Tracked as C9.
     excluded_state_amendments: list[tuple[str, str]] = field(default_factory=list)
+    # (section_number, reason) for every ACCEPTED section whose text looks
+    # truncated (parsing/completeness.py) -- correct number, incomplete
+    # text, same defect class as the footnote-overwrite and dedup bugs the
+    # count-only gate has always been blind to. Gates (see enforce_gate),
+    # unlike `unexpected` -- this isn't "review recommended", it's "known
+    # missing content".
+    truncation_flagged: list[tuple[str, str]] = field(default_factory=list)
+    # Section numbers excluded because they were candidates found inside
+    # the document's own trailing Schedule (parsing/schedule_exclusion.py)
+    # -- these numbers usually ALSO appear in `accepted` (the real section
+    # of the same number, which is exactly the point: the schedule row
+    # would otherwise have won dedup against it). Never silent, always
+    # reported (see print_report).
+    excluded_schedule_rows: list[str] = field(default_factory=list)
 
     @property
     def rejection_rate(self) -> float:
@@ -122,7 +137,8 @@ def validate(act: str, report: ParseReport) -> ValidationResult:
     repealed_numbers = {s.section_number for s in repealed}
     highest = get_highest_section_number(act)
 
-    expected_numbers = extract_expected_numbers(report.full_text)
+    toc_entries = extract_expected_entries(report.full_text)
+    expected_numbers = frozenset(toc_entries.keys()) if toc_entries is not None else None
     expected_source = "toc"
     if expected_numbers is None:
         # No extractable ToC (BNSS/BSA's Gazette originals have none at all --
@@ -154,6 +170,17 @@ def validate(act: str, report: ParseReport) -> ValidationResult:
                           key=_sort_key)
         unexpected = sorted(accepted_numbers - expected_numbers, key=_sort_key)
 
+    # Content-completeness: correct NUMBER, incomplete TEXT -- the set-diff
+    # checks above cannot see this at all, by construction. Runs on every
+    # accepted section, not a sample (parsing/completeness.py's own
+    # docstring explains why sampling isn't sufficient here).
+    truncation_flagged: list[tuple[str, str]] = []
+    for s in accepted:
+        reason = check_completeness(s, toc_entries)
+        if reason:
+            truncation_flagged.append((s.section_number, reason))
+    truncation_flagged.sort(key=lambda pair: _sort_key(pair[0]))
+
     return ValidationResult(
         act=act,
         accepted=accepted,
@@ -163,10 +190,12 @@ def validate(act: str, report: ParseReport) -> ValidationResult:
         expected_numbers=expected_numbers,
         expected_source=expected_source,
         missing=missing,
+        truncation_flagged=truncation_flagged,
         unexpected=unexpected,
         repealed_ranges=extract_repealed_ranges(report.full_text),
         highest_section_number=highest,
         excluded_state_amendments=excluded_state_amendments,
+        excluded_schedule_rows=sorted(set(report.excluded_schedule_rows), key=_sort_key),
     )
 
 
@@ -175,7 +204,9 @@ def _sort_key(section_number: str) -> tuple[int, str]:
     return (int(m.group(1)) if m else 0, section_number)
 
 
-def enforce_gate(result: ValidationResult) -> None:
+def enforce_gate(
+    result: ValidationResult, known_truncation_exceptions: frozenset[str] = frozenset()
+) -> None:
     """Raises ValidationGateError if:
       - rejection rate exceeds REJECTION_RATE_LIMIT, or
       - the document's own ToC could not be bounded (expected_numbers is None
@@ -188,6 +219,20 @@ def enforce_gate(result: ValidationResult) -> None:
     listed) -- those are reported for review but don't block ingestion,
     since a ToC extraction miss is more likely than a genuine false-positive
     accepted section.
+
+    `known_truncation_exceptions` is an explicit, by-name allowlist -- NOT a
+    threshold or a way to weaken the check generally. Every number in it
+    must be individually confirmed-and-documented elsewhere (see
+    scripts/ingest_sections.py's KNOWN_TRUNCATION_EXCEPTIONS and
+    docs/m1-verification.md's "Tracked, not fixed" list) as a real,
+    root-caused parser limitation, not silenced by raising this gate's
+    threshold or removing the check. Any truncation_flagged number NOT in
+    this set still blocks ingestion exactly as before. Added 2026-08-15
+    after the completeness check found a fifth distinct defect mechanism in
+    the same session (cap -> furniture -> schedule collision -> glued
+    suffix -> this) with no principled reason to believe it's the last one;
+    per the agreed stopping rule, a measured baseline with documented known
+    defects beats further open-ended parser chasing.
     """
     if result.rejection_rate > REJECTION_RATE_LIMIT:
         total = len(result.accepted) + len(result.repealed) + len(result.rejected)
@@ -211,11 +256,39 @@ def enforce_gate(result: ValidationResult) -> None:
             f"{'...' if len(result.missing) > 30 else ''}"
         )
 
+    if result.truncation_flagged:
+        numbers = [n for n, _ in result.truncation_flagged]
+        excepted = [n for n in numbers if n in known_truncation_exceptions]
+        unresolved = [n for n in numbers if n not in known_truncation_exceptions]
+        if excepted:
+            print(f"[{result.act}] {len(excepted)} truncation-flagged section(s) allowed through "
+                  f"via the documented known_truncation_exceptions allowlist (NOT silent -- see "
+                  f"docs/m1-verification.md): {excepted}")
+        if unresolved:
+            raise ValidationGateError(
+                f"{result.act}: {len(unresolved)} accepted section(s) look truncated (correct "
+                f"number, incomplete text) and are NOT in the known_truncation_exceptions "
+                f"allowlist: {unresolved[:30]}{'...' if len(unresolved) > 30 else ''}. See the "
+                f"printed report for each one's specific reason."
+            )
+
 
 def print_report(result: ValidationResult) -> None:
-    total = len(result.accepted) + len(result.repealed) + len(result.rejected)
+    # "parsed" must equal every raw candidate the parser actually found --
+    # accepted + repealed + rejected + excluded_state_amendments. It
+    # previously omitted excluded_state_amendments (a real candidate the
+    # parser DID find, just not pan-India), which silently broke that
+    # identity: IPC's re-source printed "parsed=574" when the parser had
+    # actually produced 585 raw candidates, undercounting by exactly the 11
+    # excluded sections. An accurate "parsed" figure is precisely what the
+    # count-reconciliation discipline this gate exists for depends on --
+    # see the 2026-08-10 IPC re-source reconciliation.
+    total = (len(result.accepted) + len(result.repealed) + len(result.rejected)
+              + len(result.excluded_state_amendments) + len(result.excluded_schedule_rows))
     print(f"[{result.act}] parsed={total} accepted={len(result.accepted)} "
           f"repealed={len(result.repealed)} rejected={len(result.rejected)} "
+          f"excluded_state_amendments={len(result.excluded_state_amendments)} "
+          f"excluded_schedule_rows={len(result.excluded_schedule_rows)} "
           f"({result.rejection_rate:.1%})")
     reasons: dict[str, int] = {}
     for r in result.rejected:
@@ -234,6 +307,16 @@ def print_report(result: ValidationResult) -> None:
               f"{len(result.missing)} {result.missing}")
         print(f"[{result.act}] unexpected (accepted, not in ToC): "
               f"{len(result.unexpected)} {result.unexpected}")
+    if result.truncation_flagged:
+        for number, reason in result.truncation_flagged:
+            print(f"[{result.act}] TRUNCATION SUSPECTED s.{number}: {reason}")
+    if result.excluded_schedule_rows:
+        print(f"[{result.act}] excluded {len(result.excluded_schedule_rows)} candidate(s) found "
+              f"inside this document's own trailing Schedule "
+              f"({', '.join(result.excluded_schedule_rows)}) -- these numbers collide with real "
+              f"section numbers of the same act; without this exclusion the (usually longer) "
+              f"Schedule row would win dedup against the real section. See "
+              f"parsing/schedule_exclusion.py.")
     if result.excluded_state_amendments:
         by_heading: dict[str, list[str]] = {}
         for number, heading in result.excluded_state_amendments:

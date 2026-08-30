@@ -51,6 +51,25 @@ _CRIME_TERMS = {
     "arrest", "fir", "property", "land", "salary", "divorce", "dowry", "stalking",
 }
 
+# is_new_topic does bag-of-words SET intersection between the current query
+# and recent history, which only works if both turns use the identical
+# token -- "my phone was stolen" (no word literally in _CRIME_TERMS) followed
+# by "what is the punishment for theft" was scored as a topic CHANGE even
+# though it's the same crime, just described with a different word form
+# (confirmed bug, not flaky: test_followup_detected_on_same_crime). Common
+# inflections/informal phrasing get normalised to their canonical
+# _CRIME_TERMS entry before the intersection, rather than added to
+# _CRIME_TERMS directly -- adding "stolen" there wouldn't fix this, since
+# "theft" and "stolen" would still be two different strings that never
+# intersect with each other.
+_CRIME_TERM_ALIASES = {
+    "stolen": "theft", "steal": "theft", "stole": "theft", "stealing": "theft",
+    "murdered": "murder", "killed": "murder", "killing": "murder",
+    "assaulted": "assault", "raped": "rape", "cheated": "cheating",
+    "robbed": "robbery", "kidnapped": "kidnapping", "harassed": "harassment",
+    "stalked": "stalking", "defamed": "defamation",
+}
+
 
 class LLMService:
     def __init__(self) -> None:
@@ -88,13 +107,19 @@ class LLMService:
         return json.loads(text)
 
     @staticmethod
+    def _crime_words(text: str) -> set[str]:
+        words = {w.lower().strip(".,?!") for w in text.split()}
+        normalised = {_CRIME_TERM_ALIASES.get(w, w) for w in words}
+        return normalised & _CRIME_TERMS
+
+    @staticmethod
     def is_new_topic(query: str, history: list[dict]) -> bool:
         if len(history) < 2:
             return True
-        cur = {w.lower().strip(".,?!") for w in query.split()} & _CRIME_TERMS
+        cur = LLMService._crime_words(query)
         prev: set[str] = set()
         for m in [h for h in history if h["role"] == "user"][-3:]:
-            prev |= {w.lower().strip(".,?!") for w in m["content"].split()} & _CRIME_TERMS
+            prev |= LLMService._crime_words(m["content"])
         if not cur and not prev:
             return False
         return not (cur & prev)

@@ -12,8 +12,10 @@ from pathlib import Path
 
 import pdfplumber
 
-from .base import ActParser, ParseReport, RawSection
+from .base import MAX_SECTION_TEXT_CHARS, ActParser, ParseReport, RawSection
 from .footnotes import is_footnote_shaped
+from .schedule_exclusion import exclude_schedule_region
+from .section_boundary import trim_trailing_furniture
 
 # Group 1: an optional marginal-note prefix sharing the line with the section
 #          number (BNSS/BSA quirk). Marginal notes wrap across lines in the
@@ -43,7 +45,56 @@ _HEADER_RE = re.compile(
 
 class GazetteParser:
     name = "GazetteParser"
-    version = "4"
+    version = "10"
+    # v10: parsing/section_boundary.py's whole-line furniture recognition
+    #     (trim_trailing_furniture, unchanged in structure since v7) now
+    #     also recognises two more line SHAPES: a chapter/ToC sub-heading
+    #     line ("Of Hurt", "112 Of Currency-Notes and Bank-Notes"), and an
+    #     ALL-CAPS chapter-title line carrying a glued footnote-index
+    #     asterisk run mid-title ("...DOCUMENTSAND TO 2*** PROPERTY
+    #     MARKS"). A same-session detour (v9, since reverted) misdiagnosed
+    #     these as furniture fused onto the same RAW line as real content
+    #     with no newline -- true only of the whitespace-COLLAPSED text
+    #     used to eyeball the symptom. The real bug was that the backward
+    #     scan stopped one line early because neither shape was recognised
+    #     as a continuation/anchor line -- see section_boundary.py's module
+    #     docstring for the full account, including v9's mid-line-split
+    #     mechanism (trim_glued_suffix) and the data-loss regression it
+    #     caused (25 of BSA's 170 sections rejected as near-empty) before
+    #     being removed. Roughly half the ~80 sections the completeness
+    #     gate flagged 2026-08-15 (post-v8) are now fixed by this; the
+    #     remainder is a fifth, distinct root cause (a different feature --
+    #     _HEADER_RE's marginal-note-prefix group -- misfiring on ordinary
+    #     sentence-final capitalised phrases) plus a handful of other known
+    #     shapes, tracked not fixed per the stopping rule agreed
+    #     2026-08-15: see docs/m1-verification.md.
+    # v8: candidates found inside the document's own trailing Schedule are
+    #     now excluded BEFORE dedup (parsing/schedule_exclusion.py) --
+    #     same fix as legacy_parser.py v8. No confirmed corruption found
+    #     in BNS/BNSS/BSA yet, but BNSS has the identical First-Schedule-
+    #     classification-table structure as CrPC, so the same collision
+    #     mechanism applies; excluding structurally rather than waiting
+    #     for it to actually corrupt a section first.
+    # v7: section boundaries now trimmed at the first trailing furniture
+    #     line (chapter heading, Gazette masthead, dash/asterisk separator,
+    #     standalone page number) via parsing/section_boundary.py, instead
+    #     of always running to the next header match -- ~330 sections (15%
+    #     of the corpus) had this furniture bled onto the end of otherwise-
+    #     complete text, found 2026-08-14 via validate.py's completeness
+    #     check. Not cosmetic: this text is embedded and fed to the LLM as
+    #     retrieval context.
+    # v6: section_text's hard cap raised from 5000 to MAX_SECTION_TEXT_CHARS
+    #     (20000, see base.py) -- 5000 was silently truncating real, long
+    #     sections, found 2026-08-14 building the golden eval set: BNS 356
+    #     (Defamation) and BNS 303 (Theft) were both missing real content --
+    #     BNS 303's own punishment subsection wasn't in the database at all.
+    #     38 sections across all five acts were affected in total.
+    # v5: footnotes.py gained a third footnote vocabulary (extension/
+    #     application-history, e.g. IPC's "has been extended to Berar
+    #     by..." -- see legacy_parser.py v5 / footnotes.py for the concrete
+    #     bug this closes). No observed effect on BNS/BNSS/BSA text, but the
+    #     shared check runs uniformly and the version bump records that its
+    #     behaviour changed.
     # v4: footnote excision now bounds each footnote's own span at its line end,
     #     not the next regex match (see legacy_parser.py's matching fix / CrPC
     #     s.57 for the concrete bug this closes -- the last footnote in a run
@@ -72,6 +123,11 @@ class GazetteParser:
     def parse(self, path: Path) -> ParseReport:
         text = self._extract_text(path)
         candidates = self._find_candidates(text)
+        # MUST run before dedup -- see schedule_exclusion.py and
+        # legacy_parser.py's identical call for why (a Schedule row's
+        # number collides with a real section's, so post-dedup exclusion
+        # is too late; the real candidate would already be gone).
+        candidates, excluded_schedule_rows = exclude_schedule_region(candidates, text)
         sections = _dedupe_keep_longest(candidates)
         return ParseReport(
             act="",  # filled in by the caller, which knows which act it asked for
@@ -80,6 +136,7 @@ class GazetteParser:
             source_path=str(path),
             sections=sections,
             full_text=text,
+            excluded_schedule_rows=excluded_schedule_rows,
         )
 
     def _extract_text(self, path: Path) -> str:
@@ -137,7 +194,8 @@ class GazetteParser:
                 pieces.append(text[cursor:matches[k].start()])
                 cursor = footnote_end(k)
             pieces.append(text[cursor:end])
-            body = re.sub(r"\s+", " ", "".join(pieces)).strip()
+            raw = trim_trailing_furniture("".join(pieces))
+            body = re.sub(r"\s+", " ", raw).strip()
 
             if not body:
                 continue
@@ -145,7 +203,7 @@ class GazetteParser:
                 RawSection(
                     section_number=m.group(1).strip(),
                     section_title=None,  # Gazette body text doesn't reliably separate
-                    section_text=body[:5000],  # a marginal-note title from operative text
+                    section_text=body[:MAX_SECTION_TEXT_CHARS],  # a marginal-note title from operative text
                     char_start=m.start(),
                 )
             )

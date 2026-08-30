@@ -8,6 +8,7 @@ from app.core.exceptions import BlockedQueryError
 from app.core.logging import logger
 from app.core.security import hash_ip
 from app.models.audit import AuditLog
+from app.models.corpus import CorpusVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
 from app.services.llm import llm_service
@@ -88,15 +89,24 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     )
     took_ms = int((time.perf_counter() - started) * 1000)
 
+    # K4/K7: whatever corpus_version was live when this answer was generated,
+    # so a stored answer can be reproduced/audited against the exact corpus
+    # state it was computed from. Created deliberately by ingest/approve
+    # (app.legal_corpus.corpus_version), never implicitly here -- this is a
+    # read-only lookup of the latest one, not a create. None on a fresh DB
+    # before the first ingest run has ever completed -- absence recorded
+    # honestly rather than defaulted to a fake id.
+    latest_corpus_version_id = (await db.execute(
+        select(CorpusVersion.id).order_by(CorpusVersion.created_at.desc()).limit(1)
+    )).scalar_one_or_none()
+
     db.add(QueryResponse(
         query_id=q.id, conversational_summary=result["conversational_summary"],
         structured_data=result["structured_data"], retrieved_sections=sections,
         confidence_score=result["confidence_score"], response_language=language,
         processing_time_ms=took_ms, is_followup=result["is_followup"],
         as_of=as_of,  # K7: the date retrieval was filtered as-of, stamped on the answer
-        # corpus_version_id intentionally not stamped yet -- see K6 admin API (task 8):
-        # corpus_versions should be created deliberately (e.g. after a successful
-        # ingest run), not implicitly on every query.
+        corpus_version_id=latest_corpus_version_id,
     ))
     q.status = QueryStatus.PROCESSED
     q.is_followup = result["is_followup"]
@@ -107,4 +117,5 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         structured_data=result["structured_data"], confidence_score=result["confidence_score"],
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, as_of=as_of,
+        corpus_version_id=latest_corpus_version_id,
     )

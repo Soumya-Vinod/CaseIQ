@@ -21,6 +21,15 @@ class ComplaintIn(BaseModel):
     witnesses: str = ""
     evidence_description: str = ""
     relief_sought: str = ""
+    # FLAGGED 2026-08-11, not fixed: caller-supplied, free-form, and never
+    # checked against section_versions/judicial_status before reaching
+    # generate_complaint_draft() (app/api/v1/complaints.py). This is a
+    # different, more basic gap than the K2 audit's "does this path filter
+    # struck-down sections" question -- this path doesn't query the DB for
+    # section content AT ALL, so a caller (or a not-yet-rewired frontend)
+    # could hand the LLM "IPC 497" and nothing here would catch that it's
+    # struck down, or that it doesn't exist, before it lands in a generated
+    # legal complaint PDF. See docs/caseiq-industry-readiness.md Part C/K.
     applicable_sections: list[str] = []
     language: str = "en"
 

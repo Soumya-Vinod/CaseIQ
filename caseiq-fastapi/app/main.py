@@ -17,7 +17,8 @@ from app.middleware.request_context import RequestContextMiddleware
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
-    logger.info("app_starting", env=settings.ENV, project=settings.PROJECT_NAME)
+    logger.info("app_starting", env=settings.ENV, project=settings.PROJECT_NAME,
+                db_host=settings.DATABASE_HOST_FOR_LOGGING)
     yield
     logger.info("app_stopping")
 

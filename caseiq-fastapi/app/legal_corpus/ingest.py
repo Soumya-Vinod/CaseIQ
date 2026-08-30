@@ -44,10 +44,16 @@ class IngestOutcome:
                 f"new_versions={self.new_versions} skipped(resume)={self.skipped_resume}")
 
 
-async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, resume: bool = False) -> IngestOutcome:
+async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, resume: bool = False,
+                      known_truncation_exceptions: frozenset[str] = frozenset()) -> IngestOutcome:
     """Runs the full pipeline for one act against an already-open session.
     Raises ProvenanceError / ValidationGateError -- caller decides how to
     report/exit; nothing here swallows those.
+
+    `known_truncation_exceptions` -- see validate.py's enforce_gate
+    docstring. Passed through from scripts/ingest_sections.py's documented
+    allowlist; defaults to empty so any other caller (e.g. K5's arq worker)
+    still gets the gate at full strength unless it explicitly opts in.
     """
     assert_ingestable(act_code, pdf_path)
     manifest_entry = load_manifest()[act_code]
@@ -61,7 +67,7 @@ async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, res
     report = parser.parse(Path(pdf_path))
     result: ValidationResult = validate(act_code, report)
     print_report(result)
-    enforce_gate(result)  # raises ValidationGateError
+    enforce_gate(result, known_truncation_exceptions)  # raises ValidationGateError
 
     act = await ensure_act(db, act_code)
     valid_from = resolve_valid_from(content_as_on, act.commenced_on)

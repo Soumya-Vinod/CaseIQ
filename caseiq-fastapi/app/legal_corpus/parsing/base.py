@@ -9,6 +9,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+# Safety cap on a single section's captured text -- guards against a genuine
+# parsing-runaway pathology (e.g. the "last section absorbs everything to
+# EOF" failure mode noted in docs/m1-verification.md's Known limitations),
+# NOT a limit real operative text is expected to hit. Previously 5000, which
+# turned out to be well within range for real, long, illustration-heavy
+# sections -- found 2026-08-14 while building the golden eval set: BNS 356
+# (Defamation) and BNS 303 (Theft) were BOTH silently missing real content
+# (BNS 303's own punishment subsection wasn't even in the database) because
+# they legitimately exceeded 5000 characters. 38 sections across all five
+# acts were affected. validate.py's content-completeness check treats
+# anything landing at or near this cap as a truncation signal worth
+# flagging regardless of its exact value -- so raising this number moves
+# where "near the cap" starts, but doesn't remove the safety net.
+MAX_SECTION_TEXT_CHARS = 20_000
+
 
 @dataclass(frozen=True)
 class RawSection:
@@ -46,6 +61,15 @@ class ParseReport:
     # Empty string, not None, when a parser has no text to offer -- keeps
     # callers from needing an extra None-check before slicing/searching it.
     full_text: str = ""
+    # Section numbers excluded because they were candidates found INSIDE
+    # the document's own trailing Schedule (parsing/schedule_exclusion.py)
+    # -- e.g. CrPC's First Schedule tabulates rows by IPC section number,
+    # which collide with CrPC's own numbering and would otherwise win the
+    # dedup-longest contest against the real section. Populated by the
+    # parser itself (this exclusion must happen BEFORE dedup, unlike state
+    # amendments), carried here purely for validate.py's print_report to
+    # surface -- never silent, same principle as excluded_state_amendments.
+    excluded_schedule_rows: list[str] = field(default_factory=list)
 
 
 class ActParser(Protocol):
