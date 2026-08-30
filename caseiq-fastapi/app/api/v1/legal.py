@@ -12,9 +12,20 @@ from app.models.corpus import CorpusVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
 from app.services.llm import llm_service
-from app.services.retrieval import build_rag_context, semantic_search
+from app.services.retrieval import build_rag_context, is_abstention, semantic_search
 from app.services.safety import screen_query
 from sqlalchemy import select
+
+# Fixed abstention response text -- deliberately not LLM-generated (see
+# is_abstention's docstring: the whole point is to skip the LLM call, not
+# just to prompt it more carefully). A considered "no" with a next step, not
+# an error message.
+_ABSTENTION_MESSAGE = (
+    "I couldn't find a confident match for this in the BNS, BNSS, BSA, IPC or CrPC text "
+    "I have -- rather than guess, I'm not going to answer this one. For guidance specific "
+    "to your situation, please consult a lawyer or your nearest legal aid clinic (NALSA "
+    "helpline: 15100, or https://nalsa.gov.in)."
+)
 
 router = APIRouter(prefix="/legal", tags=["Legal Query"])
 
@@ -64,9 +75,14 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     sections = await semantic_search(
         db, payload.query, as_of=as_of, incident_date=payload.incident_date
     )
-    rag_context = build_rag_context(sections)
     sims = [s["similarity"] for s in sections if s["similarity"] is not None]
     retrieval_strength = max(sims) if sims else 0.0
+    abstained = is_abstention(sections)
+    if abstained:
+        # No fabricated citations alongside a refusal -- see is_abstention's
+        # docstring for exactly what counts as "not enough evidence".
+        sections = []
+    rag_context = build_rag_context(sections)
 
     q = LegalQuery(user_id=user.id if user else None, original_query=payload.query,
                    detected_language=language, status=QueryStatus.PROCESSING,
@@ -74,17 +90,33 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     db.add(q)
     await db.flush()
 
-    try:
-        result = await llm_service.process_query(
-            payload.query, language=language, history=history,
-            rag_context=rag_context, retrieval_strength=retrieval_strength,
-        )
-    except Exception as exc:
-        q.status = QueryStatus.FAILED
-        logger.exception("legal_query_failed", error=str(exc))
-        raise
+    if abstained:
+        # Short-circuit BEFORE the LLM call -- letting it free-associate over
+        # weak/irrelevant retrieved sections is exactly what produced a 0.709
+        # confidence + 6 citations alongside "I can only help with legal
+        # questions" for an out-of-scope query (2026-08-30). See config.py's
+        # ABSTENTION_SIMILARITY_THRESHOLD for where the cutoff came from.
+        result = {
+            "conversational_summary": _ABSTENTION_MESSAGE,
+            "structured_data": {},
+            # Same formula as llm.py's confidence, computed here since the LLM
+            # (and therefore that function) is never called on this path.
+            "confidence_score": round(max(0.0, min(retrieval_strength, 1.0)), 3),
+            "language": language,
+            "is_followup": False,
+        }
+    else:
+        try:
+            result = await llm_service.process_query(
+                payload.query, language=language, history=history,
+                rag_context=rag_context, retrieval_strength=retrieval_strength,
+            )
+        except Exception as exc:
+            q.status = QueryStatus.FAILED
+            logger.exception("legal_query_failed", error=str(exc))
+            raise
 
-    related = [] if result["is_followup"] else await llm_service.related_questions(
+    related = [] if abstained or result["is_followup"] else await llm_service.related_questions(
         payload.query, result["conversational_summary"]
     )
     took_ms = int((time.perf_counter() - started) * 1000)
@@ -116,6 +148,6 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         conversational_summary=result["conversational_summary"],
         structured_data=result["structured_data"], confidence_score=result["confidence_score"],
         legal_sections=sections, language=language, related_questions=related,
-        is_followup=result["is_followup"], processing_time_ms=took_ms, as_of=as_of,
-        corpus_version_id=latest_corpus_version_id,
+        is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
+        as_of=as_of, corpus_version_id=latest_corpus_version_id,
     )

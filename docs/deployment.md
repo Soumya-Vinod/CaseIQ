@@ -160,9 +160,20 @@ reset password), then update `DATABASE_URL_RAW`/`DATABASE_URL_DIRECT` in both `.
 environment variables to match, then redeploy. Until this is done, treat the current credential as
 compromised.
 
+**Hard gate, not a "later": the password MUST be rotated before the Render URL is shared with
+anyone or put in the README.** Ingesting the corpus and running local verification against the
+current credential is accepted risk (private DB, SSL-only, schema-only exposure so far) — making
+the URL public is a different act and does not happen until rotation is done.
+
 General lesson for future sessions: avoid having a raw secret visible on screen (IDE tabs, terminal
 scrollback, screenshots) during a working session where it could get captured incidentally — not
 just avoid typing it into chat directly.
+
+**Working rule for AI assistants on this project: never ask the user to paste a connection string
+or any other secret into chat.** Read `.env` from disk directly instead — that IDE-selection/
+auto-attach path is exactly how the second exposure above happened. When the user rotates a
+credential, they update `.env` and Render's dashboard themselves; the assistant re-reads `.env`
+after, it doesn't receive the value in conversation.
 
 ## What is NOT deployed
 
@@ -188,3 +199,74 @@ just avoid typing it into chat directly.
 - Whether `EMBEDDING_PROVIDER=gemini` changes any of the connection/timeout behaviour under
   Render's free-tier CPU constraints — untested, since this spike deliberately stayed on
   `local` to avoid burning Gemini quota.
+
+## Config drift — local `.env` vs Render, ACTION NEEDED before deploy (2026-08-30)
+
+Two values were changed in the local `caseiq-fastapi/.env` during corpus ingestion and are now
+**out of sync with whatever Render currently has set**. Render was deliberately not touched (see
+the working rule above — the assistant doesn't touch external services without being asked);
+that means these two must be updated on Render's dashboard by hand before the deployed backend
+will match what was verified locally.
+
+1. **`EMBEDDING_PROVIDER`: `gemini` → `local`.**
+   Full corpus ingestion (all five acts, ~2,100 sections) hit Gemini's free-tier daily cap
+   (`embed_content_free_tier_requests`, limit 1000/day) partway through BSA (`RESOURCE_EXHAUSTED`,
+   confirmed in the ingest log). Per instruction, did not wait for the quota reset or retry
+   Gemini: switched `EMBEDDING_PROVIDER=local` in `.env` and ran a full (non-`--resume`)
+   re-ingest, which updates each section's embedding **in place** rather than forking a new
+   version (see `app/legal_corpus/ingest.py`'s upsert rule — same `valid_from`, so it's a
+   re-embed of the same legal reality, not a new one).
+
+   **Verified the corpus is 100% locally-embedded, not a mix**: compared `created_at` (set during
+   the original Gemini-era ingest for BNS/BNSS/BSA) against `updated_at` (later, during the local
+   re-ingest) for sample rows — `updated_at` is newer than `created_at` for every act touched by
+   both passes, confirming the embedding was overwritten. Also inspected the actual vectors: every
+   sampled row (BNS, BNSS, BSA, IPC) shows `LocalEmbedder`'s sparse hashing signature (mostly
+   zeros, a few dozen–hundred nonzero entries out of 768) — none show Gemini's dense,
+   continuous-valued signature. IPC/CrPC were ingested after the switch and never touched Gemini
+   at all. See `docs/evaluation.md` for the retrieval-quality tradeoff this implies.
+
+   **Correction on re-check**: `EMBEDDING_PROVIDER` does **not** actually need changing on
+   Render — the "Render" section above already lists `EMBEDDING_PROVIDER=local` as literally set
+   there from the original spike (chosen deliberately to avoid burning Gemini quota, see the
+   closing note under "Open questions"). Local `.env` is the one that drifted away (to `gemini`,
+   for the ingestion run) and has now drifted back to match Render. **No action needed here.**
+   Still true regardless: if Gemini quota ever resets and switching either environment back to
+   `gemini` is considered, the *entire* corpus needs full re-ingestion on that environment, not a
+   partial one — mixing embedding providers within one corpus makes cosine similarity meaningless
+   across the boundary.
+
+2. **`GROQ_MODEL`: `llama-3.3-70b-versatile` → `openai/gpt-oss-120b`.**
+   The old model no longer exists in Groq's catalog (`404 model_not_found` — confirmed via the
+   live `/legal/query` endpoint failing, then via Groq's `/models` list, which no longer returns
+   any `llama-3.x` chat model at all). Swapped to `openai/gpt-oss-120b`, the closest available
+   general instruct model at time of writing, verified working end-to-end against a real query.
+   Also fixed the *code's own default* in `app/core/config.py` (was hardcoded to the dead model
+   name) to the same value, so a fresh environment with no `GROQ_MODEL` env var doesn't silently
+   inherit a 404.
+
+   **Before deploying**: `GROQ_MODEL` was not listed among Render's env vars for the spike at
+   all — meaning today it falls back to the code's default, which (until the fix above) was the
+   dead model. Set `GROQ_MODEL=openai/gpt-oss-120b` on Render explicitly rather than relying on
+   the code default, in case that default needs to change again later. Re-check Groq's model
+   catalog isn't stale again before relying on this — model retirement on their side is out of
+   this project's control.
+
+3. **`GROQ_API_KEY` — check whether it's set at all.** The spike deliberately left it unset (see
+   "Render" section above): `app/services/llm.py` raises a clean `llm_unconfigured` error before
+   ever calling Groq if this is missing — not a crash, but also not a real answer. I have no live
+   API access to Render to check its *current* state (no Render CLI or token available in this
+   environment) — going by the documented spike record, it is still unset. **If that's still
+   accurate**, `/legal/query` on the deployed instance returns `llm_unconfigured` right now, not a
+   404 — the 404 only becomes reachable once a real `GROQ_API_KEY` is added without also setting
+   `GROQ_MODEL`.
+
+**Render dashboard checklist, to do by hand** (per the working rule above — this session doesn't
+touch Render):
+- [ ] `GROQ_API_KEY` — add the real key. Without this, `/legal/query` cannot generate an answer at
+      all, only `llm_unconfigured`.
+- [ ] `GROQ_MODEL=openai/gpt-oss-120b` — set explicitly, don't rely on the code default.
+- [ ] `EMBEDDING_PROVIDER` — no change, already `local`.
+- [ ] Corpus — Render's DB has no corpus yet either; re-ingestion against `DATABASE_URL_RAW`/
+      `DATABASE_URL_DIRECT` (the same Neon project used locally) is still the Priority 1 item, not
+      done as part of this note.

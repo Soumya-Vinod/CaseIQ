@@ -85,6 +85,11 @@ class QueryOut(BaseModel):
     related_questions: list[str]
     is_followup: bool
     processing_time_ms: int
+    # True when app.services.retrieval.is_abstention short-circuited this query
+    # before the LLM was ever called -- confidence_score and legal_sections are
+    # deliberately not fabricated in that case (empty sections, low confidence).
+    # A designed refusal, not an error: render it as one, not as a failure state.
+    abstained: bool = False
     # Part K / K7: the date retrieval was filtered as-of -- an answer must be
     # able to state what date it was computed against.
     as_of: date

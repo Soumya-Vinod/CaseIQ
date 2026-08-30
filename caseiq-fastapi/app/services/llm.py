@@ -148,8 +148,23 @@ class LLMService:
             logger.warning("llm_json_parse_failed", error=str(exc))
             summary, structured = raw[:800], {}
 
-        # Honest confidence: blend retrieval strength with a base, instead of a constant.
-        confidence = round(0.55 + 0.4 * min(retrieval_strength, 1.0), 3)
+        # Honest confidence: a direct function of retrieval strength, no artificial
+        # floor. The previous formula (0.55 + 0.4*strength) meant confidence could
+        # never drop below 0.55 regardless of evidence -- decoration, not
+        # measurement, the same defect class as the original hardcoded 0.92 this
+        # module's docstring already calls out. Verified against a live
+        # out-of-scope query (2026-08-30): under the old formula it scored 0.709
+        # confidence with 6 irrelevant citations alongside an LLM refusal text --
+        # a fully self-contradictory response. See app.api.v1.legal.process_query
+        # for the abstention short-circuit this enabled: queries that would have
+        # produced a very low score here now skip the LLM call entirely instead.
+        #
+        # Known side effect, not fixed in this pass: an answer built entirely from
+        # keyword-fallback sections (retrieval.keyword_search, no vector similarity
+        # attached) reports 0.0 here, since retrieval_strength only counts
+        # vector-scored matches -- even though a real, relevant section was found.
+        # See docs/evaluation.md.
+        confidence = round(max(0.0, min(retrieval_strength, 1.0)), 3)
         return {
             "conversational_summary": summary,
             "structured_data": structured,

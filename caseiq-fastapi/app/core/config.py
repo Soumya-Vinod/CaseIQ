@@ -163,7 +163,11 @@ class Settings(BaseSettings):
 
     # --- LLM / Embeddings / News ---
     GROQ_API_KEY: str | None = None
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    # llama-3.3-70b-versatile was retired from Groq's catalog (404 model_not_found,
+    # discovered 2026-08-30 -- see docs/deployment.md). This default is a fallback for
+    # environments with no GROQ_MODEL env var set; re-check Groq's /models list before
+    # trusting it, since their catalog can drift again without notice.
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_TEMPERATURE: float = 0.1
     GROQ_MAX_TOKENS: int = 3000
 
@@ -177,6 +181,26 @@ class Settings(BaseSettings):
     # --- Retrieval ---
     RAG_TOP_K: int = 6
     RAG_MIN_SIMILARITY: float = 0.25  # cosine similarity floor for a "match"
+
+    # Below this, the top VECTOR-similarity match is treated as too weak to
+    # answer from -- see app.services.retrieval.is_abstention. Chosen from a
+    # small, real sample against the live LocalEmbedder corpus (2026-08-30),
+    # NOT tuned or validated against a golden set (none exists yet -- see
+    # docs/evaluation.md Priority 2):
+    #   garbage  ("boiling point of methane on Titan"): max similarity 0.386-0.398
+    #   legit    ("dowry harassment punishment"):        max similarity 0.489
+    #   legit    ("file an FIR for cybercrime fraud"):    max similarity 0.252
+    # That last row is the honest problem with this cutoff: ANY single
+    # threshold that catches the garbage query above also catches this real,
+    # in-scope one -- 0.252 < 0.398, so no cutoff separates them correctly.
+    # Chosen deliberately to err toward catching the garbage query (a
+    # confident-sounding wrong answer is worse than an honest abstention on
+    # a borderline-but-real one) at 0.40 -- meaning some legitimate queries
+    # with weak lexical/hash overlap under LocalEmbedder WILL be incorrectly
+    # routed to abstention. A real embedding model would very likely widen
+    # this gap; that's a concrete argument for the Gemini/hybrid retrieval
+    # work in Priority 4, not just an aesthetic upgrade.
+    ABSTENTION_SIMILARITY_THRESHOLD: float = 0.40
 
     # --- Audit log retention (M2 hygiene) ---
     # Unbounded audit-log growth was flagged as a defect (D6); rows older than

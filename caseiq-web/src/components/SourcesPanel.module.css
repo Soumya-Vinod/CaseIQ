@@ -1,0 +1,147 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.heading {
+  font-size: 1.05rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.count {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--gold);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold-border);
+  border-radius: 10px;
+  padding: 1.1rem 1.2rem 1rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.locus {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.act {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bg);
+  background: var(--gold);
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+}
+
+.sectionNo {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.amendedTag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--readdown);
+  background: var(--readdown-bg);
+  border: 1px solid var(--readdown-border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.actFullName {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 0.3rem;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  color: var(--text);
+}
+
+.statusRow {
+  margin-top: 0.75rem;
+}
+
+.text {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  line-height: 1.75;
+  color: var(--text);
+  margin-top: 0.75rem;
+  max-width: var(--measure);
+  white-space: pre-wrap;
+}
+
+.ellipsis {
+  color: var(--text-dim);
+}
+
+.meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.emptyBody {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  max-width: 42ch;
+  margin-inline: auto;
+}

@@ -246,6 +246,28 @@ def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_o
     }
 
 
+def is_abstention(sections: list[dict]) -> bool:
+    """True when there isn't enough evidence to answer -- either nothing was
+    retrieved at all, or the best VECTOR-similarity match is below
+    settings.ABSTENTION_SIMILARITY_THRESHOLD (see that setting's comment for
+    where the number came from and its known false-positive).
+
+    Deliberately does NOT count a keyword_search fallback (similarity=None
+    on every section) as zero evidence -- that's a distinct, pre-existing
+    mechanism for when vector search finds nothing above RAG_MIN_SIMILARITY,
+    and a literal keyword match (e.g. "murder" hitting a section whose text
+    contains "murder") is real evidence, just of a different kind than a
+    cosine score. Sweeping it into this check would abstain on well-answerable
+    queries that only happen to fall back to keyword search.
+    """
+    if not sections:
+        return True
+    vector_sims = [s["similarity"] for s in sections if s["similarity"] is not None]
+    if not vector_sims:
+        return False  # keyword-fallback-only: treat as evidence, don't abstain
+    return max(vector_sims) < settings.ABSTENTION_SIMILARITY_THRESHOLD
+
+
 def build_rag_context(sections: list[dict]) -> str:
     if not sections:
         return ""
