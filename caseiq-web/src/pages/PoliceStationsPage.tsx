@@ -16,6 +16,40 @@ L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, 
 // denied, unsupported, or times out.
 const MUMBAI_CENTER: [number, number] = [19.076, 72.8777];
 const SEARCH_RADIUS_M = 5000;
+const MAX_RESULTS = 20; // capped, not unbounded -- see fetchOverpass
+
+// Public, unmetered mirrors -- tried in order, first success wins. No API
+// key exists for any of these; this is the whole reason they're flaky under
+// load, not a configuration problem on our end.
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+
+async function fetchOverpass(query: string): Promise<{ elements: unknown[] }> {
+  let lastError: unknown;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      // A per-mirror timeout, not just a per-query one in the Overpass query
+      // language itself -- that server-side [timeout:15] only bounds how
+      // long Overpass spends computing an answer, not how long a slow or
+      // hanging mirror leaves the browser's fetch() pending. Without this,
+      // one bad mirror can stall the whole fallback chain far longer than
+      // the "try the next one" design intends.
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: query,
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError ?? new Error("all Overpass endpoints failed");
+}
 
 type Station = {
   id: number;
@@ -106,13 +140,14 @@ export function PoliceStationsPage() {
       setLoading(true);
       setError(null);
       try {
-        const query = `[out:json][timeout:15];node["amenity"="police"](around:${SEARCH_RADIUS_M},${center[0]},${center[1]});out body;`;
-        const res = await fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          body: query,
-        });
-        if (!res.ok) throw new Error("overpass request failed");
-        const json = await res.json();
+        // The public Overpass instance is a shared, unmetered community
+        // resource -- confirmed directly (plain curl, no browser involved)
+        // that its main endpoint 504s under load ("server too busy") even
+        // for this exact query. A capped result count and a mirror fallback
+        // measurably improved success while testing this (2026-08-31) --
+        // not a fix for Overpass's own capacity, just resilience against it.
+        const query = `[out:json][timeout:15];node["amenity"="police"](around:${SEARCH_RADIUS_M},${center[0]},${center[1]});out body ${MAX_RESULTS};`;
+        const json = await fetchOverpass(query);
         type OverpassEl = { id: number; lat: number; lon: number; tags?: Record<string, string> };
         const list: Station[] = (json.elements as OverpassEl[])
           .filter((el) => el.lat != null && el.lon != null)

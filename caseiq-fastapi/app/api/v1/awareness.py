@@ -16,7 +16,18 @@ async def list_news(db: DB, user: OptionalUser, featured: bool | None = None, li
     stmt = select(LegalNewsArticle)
     if featured is not None:
         stmt = stmt.where(LegalNewsArticle.is_featured.is_(featured))
-    stmt = stmt.order_by(LegalNewsArticle.published_at.desc()).limit(limit)
+    # Real articles first, always -- app/services/news.py's evergreen explainer
+    # fallback has no genuine publication date (it's authored content, not
+    # news) and previously got `datetime.now()` at insert time, which made it
+    # sort ABOVE real, older news and made the tab look like it had no current
+    # articles at all (found 2026-08-31 seeding explainers for a screenshot).
+    # source_url == '' is the same "no real source to link to" signal the
+    # frontend uses to badge an explainer -- sorting on it directly here means
+    # this doesn't silently break if is_featured's meaning ever changes.
+    stmt = stmt.order_by(
+        (LegalNewsArticle.source_url == "").asc(),
+        LegalNewsArticle.published_at.desc(),
+    ).limit(limit)
     return (await db.execute(stmt)).scalars().all()
 
 
