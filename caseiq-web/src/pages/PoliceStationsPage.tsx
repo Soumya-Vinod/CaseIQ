@@ -4,7 +4,36 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { useEffect, useRef, useState } from "react";
+import cachedStations from "../data/police-stations-mmr.json";
 import styles from "./PoliceStationsPage.module.css";
+
+// Fetched once, server-side (scripts/fetch-police-stations.mjs), not at
+// request time -- police stations don't move, so paying Overpass's live,
+// flaky cost on every page load for the region almost every demo query hits
+// (Mumbai) is pure downside. Live Overpass (below) is now only reached for
+// coordinates outside this cached bounding box.
+const CACHE_BBOX = cachedStations.bbox;
+
+function isWithinCachedRegion([lat, lon]: [number, number]): boolean {
+  return (
+    lat >= CACHE_BBOX.south &&
+    lat <= CACHE_BBOX.north &&
+    lon >= CACHE_BBOX.west &&
+    lon <= CACHE_BBOX.east
+  );
+}
+
+function formatFetchedDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 // Vite bundles Leaflet's default marker images under a hashed path Leaflet's
 // own icon resolution can't find at runtime -- the standard fix is pointing
@@ -94,6 +123,7 @@ export function PoliceStationsPage() {
   const [stations, setStations] = useState<Station[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<"cache" | "live" | null>(null);
 
   // Geolocation on mount -- falls back to Mumbai on denial, timeout, or an
   // unsupported browser. Required path, not an edge case.
@@ -133,13 +163,27 @@ export function PoliceStationsPage() {
     if (mapRef.current && center) mapRef.current.setView(center, 14);
   }, [center]);
 
-  // Overpass query, re-run whenever the centre changes.
+  // Station lookup, re-run whenever the centre changes. Cached MMR data
+  // first (no network at all -- see below for why this is the case the
+  // caching exists for); live Overpass only for coordinates outside it.
   useEffect(() => {
     if (!center) return;
     (async () => {
       setLoading(true);
       setError(null);
       try {
+        if (isWithinCachedRegion(center)) {
+          const list: Station[] = cachedStations.stations
+            .map((s) => ({ ...s, distanceKm: haversineKm(center, [s.lat, s.lon]) }))
+            .filter((s) => s.distanceKm <= SEARCH_RADIUS_M / 1000)
+            .sort((a, b) => a.distanceKm - b.distanceKm)
+            .slice(0, MAX_RESULTS);
+          setStations(list);
+          setDataSource("cache");
+          renderMarkers(center, list);
+          return;
+        }
+
         // The public Overpass instance is a shared, unmetered community
         // resource -- confirmed directly (plain curl, no browser involved)
         // that its main endpoint 504s under load ("server too busy") even
@@ -161,22 +205,26 @@ export function PoliceStationsPage() {
           }))
           .sort((a, b) => a.distanceKm - b.distanceKm);
         setStations(list);
-
-        const layer = markersLayerRef.current;
-        if (layer) {
-          layer.clearLayers();
-          L.marker(center).addTo(layer).bindPopup("You are here");
-          for (const s of list) {
-            L.marker([s.lat, s.lon]).addTo(layer).bindPopup(`<b>${s.name}</b><br/>${s.address}`);
-          }
-        }
+        setDataSource("live");
+        renderMarkers(center, list);
       } catch {
         setError("Could not reach the police-station data source (Overpass API). Please try again.");
         setStations(null);
+        setDataSource(null);
       } finally {
         setLoading(false);
       }
     })();
+
+    function renderMarkers(c: [number, number], list: Station[]) {
+      const layer = markersLayerRef.current;
+      if (!layer) return;
+      layer.clearLayers();
+      L.marker(c).addTo(layer).bindPopup("You are here");
+      for (const s of list) {
+        L.marker([s.lat, s.lon]).addTo(layer).bindPopup(`<b>${s.name}</b><br/>${s.address}`);
+      }
+    }
   }, [center]);
 
   async function handleCitySearch(e: React.FormEvent) {
@@ -230,6 +278,15 @@ export function PoliceStationsPage() {
       )}
 
       <div ref={mapContainerRef} className={styles.map} />
+
+      {dataSource === "cache" && (
+        <p className={styles.dataSourceNote}>
+          Station data cached from OpenStreetMap · fetched {formatFetchedDate(cachedStations.fetched_at)}
+        </p>
+      )}
+      {dataSource === "live" && (
+        <p className={styles.dataSourceNote}>Live data from OpenStreetMap (outside the cached region)</p>
+      )}
 
       {loading && <p className={styles.loading}>Finding nearby stations…</p>}
       {error && <div className={styles.errorBox}>{error}</div>}

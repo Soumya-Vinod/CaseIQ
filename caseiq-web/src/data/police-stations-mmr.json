@@ -1,0 +1,553 @@
+{
+  "region": "Mumbai Metropolitan Region",
+  "bbox": {
+    "south": 18.85,
+    "west": 72.75,
+    "north": 19.35,
+    "east": 73.15
+  },
+  "fetched_at": "2026-08-31T15:20:07.244Z",
+  "source": "OpenStreetMap / Overpass API",
+  "count": 77,
+  "stations": [
+    {
+      "id": 347152618,
+      "name": "Khar Police Station",
+      "lat": 19.064037,
+      "lon": 72.8371137,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 605221901,
+      "name": "Lokmanya Tilak Road Police Station",
+      "lat": 18.9453708,
+      "lon": 72.8303315,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 858544370,
+      "name": "Null Bazaar Police Chowkie",
+      "lat": 18.9570075,
+      "lon": 72.8290329,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 858544419,
+      "name": "Pydhoni Police Station",
+      "lat": 18.9541719,
+      "lon": 72.832021,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 860348747,
+      "name": "Dongri Police Station",
+      "lat": 18.9621396,
+      "lon": 72.8390488,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 861239805,
+      "name": "Sir JJ Marg Police Station",
+      "lat": 18.963006,
+      "lon": 72.832291,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 985121037,
+      "name": "Aarey Police Station",
+      "lat": 19.1664849,
+      "lon": 72.8543819,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 985121043,
+      "name": "Goregaon (E) Police Station",
+      "lat": 19.1558742,
+      "lon": 72.8576756,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1034965532,
+      "name": "Lokmanya Tilak Police Chowkie Beat No 4",
+      "lat": 18.9473567,
+      "lon": 72.8337631,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1034965537,
+      "name": "Lokmanya Tilak Police Station",
+      "lat": 18.9463293,
+      "lon": 72.8331294,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1241711502,
+      "name": "Police Station",
+      "lat": 18.9444479,
+      "lon": 72.8328893,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1301593213,
+      "name": "Police Station",
+      "lat": 18.9675282,
+      "lon": 72.8323654,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1332582403,
+      "name": "Police Station",
+      "lat": 18.9302617,
+      "lon": 72.8243459,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1697431324,
+      "name": "D.N. Nagar Police Station",
+      "lat": 19.1225849,
+      "lon": 72.8299999,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1905389024,
+      "name": "Versova Police Station",
+      "lat": 19.1241245,
+      "lon": 72.8303704,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1960732105,
+      "name": "Police Commissioner Office",
+      "lat": 19.1960801,
+      "lon": 72.9811271,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1960732177,
+      "name": "Vartak Nagar Police Station",
+      "lat": 19.2131355,
+      "lon": 72.9627611,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 1990647113,
+      "name": "KK POLICE STATION",
+      "lat": 19.0990752,
+      "lon": 73.0051825,
+      "address": "Sector 10, Atmaram Bhoir Marg"
+    },
+    {
+      "id": 2097757614,
+      "name": "Police Station",
+      "lat": 19.2282071,
+      "lon": 72.8582168,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2171447204,
+      "name": "Police Chowki",
+      "lat": 19.0628319,
+      "lon": 72.8292193,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2206289223,
+      "name": "Vishnunagar Police Station",
+      "lat": 19.2192494,
+      "lon": 73.0867512,
+      "address": "kopar road"
+    },
+    {
+      "id": 2298079810,
+      "name": "Police Station, Thakur Village",
+      "lat": 19.2059514,
+      "lon": 72.8729038,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2308138695,
+      "name": "Dindoshi Police station",
+      "lat": 19.1789489,
+      "lon": 72.8577333,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2449734722,
+      "name": "Badhamkar Mark Police Station",
+      "lat": 18.9608206,
+      "lon": 72.8170666,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2562631232,
+      "name": "Gokuldham Police Station",
+      "lat": 19.1755909,
+      "lon": 72.8676526,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2680678193,
+      "name": "Police Chowk",
+      "lat": 19.0738897,
+      "lon": 72.8294847,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2930732807,
+      "name": "Tilak Nagar Police Station",
+      "lat": 19.0652856,
+      "lon": 72.8959976,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 2933183452,
+      "name": "VB Nagar Police Station",
+      "lat": 19.0717172,
+      "lon": 72.8842275,
+      "address": "Kurla West, Mumbai"
+    },
+    {
+      "id": 3008501715,
+      "name": "Police Commissioner's Office",
+      "lat": 18.9462953,
+      "lon": 72.833307,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3186544582,
+      "name": "Police Station",
+      "lat": 19.2294953,
+      "lon": 72.8559481,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3204171992,
+      "name": "POLICE STATION",
+      "lat": 19.0537,
+      "lon": 72.9357,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3205945190,
+      "name": "trombay police station",
+      "lat": 19.0361453,
+      "lon": 72.9499458,
+      "address": "mumbai"
+    },
+    {
+      "id": 3205950901,
+      "name": "Tembhipada Police Chowki",
+      "lat": 19.1548902,
+      "lon": 72.9291114,
+      "address": "Tembhipada Road"
+    },
+    {
+      "id": 3205956099,
+      "name": "chembur police station",
+      "lat": 19.0639495,
+      "lon": 72.9008254,
+      "address": "near Handore office, P.L. Lokhande Marg, mumbai"
+    },
+    {
+      "id": 3215545236,
+      "name": "Maharashtra Nagar Police Station",
+      "lat": 19.0502474,
+      "lon": 72.9378622,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3215577539,
+      "name": "Govandi Police station",
+      "lat": 19.0595211,
+      "lon": 72.9116651,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3215584200,
+      "name": "Lallubhai Police Station",
+      "lat": 19.0528478,
+      "lon": 72.9270997,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3215621243,
+      "name": "gaikwaad nagar police station",
+      "lat": 19.0603518,
+      "lon": 72.9104397,
+      "address": "P.L. Lokhande Marg, mumbai"
+    },
+    {
+      "id": 3263043837,
+      "name": "WAGLE POLICE STATION",
+      "lat": 19.2031874,
+      "lon": 72.9550994,
+      "address": "Thane (West)"
+    },
+    {
+      "id": 3532121099,
+      "name": "Nehru Nagar Kurla E Police Chowky",
+      "lat": 19.0650661,
+      "lon": 72.8808749,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3547889593,
+      "name": "Khardev Nagar Police Station",
+      "lat": 19.0557429,
+      "lon": 72.9088297,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 3602876220,
+      "name": "Vikhroli Police Station",
+      "lat": 19.1187189,
+      "lon": 72.9373252,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 4402150675,
+      "name": "Chheda Nagar Police Station",
+      "lat": 19.0672141,
+      "lon": 72.9031566,
+      "address": "Road No 1, cheedanagar, chembur,mumbai"
+    },
+    {
+      "id": 4424542678,
+      "name": "chaitra cafe",
+      "lat": 19.03502,
+      "lon": 73.1009651,
+      "address": "23, str, mumbai"
+    },
+    {
+      "id": 4621598794,
+      "name": "Police Station",
+      "lat": 19.2573838,
+      "lon": 72.8650937,
+      "address": "C S Link Road"
+    },
+    {
+      "id": 4658680890,
+      "name": "Police Station",
+      "lat": 19.1695498,
+      "lon": 72.9591762,
+      "address": "Navghar Marg"
+    },
+    {
+      "id": 4791178925,
+      "name": "Police Station",
+      "lat": 19.1715844,
+      "lon": 72.956655,
+      "address": "Lokmanya Tilak Road"
+    },
+    {
+      "id": 4848773734,
+      "name": "Sion (E) Police Station",
+      "lat": 19.0313226,
+      "lon": 72.8575876,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5057817507,
+      "name": "Matunga Police Station",
+      "lat": 19.0311163,
+      "lon": 72.8578787,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5073191992,
+      "name": "Shil Mhape Police Chouki",
+      "lat": 19.1147228,
+      "lon": 73.0343208,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5077468322,
+      "name": "Police Station",
+      "lat": 19.1428227,
+      "lon": 73.046117,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5077468323,
+      "name": "Police Station",
+      "lat": 19.1463017,
+      "lon": 73.0009279,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5116459526,
+      "name": "Kandivali Police Station",
+      "lat": 19.209583,
+      "lon": 72.8501404,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5258276335,
+      "name": "Mount Mary Police Chouki",
+      "lat": 19.051928,
+      "lon": 72.8232806,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5448387024,
+      "name": "Police Station",
+      "lat": 18.9978829,
+      "lon": 72.837489,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5506320530,
+      "name": "BKC Police Station",
+      "lat": 19.0645147,
+      "lon": 72.8603409,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5614984680,
+      "name": "Versova Police Station",
+      "lat": 19.1429738,
+      "lon": 72.8044882,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5667043327,
+      "name": "Samatanagar Police Station",
+      "lat": 19.1998393,
+      "lon": 72.8614152,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 5668284373,
+      "name": "NM Joshi Marg Police Station",
+      "lat": 18.9914132,
+      "lon": 72.8309771,
+      "address": "Sakubai Mohite Marg, Mumbai"
+    },
+    {
+      "id": 6052581621,
+      "name": "Traffic Police Chowky",
+      "lat": 19.163976,
+      "lon": 72.9374814,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 7499053623,
+      "name": "Chowki Mohalla Police Chowki",
+      "lat": 18.9618784,
+      "lon": 72.8301422,
+      "address": "Undria Street, Mumbai"
+    },
+    {
+      "id": 7506854141,
+      "name": "Do Taki Police Chowki",
+      "lat": 18.9616064,
+      "lon": 72.8286697,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 8170852418,
+      "name": "Police Station",
+      "lat": 19.1834974,
+      "lon": 72.8445059,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 9081860659,
+      "name": "Elphinstone Road Traffic Police Chowki",
+      "lat": 19.0085419,
+      "lon": 72.8325587,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 9139914820,
+      "name": "Police Station",
+      "lat": 19.0981885,
+      "lon": 72.8266433,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 9215039104,
+      "name": "Chitalsar Police Station",
+      "lat": 19.2313943,
+      "lon": 72.9762793,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 9730701801,
+      "name": "Khar Police Station",
+      "lat": 19.072887,
+      "lon": 72.8376531,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 9876652392,
+      "name": "Ramnagar Police Station",
+      "lat": 19.2166065,
+      "lon": 73.0861813,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 9876669070,
+      "name": "Vishnu Nagar Police Station",
+      "lat": 19.219069,
+      "lon": 73.0868311,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 10196823118,
+      "name": "Police Station",
+      "lat": 19.2590592,
+      "lon": 72.9669954,
+      "address": "Ghodbunder Service Road"
+    },
+    {
+      "id": 10296626442,
+      "name": "Juhu Police Station",
+      "lat": 19.1031659,
+      "lon": 72.8327116,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 10705115166,
+      "name": "Police Station",
+      "lat": 19.1871851,
+      "lon": 72.9759036,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 11452014435,
+      "name": "Chaitya Bhumi Police Chowk",
+      "lat": 19.0260237,
+      "lon": 72.8345223,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 11615592630,
+      "name": "Anti Corruption Bureau Thane",
+      "lat": 19.2059644,
+      "lon": 72.9826331,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 12026381269,
+      "name": "Shivaji Nagar Police Station",
+      "lat": 19.0610978,
+      "lon": 72.8433693,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 12878867195,
+      "name": "Office Of The Inspector Incharge, Mulund East",
+      "lat": 19.1721599,
+      "lon": 72.9575152,
+      "address": "Address not available on OpenStreetMap"
+    },
+    {
+      "id": 13514237453,
+      "name": "Mata Ramabai Ambedkar Marg Police Thaane",
+      "lat": 18.9325312,
+      "lon": 72.8318499,
+      "address": "Address not available on OpenStreetMap"
+    }
+  ]
+}

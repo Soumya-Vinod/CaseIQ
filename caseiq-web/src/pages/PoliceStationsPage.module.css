@@ -84,6 +84,12 @@
   background: var(--surface);
 }
 
+.dataSourceNote {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin: -0.6rem 0 1rem;
+}
+
 .loading, .errorBox {
   font-size: 0.88rem;
   margin-bottom: 1rem;

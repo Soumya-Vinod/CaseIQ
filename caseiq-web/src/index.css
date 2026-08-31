@@ -28,6 +28,17 @@
   --readdown-bg: rgba(127, 178, 229, 0.12);
   --readdown-border: rgba(127, 178, 229, 0.4);
 
+  /* Situation severity (structured_data.severity) -- distinct from judicial-
+     status colours above, which mean something legally specific (struck
+     down / read down). Severity is the LLM's own free-text assessment,
+     lower-stakes visually on purpose. "critical" reuses --struck rather than
+     a 4th hue -- WCAG-checked (10.25/9.34, 10.35/9.43, 8.63/7.87 on bg/surface
+     for low/medium/high respectively; critical inherits --struck's own
+     6.5/5.9 check from earlier). */
+  --severity-low: #6fcf7a;
+  --severity-medium: #e8b34d;
+  --severity-high: #f0964a;
+
   --font-ui: "Inter", system-ui, "Segoe UI", sans-serif;
   --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
 
