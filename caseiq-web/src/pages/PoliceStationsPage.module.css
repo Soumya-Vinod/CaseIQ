@@ -1,0 +1,177 @@
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4rem;
+  width: 100%;
+}
+
+.header {
+  margin-bottom: 1.25rem;
+}
+
+.eyebrow {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.title {
+  font-size: 1.5rem;
+  margin-top: 0.35rem;
+}
+
+.subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+  max-width: var(--measure);
+}
+
+.searchForm {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.searchInput {
+  flex: 1;
+  min-height: var(--tap-min);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.searchButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
+  background: var(--surface-2);
+  color: var(--gold);
+  border: 1px solid var(--gold-border);
+  border-radius: 8px;
+  padding: 0.55rem 1.1rem;
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.geoNote {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-bottom: 0.9rem;
+}
+
+.cityError {
+  font-size: 0.82rem;
+  color: var(--struck);
+  margin-bottom: 0.6rem;
+}
+
+.map {
+  width: 100%;
+  height: 280px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+  margin-bottom: 1rem;
+  background: var(--surface);
+}
+
+.loading, .errorBox {
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+
+.loading {
+  color: var(--text-dim);
+}
+
+.errorBox {
+  border: 1px solid var(--struck-border);
+  background: var(--struck-bg);
+  color: var(--struck);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.emptyTitle {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.emptyBody {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  max-width: 42ch;
+  margin-inline: auto;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold-border);
+  border-radius: 10px;
+  padding: 1rem 1.15rem 0.9rem;
+}
+
+.stationName {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.address {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.distance {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.directions {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gold);
+  text-decoration: none;
+}

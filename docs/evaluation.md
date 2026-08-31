@@ -380,6 +380,17 @@ and fuse the two, not to keep tuning the one that structurally can't see this.
   `is_abstention` needed no changes: it already treated a null-similarity section as "found by a
   different mechanism," not zero evidence.
 
+**`websearch_to_tsquery` semantics, worth recording on its own — this affects every lexical
+query, not just the synonym-expansion case below.** Postgres's `websearch_to_tsquery` ANDs every
+space-separated content word by default (`"file an FIR"` → `file & fir`) — a multi-word natural-
+language question only matches a section containing ALL of its words, not any of them. Building
+the synonym expansion surfaced this the hard way: appending an expansion with a plain space made
+retrieval *worse*, since it added the expansion's words to the same AND chain (see below for the
+full story). The fix there was joining with a literal `" or "`, which `websearch_to_tsquery` reads
+as a real disjunction — but the underlying AND-by-default behavior is still how every other
+lexical query on this corpus is evaluated, expansion or not, and is worth knowing before debugging
+a future lexical miss that looks like a ranking problem but is actually a query-construction one.
+
 **Measured before/after, top-6 correct-section hit, same six queries from the table above plus
 four new ones** (ground truth verified against the actual ingested section text, not asserted from
 memory — see `scripts/eval_baseline.py`):

@@ -9,3 +9,4 @@ export type JudicialStatusOut = components["schemas"]["JudicialStatusOut"];
 export type SectionOut = components["schemas"]["SectionOut"];
 export type SectionDetailOut = components["schemas"]["SectionDetailOut"];
 export type PreviousVersionOut = components["schemas"]["PreviousVersionOut"];
+export type NewsOut = components["schemas"]["NewsOut"];

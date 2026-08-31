@@ -1,15 +1,19 @@
 import { useState } from "react";
 import styles from "./App.module.css";
 import { BrowseByActPage } from "./pages/BrowseByActPage";
+import { NewsPage } from "./pages/NewsPage";
+import { PoliceStationsPage } from "./pages/PoliceStationsPage";
 import { QueryPage } from "./pages/QueryPage";
 import { SectionLookupPage } from "./pages/SectionLookupPage";
 
-type Tab = "ask" | "lookup" | "browse";
+type Tab = "ask" | "lookup" | "browse" | "news" | "stations";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "ask", label: "Ask" },
   { id: "lookup", label: "Look up a section" },
   { id: "browse", label: "Browse by act" },
+  { id: "news", label: "News" },
+  { id: "stations", label: "Nearby Stations" },
 ];
 
 function App() {
@@ -33,6 +37,8 @@ function App() {
       {tab === "ask" && <QueryPage />}
       {tab === "lookup" && <SectionLookupPage />}
       {tab === "browse" && <BrowseByActPage />}
+      {tab === "news" && <NewsPage />}
+      {tab === "stations" && <PoliceStationsPage />}
     </>
   );
 }
