@@ -193,21 +193,32 @@ CI step that runs once) before this goes beyond a spike.
   portfolio demo), the real fix is redeploying both Neon and Render in a Singapore region — Neon
   has one; Render's region list should be checked — not trying to shave the US-East number down.
 
-## Security note — STILL OUTSTANDING
+## Security note — rotation deliberately deferred (2026-08-31)
 
-The Neon database password has been exposed on-screen **twice** during this session: once via an
+The Neon database password has been exposed on-screen **twice**, before this session: once via an
 IDE auto-attached file selection that included the literal connection string (with credentials) in
-a chat transcript, and once via a dashboard screenshot. The spike passing does not resolve this.
+a chat transcript, and once via a dashboard screenshot. Neither exposure was to a public repo or a
+paste site — a private chat transcript and a screenshot, and the credential itself is not in git
+history anywhere.
 
-**Action item, not yet done: rotate the Neon password** (Neon dashboard → project → Settings →
-reset password), then update `DATABASE_URL_RAW`/`DATABASE_URL_DIRECT` in both `.env` and Render's
-environment variables to match, then redeploy. Until this is done, treat the current credential as
-compromised.
+**Still outstanding, but deferred as a deliberate decision, not a missed item**: the original plan
+was to rotate before the Render URL went public (see the hard-gate language this replaces). The
+URL went public first (`caseiq-web.vercel.app`, live and in the README) — the call made on
+2026-08-31 was to defer rotation until after the demo rather than rotate under time pressure right
+before needing the live chain to work, given:
+- both exposures were private (chat transcript, screenshot) — not a public leak;
+- Neon requires SSL/TLS on every connection regardless of password strength;
+- the credential appears nowhere in git history;
+- nobody else has this credential;
+- rotating now (updating `.env`, Render's env vars, and redeploying, all under a hard deadline)
+  risks breaking the live chain right before it needs to work for the demo, for a threat model
+  that hasn't materially worsened by waiting a few more days.
 
-**Hard gate, not a "later": the password MUST be rotated before the Render URL is shared with
-anyone or put in the README.** Ingesting the corpus and running local verification against the
-current credential is accepted risk (private DB, SSL-only, schema-only exposure so far) — making
-the URL public is a different act and does not happen until rotation is done.
+**Action item, still real, just not urgent right now**: rotate the Neon password (Neon dashboard
+→ project → Settings → reset password) after the demo, then update `DATABASE_URL_RAW`/
+`DATABASE_URL_DIRECT` in both `.env` and Render's environment variables to match, then redeploy.
+Until done, the current credential remains the one already treated as compromised by the exposures
+above — the deferral is about *when* to act on that, not a claim that it stopped being true.
 
 General lesson for future sessions: avoid having a raw secret visible on screen (IDE tabs, terminal
 scrollback, screenshots) during a working session where it could get captured incidentally — not

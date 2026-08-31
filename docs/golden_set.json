@@ -1,0 +1,586 @@
+[
+  {
+    "question": "What is the punishment for theft?",
+    "sections": [
+      [
+        "BNS",
+        "303"
+      ],
+      [
+        "IPC",
+        "378"
+      ],
+      [
+        "IPC",
+        "379"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for defamation?",
+    "sections": [
+      [
+        "BNS",
+        "356"
+      ],
+      [
+        "IPC",
+        "499"
+      ],
+      [
+        "IPC",
+        "500"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for murder?",
+    "sections": [
+      [
+        "BNS",
+        "103"
+      ],
+      [
+        "IPC",
+        "302"
+      ]
+    ]
+  },
+  {
+    "question": "What is culpable homicide not amounting to murder?",
+    "sections": [
+      [
+        "BNS",
+        "105"
+      ],
+      [
+        "IPC",
+        "304"
+      ]
+    ]
+  },
+  {
+    "question": "What is cheating and dishonestly inducing delivery of property?",
+    "sections": [
+      [
+        "BNS",
+        "318"
+      ],
+      [
+        "IPC",
+        "415"
+      ],
+      [
+        "IPC",
+        "420"
+      ]
+    ]
+  },
+  {
+    "question": "What is criminal breach of trust?",
+    "sections": [
+      [
+        "BNS",
+        "316"
+      ],
+      [
+        "IPC",
+        "405"
+      ],
+      [
+        "IPC",
+        "406"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for dowry harassment?",
+    "sections": [
+      [
+        "BNS",
+        "85"
+      ],
+      [
+        "IPC",
+        "498A"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for dowry death?",
+    "sections": [
+      [
+        "BNS",
+        "80"
+      ],
+      [
+        "IPC",
+        "304B"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for rape?",
+    "sections": [
+      [
+        "BNS",
+        "64"
+      ],
+      [
+        "BNS",
+        "63"
+      ],
+      [
+        "IPC",
+        "375"
+      ],
+      [
+        "IPC",
+        "376"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for kidnapping?",
+    "sections": [
+      [
+        "BNS",
+        "137"
+      ],
+      [
+        "IPC",
+        "359"
+      ],
+      [
+        "IPC",
+        "363"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for robbery?",
+    "sections": [
+      [
+        "BNS",
+        "309"
+      ],
+      [
+        "IPC",
+        "390"
+      ],
+      [
+        "IPC",
+        "392"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for dacoity?",
+    "sections": [
+      [
+        "BNS",
+        "310"
+      ],
+      [
+        "BNS",
+        "311"
+      ],
+      [
+        "IPC",
+        "391"
+      ],
+      [
+        "IPC",
+        "395"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for extortion?",
+    "sections": [
+      [
+        "BNS",
+        "308"
+      ],
+      [
+        "IPC",
+        "383"
+      ],
+      [
+        "IPC",
+        "384"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for forgery?",
+    "sections": [
+      [
+        "BNS",
+        "336"
+      ],
+      [
+        "IPC",
+        "463"
+      ],
+      [
+        "IPC",
+        "465"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for criminal intimidation?",
+    "sections": [
+      [
+        "BNS",
+        "351"
+      ],
+      [
+        "IPC",
+        "503"
+      ],
+      [
+        "IPC",
+        "506"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for rioting?",
+    "sections": [
+      [
+        "BNS",
+        "191"
+      ],
+      [
+        "IPC",
+        "146"
+      ],
+      [
+        "IPC",
+        "147"
+      ]
+    ]
+  },
+  {
+    "question": "What is an unlawful assembly?",
+    "sections": [
+      [
+        "BNS",
+        "189"
+      ],
+      [
+        "IPC",
+        "141"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for an acid attack?",
+    "sections": [
+      [
+        "BNS",
+        "124"
+      ],
+      [
+        "IPC",
+        "326A"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for stalking?",
+    "sections": [
+      [
+        "BNS",
+        "78"
+      ],
+      [
+        "IPC",
+        "354D"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for voyeurism?",
+    "sections": [
+      [
+        "BNS",
+        "77"
+      ],
+      [
+        "IPC",
+        "354C"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for mischief?",
+    "sections": [
+      [
+        "BNS",
+        "324"
+      ],
+      [
+        "IPC",
+        "425"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for counterfeiting currency?",
+    "sections": [
+      [
+        "BNS",
+        "178"
+      ],
+      [
+        "IPC",
+        "489A"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for attempt to murder?",
+    "sections": [
+      [
+        "BNS",
+        "109"
+      ],
+      [
+        "IPC",
+        "307"
+      ]
+    ]
+  },
+  {
+    "question": "What is wrongful confinement?",
+    "sections": [
+      [
+        "BNS",
+        "127"
+      ],
+      [
+        "IPC",
+        "340"
+      ]
+    ]
+  },
+  {
+    "question": "What is wrongful restraint?",
+    "sections": [
+      [
+        "BNS",
+        "126"
+      ],
+      [
+        "IPC",
+        "339"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for assault?",
+    "sections": [
+      [
+        "BNS",
+        "130"
+      ],
+      [
+        "IPC",
+        "351"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for sexual harassment?",
+    "sections": [
+      [
+        "BNS",
+        "75"
+      ],
+      [
+        "IPC",
+        "354A"
+      ]
+    ]
+  },
+  {
+    "question": "What is abetment of suicide?",
+    "sections": [
+      [
+        "BNS",
+        "108"
+      ],
+      [
+        "IPC",
+        "306"
+      ]
+    ]
+  },
+  {
+    "question": "What is the procedure to file an FIR?",
+    "sections": [
+      [
+        "BNSS",
+        "173"
+      ],
+      [
+        "CrPC",
+        "154"
+      ]
+    ]
+  },
+  {
+    "question": "What is the procedure for arrest without a warrant?",
+    "sections": [
+      [
+        "BNSS",
+        "35"
+      ],
+      [
+        "CrPC",
+        "41"
+      ]
+    ]
+  },
+  {
+    "question": "What is the procedure for issuing a search warrant?",
+    "sections": [
+      [
+        "BNSS",
+        "96"
+      ],
+      [
+        "CrPC",
+        "93"
+      ]
+    ]
+  },
+  {
+    "question": "What is the police report or charge sheet after investigation?",
+    "sections": [
+      [
+        "BNSS",
+        "193"
+      ],
+      [
+        "CrPC",
+        "173"
+      ]
+    ]
+  },
+  {
+    "question": "How does a magistrate take cognizance of an offence?",
+    "sections": [
+      [
+        "BNSS",
+        "210"
+      ],
+      [
+        "CrPC",
+        "190"
+      ]
+    ]
+  },
+  {
+    "question": "What is the order for maintenance of wives and children?",
+    "sections": [
+      [
+        "BNSS",
+        "144"
+      ],
+      [
+        "CrPC",
+        "125"
+      ]
+    ]
+  },
+  {
+    "question": "What is compounding of offences?",
+    "sections": [
+      [
+        "BNSS",
+        "359"
+      ],
+      [
+        "CrPC",
+        "320"
+      ]
+    ]
+  },
+  {
+    "question": "What is relevant under the law of evidence?",
+    "sections": [
+      [
+        "BSA",
+        "3"
+      ]
+    ]
+  },
+  {
+    "question": "What is expert opinion as evidence?",
+    "sections": [
+      [
+        "BSA",
+        "39"
+      ]
+    ]
+  },
+  {
+    "question": "On whom does the burden of proof lie?",
+    "sections": [
+      [
+        "BSA",
+        "104"
+      ],
+      [
+        "BSA",
+        "105"
+      ]
+    ]
+  },
+  {
+    "question": "What is the presumption of legitimacy of a child?",
+    "sections": [
+      [
+        "BSA",
+        "116"
+      ]
+    ]
+  },
+  {
+    "question": "What is the punishment for bigamy?",
+    "sections": [
+      ["BNS", "82"],
+      ["IPC", "494"]
+    ]
+  },
+  {
+    "question": "What is anticipatory bail?",
+    "sections": [
+      ["BNSS", "482"],
+      ["CrPC", "438"]
+    ]
+  },
+  {
+    "question": "What is plea bargaining?",
+    "sections": [
+      ["BNSS", "289"],
+      ["CrPC", "265A"]
+    ]
+  },
+  {
+    "question": "What is a dying declaration?",
+    "sections": [
+      ["BSA", "26"]
+    ]
+  },
+  {
+    "question": "What is a hostile witness?",
+    "sections": [
+      ["BSA", "148"]
+    ]
+  }
+]

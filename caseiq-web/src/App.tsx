@@ -1,5 +1,6 @@
 import { useState } from "react";
 import styles from "./App.module.css";
+import { AppHeader } from "./components/AppHeader";
 import { BrowseByActPage } from "./pages/BrowseByActPage";
 import { NewsPage } from "./pages/NewsPage";
 import { PoliceStationsPage } from "./pages/PoliceStationsPage";
@@ -21,6 +22,7 @@ function App() {
 
   return (
     <>
+      <AppHeader />
       <nav className={styles.nav} aria-label="Main">
         {TABS.map((t) => (
           <button

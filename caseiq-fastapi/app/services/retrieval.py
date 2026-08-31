@@ -47,6 +47,14 @@ _SYNONYM_EXPANSIONS: dict[str, str] = {
     "eve teasing": "outraging modesty",
     "molestation": "assault with intent to outrage modesty",
     "cheating": "cheating and dishonestly inducing delivery of property",
+    # Added 2026-08-31: a marital-abuse query returned "outside the scope of
+    # the criminal statutes" when BNS s.85 / IPC s.498A (cruelty by husband or
+    # relatives) is squarely on point and in the corpus -- same word-choice
+    # gap as dowry harassment above, not a new failure mode.
+    "marital abuse": "cruelty",
+    "domestic violence": "cruelty",
+    "husband beating wife": "cruelty",
+    "in-laws harassment": "cruelty",
 }
 
 
@@ -382,44 +390,68 @@ def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_o
 
 def is_abstention(sections: list[dict]) -> bool:
     """True when there isn't enough evidence to answer -- either nothing was
-    retrieved at all, or the best VECTOR-similarity match is below
-    settings.ABSTENTION_SIMILARITY_THRESHOLD (see that setting's comment for
-    where the number came from and its known false-positive).
+    retrieved at all, or NEITHER ranker found real evidence: no lexical
+    (full-text) hit anywhere in the results, AND the best vector similarity
+    is below settings.ABSTENTION_SIMILARITY_THRESHOLD.
 
-    Deliberately does NOT count a keyword_search fallback (similarity=None
-    on every section) as zero evidence -- that's a distinct, pre-existing
-    mechanism for when vector search finds nothing above RAG_MIN_SIMILARITY,
-    and a literal keyword match (e.g. "murder" hitting a section whose text
-    contains "murder") is real evidence, just of a different kind than a
-    cosine score. Sweeping it into this check would abstain on well-answerable
-    queries that only happen to fall back to keyword search.
+    FIXED 2026-08-31 (real bug, not just message wording): the original
+    version only ever looked at vector_sims, and returned False early ONLY
+    when the list had NO vector-scored entries at all. That condition was
+    true for the old, pre-hybrid keyword_search fallback (vector search
+    found literally nothing, so every result was a keyword-only hit) -- but
+    since hybrid retrieval's RRF fusion (see semantic_search) always draws
+    from a 20-wide VECTOR candidate pool too, `vector_sims` is almost never
+    empty any more, even when the fused top results are actually dominated
+    by strong lexical hits. Caught live: "what can I do about marital
+    abuse" returned IPC 498A, BNS 85/86 (cruelty by husband/relatives --
+    squarely on point) via the lexical ranker, similarity=None, ranked
+    ABOVE several weak vector-only matches in the 0.27-0.28 range -- but the
+    old check only looked at those weak vector scores, decided they were
+    below threshold, and abstained with 498A/85/86 sitting right there in
+    `sections`, ignored. Now: ANY lexical hit present at all is treated as
+    real evidence (a literal word/phrase match, not a guess) and skips the
+    vector-threshold check entirely, regardless of how weak the vector
+    scores in the same result set are.
     """
     if not sections:
         return True
+    if any(s["similarity"] is None for s in sections):
+        return False  # a lexical/full-text hit is real evidence on its own
     vector_sims = [s["similarity"] for s in sections if s["similarity"] is not None]
-    if not vector_sims:
-        return False  # keyword-fallback-only: treat as evidence, don't abstain
     return max(vector_sims) < settings.ABSTENTION_SIMILARITY_THRESHOLD
 
 
 # Multi-word phrases essentially unique to civil-law domains this corpus does not
-# cover (property, tenancy, family, succession, contract) -- deliberately NOT
-# single words like "property" (theft is legitimately "property" too) or
-# "right" (many criminal rights exist). Added 2026-08-30 after finding that
-# LocalEmbedder's hash-based similarity CANNOT separate this from real criminal
-# queries by score alone: a civil easement/right-of-way question measured
-# 0.4768 max similarity, statistically indistinguishable from "punishment for
-# theft" (0.478) and "punishment for defamation" (0.478) on the same corpus --
-# see docs/evaluation.md. No similarity threshold that keeps those two
-# answering can also catch this one; a threshold high enough to catch it
-# (tested 0.55, 0.60) abstains on theft/FIR/dowry too. This is a second,
-# independent, imprecise-by-design signal, not a replacement for the threshold.
+# cover. Added 2026-08-30 after finding that LocalEmbedder's hash-based
+# similarity CANNOT separate this from real criminal queries by score alone: a
+# civil easement/right-of-way question measured 0.4768 max similarity,
+# statistically indistinguishable from "punishment for theft" (0.478) and
+# "punishment for defamation" (0.478) on the same corpus -- see
+# docs/evaluation.md. No similarity threshold that keeps those two answering
+# can also catch this one; a threshold high enough to catch it (tested 0.55,
+# 0.60) abstains on theft/FIR/dowry too. This is a second, independent,
+# imprecise-by-design signal, not a replacement for the threshold.
+#
+# AUDITED 2026-08-31 after a real false-positive risk (not yet observed live,
+# found by review): a marital-cruelty query ("marital abuse") was miscategorised
+# by a *different* bug (the generic abstention message's own wording, fixed
+# below), but reviewing every phrase here for the same failure mode afterward
+# turned up several that a genuinely CRIMINAL query could plausibly contain as
+# incidental context rather than as its actual subject -- "my landlord
+# assaulted me," "he threatened me during our divorce," "she was kidnapped in
+# a custody dispute," "he forged my father's will," "the property dispute
+# turned violent," "he breached the contract and cheated me" (cheating is
+# BNS/IPC territory). Removed: tenancy, eviction, landlord, divorce, child
+# custody, inheritance, will and testament, property dispute, civil suit,
+# breach of contract. A false civil-scope match on a real criminal query is
+# worse than this list missing a real civil one -- is_abstention's similarity
+# check is still there as the other, weaker net. Kept only phrases narrow
+# enough that a criminal-law query mentioning them as context, rather than as
+# its actual subject, is implausible.
 _CIVIL_ONLY_PHRASES = (
     "right of way", "easement", "adverse possession", "prescriptive easement",
-    "tenancy", "eviction", "landlord", "lease agreement", "rent dispute",
-    "divorce", "child custody", "alimony", "maintenance under hindu",
-    "inheritance", "succession certificate", "will and testament", "partition suit",
-    "breach of contract", "specific performance", "civil suit", "property dispute",
+    "lease agreement", "alimony", "maintenance under hindu",
+    "succession certificate", "partition suit", "specific performance",
 )
 
 

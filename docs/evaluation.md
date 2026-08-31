@@ -505,8 +505,93 @@ patch over a known, narrow, manually-discovered gap, not a general solution to t
 lexical/semantic mismatch this whole document keeps documenting from different angles. The fix is
 still a real embedding model.
 
-## Baseline (Recall@5, MRR)
+## Baseline (Recall@5, MRR) — measured (2026-08-31)
 
-Not yet measured — pending the golden set above. Note that the hybrid-retrieval hit-rate measured
-above (6/6 on defined queries) is a narrower, faster proxy for this — it is not a substitute for
-Recall@5/MRR on a real 40–60-pair golden set, which remains the next step.
+**44 question → correct-section pairs**, `docs/golden_set.json`, spanning all five acts. Every
+pair's ground truth was checked against the actual ingested section text before being kept
+(`scripts/build_golden_set.py`) — not asserted from legal knowledge alone. Five candidates
+initially failed an automated keyword sanity check (bigamy, anticipatory bail, plea bargaining,
+dying declaration, hostile witness) and were re-verified by hand: all five sections are real and
+correct, the statute just doesn't use the same word the question does (e.g. anticipatory bail's
+actual heading is "Direction for grant of bail to person apprehending arrest," not the word
+"anticipatory") — which turns out to be the theme of this whole measurement, not just a footnote
+about building it.
+
+**Recall@5 = 0.705 (31/44). MRR = 0.387.** Measured against current hybrid retrieval
+(`scripts/eval_golden_set.py`), top-10 depth.
+
+**11 of 44 (25%) don't appear even in the top 10** — not just outside the top 5:
+*acid attack, assault, arrest without a warrant, search warrant, charge sheet/police report,
+presumption of legitimacy, bigamy, anticipatory bail, plea bargaining, dying declaration, hostile
+witness.* Look at that list next to the finding above: several of these are exactly the
+hand-verified "keyword sanity check failed but the section is correct" cases — the golden set
+independently rediscovered, at 25% prevalence across 44 real questions, the same terminology gap
+that the dowry-harassment/FIR synonym stopgap was built to patch for exactly two phrases. This is
+the measured version of that finding, not a new one: colloquial legal language ("anticipatory
+bail," "hostile witness," "dying declaration," "search warrant") routinely doesn't match the
+statute's own phrasing ("direction for grant of bail to a person apprehending arrest," "witness...
+cross-examined as to previous statements," "statements by persons who cannot be called as
+witnesses," "issue of summons or warrant"), and neither the hash-based vector embedding nor
+lexical full-text search can bridge a synonym they were never given. The curated synonym list
+fixes two of these eleven; extending it to all eleven, and to whatever the next real user's
+phrasing turns out to need, is the wrong direction to keep pushing — it is the same "not a fix"
+already said about that list. A real embedding model remains the actual fix, now with a measured
+number (0.705 / 0.387) behind the argument instead of an anecdote.
+
+**2 of 44 rank 6th** (forgery, mischief) — found, but just outside the standard top-5 cutoff;
+worth noting since RAG_TOP_K/top_k tuning is a much smaller lever than the embedding-model
+question above, but a real one if this number is revisited.
+
+This is the last unmeasured claim this document made. 0.705/0.387 is the honest number to cite
+for this project, not the earlier six-query anecdote (4/6 → 6/6) — that stays in this document as
+the illustrative case for what hybrid retrieval fixed, but the golden set above is the actual
+baseline.
+
+## Bug: a criminal query told it was outside scope (found live, 2026-08-31)
+
+*"What can I do about marital abuse?"* returned *"marital abuse falls under family law, which is
+outside the scope of the criminal statutes I can reference."* Wrong: BNS §85 / IPC §498A (cruelty
+by husband or relatives) are criminal provisions squarely on point and are in the corpus. Two
+separate, real causes, not one:
+
+1. **The generic abstention message's own wording implied a domain diagnosis it never made.**
+   `_ABSTENTION_MESSAGE` used to list example out-of-scope domains ("property, contract, tenancy,
+   family, inheritance") even on the path that fires purely on low similarity, with no domain
+   check at all — the word "family" in a low-confidence response made a plain retrieval miss read
+   as a confident, false claim about what kind of question it was. Same wording existed in the
+   LLM's own system prompt, which is very likely the literal source of the exact phrase quoted
+   above. Both fixed: the message states only what IS covered, not a guess at what isn't; the
+   prompt now explicitly says a relationship (marriage, family) doesn't make something civil, and
+   names cruelty/dowry/domestic violence as in-scope criminal matters by example.
+
+2. **The real mechanical bug**: `is_abstention` only ever checked vector-similarity scores. Hybrid
+   retrieval's RRF fusion draws from a vector candidate pool AND a lexical one every time, so
+   `vector_sims` is now almost never empty — meaning the old "no vector scores at all → treat as
+   keyword-fallback evidence" escape hatch, written for the pre-hybrid keyword-only fallback, had
+   gone essentially dead. For this query, BNS §85/IPC §498A were sitting in the results via the
+   lexical ranker (similarity=`None`, real evidence) while a handful of unrelated vector-only
+   matches scored 0.27–0.28 — and the old check looked only at those weak vector scores, decided
+   they were below the 0.40 threshold, and abstained with the correct answer already in `sections`,
+   ignored. Fixed: any lexical hit anywhere in the results is now treated as real evidence on its
+   own, skipping the vector-threshold check entirely.
+
+3. **`is_civil_scope_mismatch`'s phrase list, audited for the same failure mode afterward**: it
+   never actually matched "marital" or anything like it — that wasn't this bug's mechanism — but
+   the audit found several phrases that a genuinely criminal query could plausibly contain as
+   context rather than as its subject ("my landlord assaulted me," "threatened during our
+   divorce," "kidnapped in a custody dispute," "forged my father's will," "property dispute turned
+   violent"). Removed: tenancy, eviction, landlord, divorce, child custody, inheritance, will and
+   testament, property dispute, civil suit, breach of contract. A false civil-scope match on a
+   real criminal query is worse than this list missing a real civil one.
+
+**Synonym map extended**: `marital abuse`, `domestic violence`, `husband beating wife`,
+`in-laws harassment` → `cruelty` — same stopgap, same caveats as the existing entries. One
+phrasing tested live still misses even after this ("my husband abuses me, what are my legal
+options?" — no shared literal words with the corpus text at all, vector or lexical) — reported
+honestly rather than chased further; it no longer produces a false civil-scope claim either way,
+which was the actual bug.
+
+Regression test: `tests/integration/test_abstention.py::TestMaritalAbuseNotCivil` — asserts the
+phrase list doesn't match, and that a seeded BNS §85-equivalent section is retrieved and does not
+abstain. Verified directly against the live corpus instead (same integration-test-DB limitation
+as the rest of this file): all three fixes confirmed working together, full suite still green.

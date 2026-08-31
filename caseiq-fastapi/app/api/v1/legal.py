@@ -30,17 +30,30 @@ from sqlalchemy import select
 # but not recognisably civil (Titan's methane question, e.g.) -- it still states
 # the corpus's actual scope rather than a bare "not confident".
 _ABSTENTION_MESSAGE = (
+    # FIXED 2026-08-31: this used to list example out-of-scope domains
+    # ("property, contract, tenancy, family, inheritance") even though this
+    # generic path makes NO domain diagnosis at all -- it fires purely on low
+    # similarity (see is_abstention). A marital-cruelty query ("marital
+    # abuse") hit exactly this path (BNS s.85/IPC s.498A weren't retrieved,
+    # unrelated to the civil-phrase check below) and the word "family" in
+    # this message made a pure retrieval miss on a real criminal question
+    # read as a confident, false claim that it was a civil matter. Say only
+    # what's actually true here: what IS covered, not a guess at what isn't.
     "I couldn't find a confident match for this in the BNS, BNSS, BSA, IPC or CrPC text "
-    "I have. CaseIQ's corpus covers Indian criminal law and procedure only -- it doesn't "
-    "include civil matters (property, contract, tenancy, family, inheritance) or other law "
-    "outside those five acts. Rather than guess, I'm not going to answer this one. For "
-    "guidance specific to your situation, please consult a lawyer or your nearest legal aid "
-    "clinic (NALSA helpline: 15100, or https://nalsa.gov.in)."
+    "I have -- CaseIQ only covers Indian criminal law and procedure. Rather than guess, "
+    "I'm not going to answer this one. For guidance specific to your situation, please "
+    "consult a lawyer or your nearest legal aid clinic (NALSA helpline: 15100, or "
+    "https://nalsa.gov.in)."
 )
 _CIVIL_SCOPE_MESSAGE = (
+    # Wording kept in sync with is_civil_scope_mismatch's actual phrase list
+    # (property/tenancy/succession-type civil domains only, as of the
+    # 2026-08-31 audit -- "family" removed after divorce/child-custody were
+    # dropped from that list for false-positive risk). Don't claim a domain
+    # this message's own trigger no longer checks for.
     "CaseIQ covers Indian criminal law and procedure (BNS, BNSS, BSA, IPC, CrPC). This "
-    "appears to be a civil matter -- property, tenancy, contract, family, or inheritance law "
-    "-- which is outside this corpus, so I'm not going to answer it. For guidance specific to "
+    "appears to be a civil matter -- property, tenancy, succession, or a similar civil-law "
+    "area -- which is outside this corpus, so I'm not going to answer it. For guidance specific to "
     "your situation, please consult a lawyer or your nearest legal aid clinic (NALSA "
     "helpline: 15100, or https://nalsa.gov.in)."
 )

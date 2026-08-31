@@ -59,9 +59,29 @@ async function fetchFromAnyMirror() {
   throw lastError ?? new Error("all endpoints failed");
 }
 
+// Names that are essentially never a real police station's own name --
+// a defensive net against upstream OSM mistagging, not a claim that the
+// query itself is wrong. Found by hand (2026-08-31): OSM node 4424542678,
+// name "chaitra cafe," was returned by this exact amenity=police query --
+// the query correctly asked Overpass for amenity=police; the node's own
+// OSM data has it mistagged. Confirmed no other entry in that fetch looked
+// wrong; this filter exists in case a future re-fetch picks up a similar
+// one, so it doesn't require another by-hand scan of every name.
+const SUSPICIOUS_NAME_PATTERN = /\b(cafe|coffee|restaurant|hotel|hospital|school|temple|mandir|masjid|church)\b/i;
+
 const json = await fetchFromAnyMirror();
-const stations = json.elements
-  .filter((el) => el.lat != null && el.lon != null)
+const allElements = json.elements.filter((el) => el.lat != null && el.lon != null);
+const suspicious = allElements.filter((el) => SUSPICIOUS_NAME_PATTERN.test(el.tags?.name ?? ""));
+if (suspicious.length > 0) {
+  console.warn(
+    `WARNING: ${suspicious.length} result(s) tagged amenity=police have a suspicious name -- ` +
+      `review by hand before trusting, likely upstream OSM mistagging, not excluded automatically:`,
+  );
+  for (const el of suspicious) console.warn(`  - ${el.id}: "${el.tags?.name}"`);
+}
+
+const stations = allElements
+  .filter((el) => !SUSPICIOUS_NAME_PATTERN.test(el.tags?.name ?? ""))
   .map((el) => ({
     id: el.id,
     name: el.tags?.name || "Police Station",

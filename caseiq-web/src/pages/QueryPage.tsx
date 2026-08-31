@@ -72,6 +72,7 @@ export function QueryPage() {
           statutes, every answer cites the section it came from.
         </p>
       </header>
+      <div className={styles.rule} aria-hidden="true" />
 
       <form className={styles.form} onSubmit={handleSubmit}>
         <textarea

@@ -8,7 +8,7 @@
   },
   "fetched_at": "2026-08-31T15:20:07.244Z",
   "source": "OpenStreetMap / Overpass API",
-  "count": 77,
+  "count": 76,
   "stations": [
     {
       "id": 347152618,
@@ -310,13 +310,6 @@
       "lat": 19.0672141,
       "lon": 72.9031566,
       "address": "Road No 1, cheedanagar, chembur,mumbai"
-    },
-    {
-      "id": 4424542678,
-      "name": "chaitra cafe",
-      "lat": 19.03502,
-      "lon": 73.1009651,
-      "address": "23, str, mumbai"
     },
     {
       "id": 4621598794,

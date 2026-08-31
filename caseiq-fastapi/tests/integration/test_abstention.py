@@ -22,7 +22,7 @@ from datetime import date
 import pytest
 
 from app.services.embeddings import embedder
-from app.services.retrieval import is_abstention, semantic_search
+from app.services.retrieval import is_abstention, is_civil_scope_mismatch, semantic_search
 from tests.integration.test_corpus import _make_act, _make_version
 
 pytestmark = pytest.mark.integration
@@ -31,6 +31,16 @@ _SECTION_TEXT = (
     "Whoever dishonestly takes any movable property out of the possession of any person "
     "without that person's consent, moves that property in order to such taking, is said "
     "to commit theft of movable property belonging to another."
+)
+
+# Real BNS s.85 text (Husband or relative of husband of a woman subjecting
+# her to cruelty), verified against the live corpus. Used here, not a
+# paraphrase, so this test seeds the actual provision the bug was about.
+_CRUELTY_SECTION_TEXT = (
+    "Husband or relative of husband of a woman subjecting her to cruelty.--Whoever, being "
+    "the husband or the relative of the husband of a woman, subjects such woman to cruelty "
+    "shall be punished with imprisonment for a term which may extend to three years and "
+    "shall also be liable to fine."
 )
 
 
@@ -71,4 +81,45 @@ class TestAbstention:
         sections = await semantic_search(db, "What is the punishment for theft of property?")
 
         assert sections != []
+        assert is_abstention(sections) is False
+
+
+class TestMaritalAbuseNotCivil:
+    """Regression test for a real bug, found live 2026-08-31: a marital-abuse
+    query was told this "falls under family law, outside the scope of the
+    criminal statutes" -- factually wrong, BNS s.85 / IPC s.498A (cruelty by
+    husband or relatives) are criminal provisions squarely on point and are
+    in the corpus. Two distinct causes, both covered here:
+      1. is_civil_scope_mismatch's phrase list must never match a marital/
+         domestic-cruelty query (it didn't, even before the fix -- the false
+         claim came from the generic abstention message's own wording,
+         fixed separately in app/api/v1/legal.py).
+      2. is_abstention must not ignore a real lexical hit (BNS 85/IPC 498A
+         found via full-text search) just because some unrelated vector-only
+         candidates in the same result set score below threshold -- this WAS
+         the real mechanical bug (see is_abstention's docstring).
+    """
+
+    async def _seed_cruelty_section(self, db):
+        act = await _make_act(db, "TESTCRUELTY", commenced_on=date(2023, 1, 1))
+        sv = await _make_version(db, act, "85", _CRUELTY_SECTION_TEXT, date(2023, 1, 1))
+        sv.embedding = await embedder.embed(f"Cruelty. {_CRUELTY_SECTION_TEXT}")
+        await db.commit()
+        return act, sv
+
+    async def test_marital_abuse_query_is_not_civil_scope_mismatch(self, db):
+        for query in [
+            "What can I do about marital abuse?",
+            "My husband abuses me, what are my legal options?",
+            "What is the punishment for marital abuse?",
+        ]:
+            assert is_civil_scope_mismatch(query) is False, query
+
+    async def test_marital_abuse_query_retrieves_cruelty_section_and_does_not_abstain(self, db):
+        await self._seed_cruelty_section(db)
+
+        sections = await semantic_search(db, "What can I do about marital abuse?")
+
+        assert sections != []
+        assert ("TESTCRUELTY", "85") in {(s["act"], s["section"]) for s in sections}
         assert is_abstention(sections) is False
