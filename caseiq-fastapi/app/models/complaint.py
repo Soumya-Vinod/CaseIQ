@@ -42,7 +42,18 @@ class Complaint(UUIDPk, Timestamped, Base):
     witnesses: Mapped[str] = mapped_column(Text, default="")
     evidence_description: Mapped[str] = mapped_column(Text, default="")
     relief_sought: Mapped[str] = mapped_column(Text, default="")
+    # Short citation strings ("BNS 85", "IPC 498A") derived server-side from
+    # retrieved_sections below, for the PDF's compact "Sections:" line. Never
+    # written from client input -- see retrieved_sections' docstring and the
+    # 0006_complaint_grounding migration for why that changed.
     applicable_sections: Mapped[list] = mapped_column(JSONB, default=list)
+    # Full grounded retrieval result (same semantic_search() /legal/query uses),
+    # same shape as QueryResponse.retrieved_sections (app/models/legal.py): act,
+    # section, title, snippet, judicial_status, similarity. Stored so the PDF
+    # and the frontend "sources" panel can be rebuilt from this row alone --
+    # Render's disk is ephemeral, so a later /download call may hit a
+    # container that never ran the original retrieval.
+    retrieved_sections: Mapped[list] = mapped_column(JSONB, default=list)
     generated_draft: Mapped[str | None] = mapped_column(Text)
     pdf_path: Mapped[str | None] = mapped_column(String(500))
     language: Mapped[str] = mapped_column(String(5), default="en")

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.models.complaint import ComplaintType
 from app.schemas.common import ORMModel
+from app.schemas.legal import RetrievedSection
 
 
 class ComplaintIn(BaseModel):
@@ -21,16 +22,16 @@ class ComplaintIn(BaseModel):
     witnesses: str = ""
     evidence_description: str = ""
     relief_sought: str = ""
-    # FLAGGED 2026-08-11, not fixed: caller-supplied, free-form, and never
-    # checked against section_versions/judicial_status before reaching
-    # generate_complaint_draft() (app/api/v1/complaints.py). This is a
-    # different, more basic gap than the K2 audit's "does this path filter
-    # struck-down sections" question -- this path doesn't query the DB for
-    # section content AT ALL, so a caller (or a not-yet-rewired frontend)
-    # could hand the LLM "IPC 497" and nothing here would catch that it's
-    # struck down, or that it doesn't exist, before it lands in a generated
-    # legal complaint PDF. See docs/caseiq-industry-readiness.md Part C/K.
-    applicable_sections: list[str] = []
+    # FIXED 2026-09-01: `applicable_sections` used to be accepted here as a
+    # caller-supplied, free-form list and handed straight to the LLM as fact
+    # -- flagged 2026-08-11, never checked against section_versions/
+    # judicial_status, so a caller (or a not-yet-rewired frontend) could hand
+    # the LLM "IPC 497" and nothing would catch that it's struck down or
+    # doesn't exist before it landed in a generated legal complaint PDF. The
+    # field is removed from client input entirely: the server now runs the
+    # same semantic_search() /legal/query uses against the incident
+    # narrative and stores what it actually found (Complaint.retrieved_sections).
+    # See docs/caseiq-industry-readiness.md Part C/K.
     language: str = "en"
 
 
@@ -43,3 +44,12 @@ class ComplaintOut(ORMModel):
     pdf_available: bool = False
     download_url: str | None = None
     disclaimer: str
+    # Same treatment as QueryOut.legal_sections -- the sections CaseIQ actually
+    # matched against the incident narrative, with their text, so the user can
+    # see what law the draft rests on rather than trusting an opaque letter.
+    legal_sections: list[RetrievedSection] = []
+    # True when retrieval found nothing confidently relevant to the incident
+    # narrative -- mirrors QueryOut.abstained. The draft still generates (a
+    # complaint form isn't a yes/no legal question), but cites no sections and
+    # says so plainly, rather than the LLM inventing a plausible one.
+    grounded: bool = True

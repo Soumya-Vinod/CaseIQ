@@ -44,6 +44,17 @@ _SYNONYM_EXPANSIONS: dict[str, str] = {
     "fir": "information in cognizable cases",
     "first information report": "information in cognizable cases",
     "dowry harassment": "cruelty",
+    # Added 2026-09-01: found auditing the complaint-drafting path (a real
+    # dowry-cruelty incident narrative, not a short direct question like
+    # "dowry harassment"), free-form prose phrases it differently enough
+    # that the existing "dowry harassment" entry's exact phrase match never
+    # fires. "dowry demand" and "dowry demands" both needed as separate keys
+    # -- expand_query_synonyms word-boundary-matches (`\bphrase\b`), and `s`
+    # is a word character, so "dowry demand\b" does not match inside
+    # "demands". Verified this actually surfaces BNS 86 (cruelty by husband
+    # or relatives) for the failing narrative before adding it, not guessed.
+    "dowry demand": "cruelty",
+    "dowry demands": "cruelty",
     "eve teasing": "outraging modesty",
     "molestation": "assault with intent to outrage modesty",
     "cheating": "cheating and dishonestly inducing delivery of property",
@@ -252,6 +263,37 @@ async def _vector_candidates(
     return out
 
 
+_LEXICAL_OR_JOIN_THRESHOLD = 10  # see _lexical_query_text
+
+
+def _lexical_query_text(query: str) -> str:
+    """FIXED 2026-09-01, found building complaint-draft grounding (app/api/v1/
+    complaints.py): websearch_to_tsquery ANDs every bare word by default (see
+    expand_query_synonyms' docstring -- this was already known and worked
+    around there for the short curated-synonym addition, but never applied to
+    the query text itself). /legal/query only ever sends short questions
+    (6-8 words), where requiring every word to match is precisely what makes
+    the AND precise. A complaint's incident narrative is a full paragraph
+    (confirmed directly via EXPLAIN: a 19-significant-term AND against a real
+    dowry-cruelty narrative matched ZERO rows, even though the narrative
+    contains "cruelty" verbatim and BNS 85/86 literally define that offense --
+    no real section's text contains all 19 of the complainant's own words).
+    Long input is OR-joined into a disjunction instead, ranked by ts_rank_cd's
+    match density (same "or"-joining mechanism expand_query_synonyms already
+    uses for the same underlying reason) -- short queries pass through
+    unchanged, so this doesn't touch the already-verified short-query
+    precision /legal/query relies on.
+    """
+    words = re.findall(r"\w+", query)
+    if len(words) <= _LEXICAL_OR_JOIN_THRESHOLD:
+        return query
+    seen: list[str] = []
+    for w in words:
+        if w not in seen:
+            seen.append(w)
+    return " or ".join(seen)
+
+
 async def _lexical_candidates(
     db: AsyncSession, query: str, as_of: date, incident_date: date | None, k: int,
 ) -> list[tuple[tuple, SectionVersion, str, dict | None]]:
@@ -263,7 +305,7 @@ async def _lexical_candidates(
     make, because the query's hash and the section's hash land in different
     buckets regardless of the shared word.
     """
-    tsquery = func.websearch_to_tsquery("english", query)
+    tsquery = func.websearch_to_tsquery("english", _lexical_query_text(query))
     rank = func.ts_rank_cd(SectionVersion.search_vector, tsquery).label("rank")
     stmt = (
         select(SectionVersion, Act.act_code, *_judicial_cols())

@@ -595,3 +595,55 @@ Regression test: `tests/integration/test_abstention.py::TestMaritalAbuseNotCivil
 phrase list doesn't match, and that a seeded BNS §85-equivalent section is retrieved and does not
 abstain. Verified directly against the live corpus instead (same integration-test-DB limitation
 as the rest of this file): all three fixes confirmed working together, full suite still green.
+
+## Grounding the complaint-drafting path (2026-09-01)
+
+`/complaints` never had retrieval wired in at all — `generate_complaint_draft` took a
+caller-supplied `applicable_sections: list[str]` and handed it to the LLM as fact, with no
+`semantic_search()` call anywhere in the path (flagged 2026-08-11 in
+`app/schemas/complaint.py`, never fixed). Fixed: `applicable_sections` removed from client input
+entirely; the server now runs the same retrieval `/legal/query` uses against the incident
+narrative and stores what it actually found (`Complaint.retrieved_sections`, migration
+`0006_complaint_grounding`). `generate_complaint_draft`'s prompt carries the same "cite ONLY
+what you were given" contract as `_STRUCTURED_PROMPT`.
+
+Building this surfaced two retrieval bugs that had never mattered before, because `/legal/query`
+never sends input long enough to trigger them:
+
+1. **`websearch_to_tsquery` ANDs every word by default** (already known — see
+   `expand_query_synonyms`'s docstring — but never applied to the raw query text itself). A
+   6-8 word question ANDs fine; a full incident-narrative paragraph does not. Verified directly:
+   a real dowry-cruelty narrative containing the literal word "cruelty" produced a 19-term AND
+   tsquery that matched **zero** rows, even though BNS §85/86 and IPC §498A all contain that word
+   verbatim — full-text search contributed nothing, silently, for every long query. Fixed:
+   `_lexical_query_text()` OR-joins the query's words instead of AND-ing them once the word count
+   passes a threshold (10) comfortably above any real `/legal/query` question, so the already-verified
+   short-query precision is untouched — confirmed by re-running the theft/defamation/murder/
+   marital-abuse/Titan/easement battery after the change, all unchanged.
+2. **`relief_sought` pollutes retrieval when included in the query text**: "Registration of FIR
+   and protection order" contains "FIR", which `expand_query_synonyms` expands to "information in
+   cognizable cases" — outranking the actual offense sections with CrPC §154/155 (FIR filing
+   *procedure*, not the offense itself). Fixed: the retrieval query is built from
+   `incident_description` + `accused_details` only; relief sought describes the remedy asked for,
+   not what happened.
+
+Also added: `dowry demand`/`dowry demands` → `cruelty` to the synonym map (the existing `dowry
+harassment` entry doesn't match this phrasing — word-boundary matched, and "demands" isn't
+"demand"). All three fixes verified together against the real corpus before/after: the same
+dowry-cruelty narrative now grounds on IPC §498A; a genuine civil narrative (tenancy deposit
+dispute) and a genuine out-of-corpus one (consumer warranty dispute) both correctly produce a
+draft that names **no** specific section, stating plainly that the applicable provision
+couldn't be confidently matched — this is the property that actually matters, and it held even
+when retrieval returned weak/irrelevant sections rather than none at all (`is_civil_scope_mismatch`
+still won't catch every real civil narrative — same phrase-list tradeoff as above, accepted for
+the same reason: a false positive on a criminal query is worse than a miss on a civil one).
+
+**PDF font bug, found not assumed**: reportlab's built-in fonts (Helvetica etc.) are Latin-only
+(WinAnsiEncoding). Rendered Devanagari text through Helvetica and extracted the resulting PDF's
+text layer back out — it came back as literal `■` (U+25A0, one per glyph), not the actual text.
+The old Django `pdf_service.py` had the same gap (never registered a non-Latin font either).
+Fixed by vendoring Noto Sans Devanagari/Tamil (OFL-licensed) under `app/assets/fonts/` and
+registering them with reportlab, selected by `Complaint.language`; re-verified the same
+round-trip afterward and got the real Devanagari/Tamil text back, not boxes. Known limitation,
+documented rather than hidden: these are variable fonts (reportlab registers one static weight),
+so hi/mr/ta body text has no separate bold face.

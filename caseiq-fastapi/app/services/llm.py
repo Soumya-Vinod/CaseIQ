@@ -215,11 +215,46 @@ class LLMService:
         except Exception:
             return "en"
 
-    async def generate_complaint_draft(self, data: dict) -> str:
+    async def generate_complaint_draft(self, data: dict, *, rag_context: str, language: str = "en") -> str:
+        """FIXED 2026-09-01: this used to ask the LLM to write "applicable
+        sections" itself as free narrative text, with no retrieved sections
+        passed in at all -- the same ungrounded-citation failure mode
+        /legal/query's _STRUCTURED_PROMPT already guards against, just never
+        applied here. Same contract now: the ONLY sections this may cite are
+        the ones in rag_context (built by retrieval.build_rag_context from a
+        real semantic_search() call against the incident narrative, in
+        app/api/v1/complaints.py). A complaint a user might actually file is a
+        worse place for an invented section number than a wrong search
+        result -- see docs/evaluation.md.
+        """
+        rag_block = (
+            f"\n{rag_context}\n"
+            if rag_context
+            else "\nNo retrieved sections were found relevant to this incident.\n"
+        )
+        lang_note = {
+            "hi": "Write the letter body in Hindi. Keep section/act names (e.g. 'BNS Section 85') in English.",
+            "mr": "Write the letter body in Marathi. Keep section/act names (e.g. 'BNS Section 85') in English.",
+            "ta": "Write the letter body in Tamil. Keep section/act names (e.g. 'BNS Section 85') in English.",
+        }.get(language, "")
         prompt = (
             "You are an expert Indian legal document writer. Generate a formal complaint letter "
-            "with: header, subject, detailed narrative, accused details, evidence, applicable "
-            "sections, relief sought, declaration, signature block. Formal legal language, no commentary.\n\n"
+            "narrative with: subject line, detailed factual narrative, evidence summary, relief "
+            "sought. Formal legal language, no commentary. Do NOT include a header, letterhead, "
+            "salutation, complainant/accused/police-station address block, declaration, or "
+            "signature block -- the PDF renderer already lays those out from structured fields "
+            "elsewhere in the document; repeating them here duplicates the letter. Do NOT use "
+            "markdown formatting (no **bold**, no '---' rules, no headings) -- plain prose only, "
+            "the PDF renderer is not a markdown engine.\n"
+            f"{rag_block}"
+            "GROUNDING: the sections above (if any) are the ONLY statutory sections, acts, or "
+            "punishments you may name anywhere in this letter. Do not invent a section number, "
+            "act, or citation that was not given to you above. If no sections were retrieved, "
+            "write the factual narrative and relief sought WITHOUT naming any specific section or "
+            "act -- say plainly that the applicable provisions could not be confidently matched "
+            "and should be identified by the reviewing officer or advocate. An unsupported "
+            "citation in a document someone might actually file is worse than no citation.\n"
+            f"{lang_note}\n\n"
             + "\n".join(f"{k}: {v}" for k, v in data.items())
         )
         return await self._call([{"role": "user", "content": prompt}], temperature=0.05, max_tokens=2000)

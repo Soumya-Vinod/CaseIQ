@@ -473,11 +473,6 @@ export interface components {
              */
             relief_sought: string;
             /**
-             * Applicable Sections
-             * @default []
-             */
-            applicable_sections: string[];
-            /**
              * Language
              * @default en
              */
@@ -506,6 +501,16 @@ export interface components {
             download_url?: string | null;
             /** Disclaimer */
             disclaimer: string;
+            /**
+             * Legal Sections
+             * @default []
+             */
+            legal_sections: components["schemas"]["RetrievedSection"][];
+            /**
+             * Grounded
+             * @default true
+             */
+            grounded: boolean;
         };
         /**
          * ComplaintType
