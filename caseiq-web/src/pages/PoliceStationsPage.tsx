@@ -44,7 +44,21 @@ L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, 
 // Required fallback path, not an edge case: shown whenever geolocation is
 // denied, unsupported, or times out.
 const MUMBAI_CENTER: [number, number] = [19.076, 72.8777];
-const SEARCH_RADIUS_M = 5000;
+// FIXED 2026-09-02: this used to be a hard cutoff on the cached path too --
+// found via a full grid-scan of the cached bbox (~2km spacing), not
+// assumed: 58% of the bbox's claimed area has ZERO cached stations within
+// 5km, because the 76 cached stations are geographically denser than the
+// bbox they're checked against implies (real station lat/lon range is
+// visibly smaller than the bbox, and uneven within it -- an OSM tagging-
+// density fact, not something this app controls). Any geolocation landing
+// in that 58% correctly used the cache (it's inside the bbox) and then
+// correctly computed zero results, because real, present stations farther
+// than 5km were being discarded rather than shown. 10km is now only the
+// LIVE Overpass query's own server-side search radius and the distance
+// past which the UI notes cached coverage is thin -- the cached path
+// itself no longer hard-filters by distance at all; see below.
+const SEARCH_RADIUS_M = 10000;
+const NOTE_THIN_COVERAGE_KM = 8; // nearest cached match beyond this gets an honest note, not a cutoff
 const MAX_RESULTS = 20; // capped, not unbounded -- see fetchOverpass
 
 // Public, unmetered mirrors -- tried in order, first success wins. No API
@@ -173,9 +187,15 @@ export function PoliceStationsPage() {
       setError(null);
       try {
         if (isWithinCachedRegion(center)) {
+          // FIXED: no distance filter here any more -- see SEARCH_RADIUS_M's
+          // comment. The nearest cached station is always more useful than
+          // "none found", however far it turns out to be; the UI shows the
+          // real distance on every card, and a note appears separately when
+          // even the nearest one is far enough that "thin coverage here" is
+          // the honest read, rather than silently returning distant results
+          // with no context.
           const list: Station[] = cachedStations.stations
             .map((s) => ({ ...s, distanceKm: haversineKm(center, [s.lat, s.lon]) }))
-            .filter((s) => s.distanceKm <= SEARCH_RADIUS_M / 1000)
             .sort((a, b) => a.distanceKm - b.distanceKm)
             .slice(0, MAX_RESULTS);
           setStations(list);
@@ -251,10 +271,8 @@ export function PoliceStationsPage() {
       <header className={styles.header}>
         <p className={styles.eyebrow}>Find help nearby</p>
         <h1 className={styles.title}>Nearest police stations</h1>
-        <p className={styles.subtitle}>
-          Map data from OpenStreetMap volunteers, not Google — no billing account, no watermark.
-        </p>
       </header>
+      <div className={styles.rule} aria-hidden="true" />
 
       {geoStatus === "denied" && (
         <>
@@ -290,6 +308,12 @@ export function PoliceStationsPage() {
 
       {loading && <p className={styles.loading}>Finding nearby stations…</p>}
       {error && <div className={styles.errorBox}>{error}</div>}
+
+      {!loading && !error && stations && stations.length > 0 && stations[0].distanceKm > NOTE_THIN_COVERAGE_KM && (
+        <p className={styles.geoNote}>
+          Cached coverage is thinner here — the nearest match is {stations[0].distanceKm.toFixed(0)} km away.
+        </p>
+      )}
 
       {!loading && !error && stations && stations.length === 0 && (
         <div className={styles.empty}>

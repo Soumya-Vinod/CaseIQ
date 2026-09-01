@@ -82,7 +82,10 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
 
       {hasWhatApplies && (
         <div className={styles.block}>
-          <h2 className={styles.blockTitle}>What applies</h2>
+          <div className={styles.blockHeading}>
+            <span className={styles.blockNumber} aria-hidden="true">I</span>
+            <h2 className={styles.blockTitle}>What applies</h2>
+          </div>
 
           {nonEmptyArray(sd.laws_applicable) && (
             <ul className={styles.lawList}>
@@ -97,9 +100,6 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
                   {nonEmptyString(law.title) && <p className={styles.lawTitle}>{law.title}</p>}
                   {nonEmptyString(law.why_applies) && (
                     <p className={styles.lawWhy}>{law.why_applies}</p>
-                  )}
-                  {nonEmptyString(law.ipc_equivalent ?? undefined) && (
-                    <p className={styles.ipcEquivalent}>IPC equivalent: {law.ipc_equivalent}</p>
                   )}
                 </li>
               ))}
@@ -118,12 +118,6 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
                       <PunishField label="Imprisonment" value={p.imprisonment} />
                     )}
                     {nonEmptyString(p.fine) && <PunishField label="Fine" value={p.fine} />}
-                    {nonEmptyString(p.bailable) && (
-                      <PunishField label="Bail" value={p.bailable} />
-                    )}
-                    {nonEmptyString(p.cognizable) && (
-                      <PunishField label="Type" value={p.cognizable} />
-                    )}
                   </div>
                 </div>
               ))}
@@ -134,7 +128,12 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
 
       {hasWhatToDo && (
         <div className={styles.block}>
-          <h2 className={styles.blockTitle}>What to do</h2>
+          <div className={styles.blockHeading}>
+            <span className={styles.blockNumber} aria-hidden="true">
+              {hasWhatApplies ? "II" : "I"}
+            </span>
+            <h2 className={styles.blockTitle}>What to do</h2>
+          </div>
 
           {nonEmptyArray(sd.immediate_steps) && (
             <ol className={styles.stepList}>
@@ -180,7 +179,6 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
                   {nonEmptyString(r.explanation) && (
                     <p className={styles.rightExplanation}>{r.explanation}</p>
                   )}
-                  {nonEmptyString(r.law) && <span className={styles.rightLaw}>{r.law}</span>}
                 </li>
               ))}
             </ul>

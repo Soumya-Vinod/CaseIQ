@@ -11,6 +11,7 @@ from app.models.corpus import (
 )
 from app.models.legal import LegalQuery, LegalSection, QueryResponse
 from app.models.news import LegalNewsArticle
+from app.models.offence_attributes import OffenceAttributes
 from app.models.user import User
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "JudicialStatus",
     "LegalQuery",
     "LegalSection",
+    "OffenceAttributes",
     "QueryResponse",
     "SectionVersion",
     "LegalNewsArticle",

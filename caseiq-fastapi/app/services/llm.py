@@ -15,6 +15,24 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import logger
 
+# FIXED 2026-09-02: this schema used to ask for three fields with no possible
+# grounding, shipping as fact in every live answer: `ipc_equivalent` (a
+# fabricated IPC<->BNS cross-reference -- the exact mapping this project
+# explicitly refused to hand-build for a Part 2 feature on fabrication
+# grounds, arriving through the side door of a per-query LLM guess instead;
+# see docs/evaluation.md), `bailable`/`cognizable` (this classification lives
+# in CrPC's First Schedule, which is deliberately EXCLUDED from ingestion --
+# see app/legal_corpus/parsing/schedule_exclusion.py -- so it isn't in the
+# corpus for the LLM to ground on; confirmed directly: `category` is empty
+# for every section_versions row, and only 56 of ~2155 sections' own text
+# even mentions the words "bailable"/"cognizable"), and `your_rights[].law`
+# (whose own example was "Article 39A" -- a constitutional citation, and this
+# prompt's own first paragraph says constitutional law is out of scope; a
+# citation this schema could never possibly ground). All three removed from
+# the schema entirely rather than left in "only fill if grounded" -- see
+# generate_complaint_draft's identical no-value-if-ungrounded contract for a
+# case where that softer instruction is appropriate: there, the alternative
+# is a plain sentence saying so; here, an empty field is that "say so".
 _STRUCTURED_PROMPT = """You are CaseIQ — India's AI legal-awareness assistant. Your ONLY source of \
 statutory law is BNS 2023, BNSS 2023, BSA 2023, IPC 1860 and CrPC 1973 -- criminal law and \
 procedure. You do NOT cover constitutional law or purely civil matters like property disputes, \
@@ -35,7 +53,10 @@ section number, a doctrine, or a punishment from your own knowledge to fill the 
 conversational_summary that you don't have a grounded answer for this, and leave laws_applicable \
 and punishments as empty arrays. An answer with no supporting retrieved section is exactly the \
 failure this project exists to prevent -- a partial or absent answer is always preferable to one \
-you supplied from memory.
+you supplied from memory. This applies to every field below, not just section numbers: do not \
+state a bail/cognizability classification, a cross-Act equivalent section, or a citation to any \
+act or article outside BNS/BNSS/BSA/IPC/CrPC, unless the retrieved section's own text actually \
+says so. Leave the field out rather than fill it from what you'd generally expect to be true.
 
 REQUIRED SCHEMA:
 {{
@@ -44,12 +65,11 @@ REQUIRED SCHEMA:
     "situation_overview": "2-3 plain-language sentences on the legal nature of this situation",
     "severity": "low | medium | high | critical",
     "severity_reason": "one sentence",
-    "laws_applicable": [{{"act": "BNS 2023", "section": "303", "title": "Theft", "why_applies": "...", "ipc_equivalent": "IPC 378"}}],
-    "punishments": [{{"offence": "Theft", "imprisonment": "Up to 3 years", "fine": "As court decides", "bailable": "Bailable", "cognizable": "Cognizable"}}],
+    "laws_applicable": [{{"act": "BNS 2023", "section": "303", "title": "Theft", "why_applies": "..."}}],
+    "punishments": [{{"offence": "Theft", "imprisonment": "Up to 3 years", "fine": "As court decides"}}],
     "immediate_steps": [{{"step": 1, "action": "...", "details": "...", "urgency": "immediate | within_24h | within_week"}}],
     "critical_deadlines": [{{"deadline": "24 hours", "what": "...", "consequence": "..."}}],
-    "your_rights": [{{"right": "...", "explanation": "...", "law": "Article 39A"}}],
-    "helplines": [{{"name": "Police Emergency", "number": "112", "when": "Life-threatening situations"}}],
+    "your_rights": [{{"right": "...", "explanation": "..."}}],
     "dos_and_donts": {{"dos": ["..."], "donts": ["..."]}}
   }}
 }}

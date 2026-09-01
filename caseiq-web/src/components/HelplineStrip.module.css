@@ -1,0 +1,33 @@
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-right: 0.2rem;
+}
+
+.link {
+  color: var(--gold);
+  text-decoration: none;
+  font-weight: 600;
+  /* A tap target this small competing with a text line would force
+     awkward spacing at 390px -- min-height alone (no padding box) keeps
+     the line compact while still giving each link a real tap area via
+     line-height + inline padding rather than a boxed button. */
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+}
+
+.sep {
+  margin-left: 0.4rem;
+  color: var(--text-dim);
+}

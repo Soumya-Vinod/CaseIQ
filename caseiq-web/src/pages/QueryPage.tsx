@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type { QueryOut } from "../api/types";
 import { AbstentionCard } from "../components/AbstentionCard";
 import { AnswerBriefing } from "../components/AnswerBriefing";
+import { HelplineStrip } from "../components/HelplineStrip";
 import { RelatedQuestions } from "../components/RelatedQuestions";
 import { SourcesPanel } from "../components/SourcesPanel";
 import styles from "./QueryPage.module.css";
@@ -91,7 +92,7 @@ export function QueryPage() {
 
       {!result && !loading && !error && (
         <div className={styles.examples}>
-          <p className={styles.examplesLabel}>Try one of these — verified to answer correctly:</p>
+          <p className={styles.examplesLabel}>Try one of these</p>
           <div className={styles.exampleList}>
             {EXAMPLE_QUESTIONS.map((q) => (
               <button
@@ -115,6 +116,7 @@ export function QueryPage() {
           <AbstentionCard
             message={result.conversational_summary}
             confidence={result.confidence_score}
+            helplines={result.helplines}
           />
         </section>
       )}
@@ -138,6 +140,10 @@ export function QueryPage() {
           <section className={styles.sourcesSection}>
             <SourcesPanel sections={result.legal_sections} />
           </section>
+
+          <div className={styles.helplineRow}>
+            <HelplineStrip helplines={result.helplines} />
+          </div>
         </>
       )}
 

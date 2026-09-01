@@ -543,6 +543,19 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HelplineOut */
+        HelplineOut: {
+            /** Name */
+            name: string;
+            /** Number */
+            number: string;
+            /** When To Use */
+            when_to_use: string;
+            /** Source Url */
+            source_url: string;
+            /** Verified On */
+            verified_on: string;
+        };
         /** JudicialStatusOut */
         JudicialStatusOut: {
             /** Status */
@@ -595,6 +608,27 @@ export interface components {
             tags: unknown[];
             /** Is Featured */
             is_featured: boolean;
+        };
+        /** OffenceAttributesOut */
+        OffenceAttributesOut: {
+            /** Cognizable Raw */
+            cognizable_raw: string;
+            /** Cognizable */
+            cognizable?: boolean | null;
+            /** Bailable Raw */
+            bailable_raw: string;
+            /** Bailable */
+            bailable?: boolean | null;
+            /** Compoundable */
+            compoundable?: boolean | null;
+            /** Compoundable With Permission */
+            compoundable_with_permission?: boolean | null;
+            /** Compoundable By */
+            compoundable_by?: string | null;
+            /** Triable By */
+            triable_by: string;
+            /** Source */
+            source: string;
         };
         /** PreviousVersionOut */
         PreviousVersionOut: {
@@ -663,6 +697,11 @@ export interface components {
             as_of: string;
             /** Corpus Version Id */
             corpus_version_id?: string | null;
+            /**
+             * Helplines
+             * @default []
+             */
+            helplines: components["schemas"]["HelplineOut"][];
         };
         /** RefreshIn */
         RefreshIn: {
@@ -722,6 +761,7 @@ export interface components {
              */
             recently_amended: boolean;
             judicial_status?: components["schemas"]["JudicialStatusOut"] | null;
+            offence_attributes?: components["schemas"]["OffenceAttributesOut"] | null;
         };
         /**
          * SectionDetailOut

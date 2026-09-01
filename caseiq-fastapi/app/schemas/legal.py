@@ -30,6 +30,18 @@ class JudicialStatusOut(BaseModel):
     scope_note: str = ""
 
 
+class OffenceAttributesOut(BaseModel):
+    cognizable_raw: str
+    cognizable: bool | None = None  # None = genuinely conditional, per the schedule's own wording
+    bailable_raw: str
+    bailable: bool | None = None
+    compoundable: bool | None = None
+    compoundable_with_permission: bool | None = None
+    compoundable_by: str | None = None
+    triable_by: str
+    source: str
+
+
 class RetrievedSection(BaseModel):
     act: str
     section: str
@@ -48,6 +60,14 @@ class RetrievedSection(BaseModel):
     # row); fetch it via GET /knowledge/sections/{act}/{section}.
     recently_amended: bool = False
     judicial_status: JudicialStatusOut | None = None
+    # C1: real cognizable/bailable/court classification, joined from
+    # offence_attributes (app.services.retrieval.attach_offence_attributes)
+    # -- never LLM output. None means literally "no row in our data" -- an
+    # explicit third state a consumer must render as such, not as blank
+    # (which would read as "not a special classification" -- worse than
+    # the LLM guess this replaced). Coverage is partial by design; see
+    # docs/evaluation.md for the current figure.
+    offence_attributes: OffenceAttributesOut | None = None
 
 
 class PreviousVersionOut(BaseModel):
@@ -74,6 +94,14 @@ class SectionDetailOut(BaseModel):
     judicial_status: JudicialStatusOut | None = None
 
 
+class HelplineOut(BaseModel):
+    name: str
+    number: str
+    when_to_use: str
+    source_url: str
+    verified_on: str
+
+
 class QueryOut(BaseModel):
     query_id: UUID
     original_query: str
@@ -98,6 +126,14 @@ class QueryOut(BaseModel):
     # yet (e.g. a fresh dev DB before the first ingest run) -- absence is a
     # queryable fact, not silently defaulted to a fake id.
     corpus_version_id: UUID | None = None
+    # C4: a small, static, hand-verified table (app.services.helplines) --
+    # never LLM output, never in a prompt. Same on every response,
+    # abstained or not, since it's a reference list, not query-specific;
+    # the abstention state is where it matters most (see AbstentionCard),
+    # since that's the one path with nowhere else to send someone. See
+    # docs/evaluation.md for the incident this replaces ("1516" / "1800-
+    # 111-222", both fabricated, both wrong).
+    helplines: list[HelplineOut] = []
 
 
 class SituationIn(BaseModel):

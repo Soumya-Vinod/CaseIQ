@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.corpus import Act, JudicialStatus, SectionVersion
+from app.models.offence_attributes import OffenceAttributes
 from app.services.embeddings import embedder
 
 # Hand-curated stopgap for a semantic-embedding gap, added 2026-08-30 after
@@ -372,7 +373,7 @@ async def semantic_search(
     ]
 
     if results:
-        return results
+        return await attach_offence_attributes(db, results)
     return await keyword_search(db, query, top_k, as_of=as_of, incident_date=incident_date)
 
 
@@ -406,11 +407,12 @@ async def keyword_search(
         stmt = stmt.where(Act.act_code.in_(acts_for_incident_date(incident_date)))
     stmt = stmt.limit(top_k)
     rows = (await db.execute(stmt)).all()
-    return [
+    results = [
         _serialise(sv, act_code, None, as_of,
                    judicial_status_dict(j_status, j_case, j_citation, j_court, j_decided, j_scope))
         for sv, act_code, j_status, j_case, j_citation, j_court, j_decided, j_scope in rows
     ]
+    return await attach_offence_attributes(db, results)
 
 
 def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_of: date,
@@ -428,6 +430,45 @@ def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_o
         "recently_amended": _is_recently_amended(sv, as_of),
         "judicial_status": judicial_status,
     }
+
+
+async def attach_offence_attributes(db: AsyncSession, sections: list[dict]) -> list[dict]:
+    """C1: attach real cognizable/bailable/court classification to a batch of
+    already-retrieved sections, joined from `offence_attributes` (parsed
+    from CrPC's First Schedule -- see scripts/parse_crpc_schedule.py and
+    docs/evaluation.md) -- never generated. Coverage is intentionally
+    partial (221/381... see docs/evaluation.md for the current figure): a
+    section this table has no row for gets `offence_attributes: None`, an
+    explicit "no row in our data" state a consumer must render as such, not
+    as silence that could read as "not a special classification" -- see
+    RetrievedSection.offence_attributes' own docstring for the three states
+    this must never be confused between.
+
+    One batched query for the whole page of results, not N+1 -- `top_k` is
+    small (single digits) but this runs on every query.
+    """
+    if not sections:
+        return sections
+    pairs = {(s["act"], s["section"]) for s in sections}
+    stmt = select(OffenceAttributes).where(
+        or_(*[
+            and_(OffenceAttributes.act == act, OffenceAttributes.section_number == section)
+            for act, section in pairs
+        ])
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    by_key = {(r.act, r.section_number): r for r in rows}
+    for s in sections:
+        r = by_key.get((s["act"], s["section"]))
+        s["offence_attributes"] = None if r is None else {
+            "cognizable_raw": r.cognizable_raw, "cognizable": r.cognizable,
+            "bailable_raw": r.bailable_raw, "bailable": r.bailable,
+            "compoundable": r.compoundable,
+            "compoundable_with_permission": r.compoundable_with_permission,
+            "compoundable_by": r.compoundable_by,
+            "triable_by": r.triable_by, "source": r.source,
+        }
+    return sections
 
 
 def is_abstention(sections: list[dict]) -> bool:

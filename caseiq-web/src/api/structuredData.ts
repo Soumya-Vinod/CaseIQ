@@ -7,6 +7,15 @@
  * every field is optional and every consumer must check before rendering --
  * never assume a field exists just because it's listed here. On the
  * abstention path this is always `{}`.
+ *
+ * FIXED 2026-09-02: `laws_applicable[].ipc_equivalent`, `punishments[].bailable`/
+ * `.cognizable`, and `your_rights[].law` removed -- the prompt no longer asks
+ * for them. All three were fields the corpus has no way to ground (no IPC<->BNS
+ * mapping exists anywhere -- see docs/evaluation.md; bail/cognizability
+ * classification lives in CrPC's First Schedule, deliberately excluded from
+ * ingestion; and constitutional articles are explicitly out of this corpus's
+ * scope), so every value shown for them was an LLM memory guess rendered as
+ * if it were a corpus fact.
  */
 export interface StructuredData {
   situation_overview?: string;
@@ -17,14 +26,11 @@ export interface StructuredData {
     section?: string;
     title?: string;
     why_applies?: string;
-    ipc_equivalent?: string | null;
   }[];
   punishments?: {
     offence?: string;
     imprisonment?: string;
     fine?: string;
-    bailable?: string;
-    cognizable?: string;
   }[];
   immediate_steps?: {
     step?: number;
@@ -40,7 +46,6 @@ export interface StructuredData {
   your_rights?: {
     right?: string;
     explanation?: string;
-    law?: string;
   }[];
   dos_and_donts?: {
     dos?: string[];

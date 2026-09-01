@@ -60,6 +60,7 @@ export function SectionLookupPage() {
           excluded — so you can see it's dead law instead of finding nothing.
         </p>
       </header>
+      <div className={styles.rule} aria-hidden="true" />
 
       <form className={styles.form} onSubmit={handleSubmit}>
         <select className={styles.select} value={act} onChange={(e) => setAct(e.target.value)}>

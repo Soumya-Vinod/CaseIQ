@@ -52,6 +52,7 @@ decorated number. Full five-stage trace of that one query, with a measurement at
 | Retrieval hit rate on 6 illustrative queries (correct section in top 6) | 4/6 → 6/6 after adding hybrid retrieval |
 | Corpus | 2,155 sections, BNS + BNSS + BSA + IPC + CrPC — criminal law and procedure only |
 | Judicial status | IPC §497 (adultery) excluded as struck down; IPC §377 flagged read-down, both with real citations |
+| Offence classification (cognizable/bailable/court), parsed from source, never LLM output | IPC (CrPC's First Schedule): **212/381 sections (56%)**. BNS (BNSS's First Schedule, currently in-force law): **398/434 sections (92%)** — same table, different source document, different result. Partial by measured coverage, not by omission; the rest are absent, not guessed |
 | Test suite | 22 passed, 1 skipped (needs a local test DB) |
 
 **The sharpest single finding**: a civil-law question this corpus has nothing to answer (a

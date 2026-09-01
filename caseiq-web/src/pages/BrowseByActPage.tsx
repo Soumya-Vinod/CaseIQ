@@ -62,6 +62,7 @@ export function BrowseByActPage() {
         <p className={styles.eyebrow}>Browse the corpus</p>
         <h1 className={styles.title}>All sections, by act</h1>
       </header>
+      <div className={styles.rule} aria-hidden="true" />
 
       <div className={styles.controls}>
         <div className={styles.actRow}>

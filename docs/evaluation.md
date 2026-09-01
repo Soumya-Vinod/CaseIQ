@@ -596,6 +596,52 @@ phrase list doesn't match, and that a seeded BNS §85-equivalent section is retr
 abstain. Verified directly against the live corpus instead (same integration-test-DB limitation
 as the rest of this file): all three fixes confirmed working together, full suite still green.
 
+## Finding: conjunctive full-text queries silently fail on long input (2026-09-01)
+
+This isn't a CaseIQ-specific quirk — it's a general property of how Postgres (and most full-text
+engines' "simple query" modes) build a query from free text, worth knowing before anyone hybrid-
+retrieval-style bolts full-text search onto long input.
+
+**The mechanism.** `websearch_to_tsquery` — Postgres's "parse this like a search-engine box"
+function, and the natural choice for turning free text into a tsquery without hand-rolling
+boolean syntax — ANDs every bare term by default. `websearch_to_tsquery('english', 'punishment
+for theft')` becomes `'punish' & 'theft'`: exactly right for a short query, since requiring both
+words to appear in the same row is precisely what makes the match precise. This was already known
+in this codebase (see `expand_query_synonyms`'s docstring, which works around it for the curated
+synonym string) — but that fix was applied to the *synonym addition*, never to the query text
+itself.
+
+**Why it went unnoticed.** `/legal/query` only ever sends short, direct questions (6-8 words) —
+AND semantics are actively correct there, so the bug had no surface to appear on. It surfaced the
+moment a second caller (`/complaints`, added 2026-09-01) started sending full incident-narrative
+paragraphs — free-form prose is exactly the kind of long-form input hybrid retrieval tends to
+face once it's used for anything beyond a search box.
+
+**Verified, not assumed.** A real dowry-cruelty incident narrative — containing the literal word
+"cruelty" — was run through `websearch_to_tsquery` directly (`EXPLAIN`, not just reading the
+code): it produced a 19-term AND query (`'husband' & 'famili' & 'subject' & 'cruelti' & ...`).
+Checked how many rows in the corpus matched all 19 stemmed terms: **zero** — even though BNS §85,
+BNS §86, and IPC §498A all define "cruelty" and contain that exact word. Full-text search wasn't
+weak here; it was silently contributing nothing at all, and nothing in the response said so — the
+query still returned results (from the vector ranker alone), just none of them relevant, with no
+signal that half the hybrid system had gone dark.
+
+**The general lesson**: a conjunctive ("must contain every term") full-text query is a precision
+tool that degrades to zero recall, not gracefully, as input length grows — there's no natural
+point at which it starts returning *fewer good matches*; it just stops matching anything once
+enough terms are required simultaneously. Any system doing hybrid retrieval needs either (a) a
+length- or term-count-based switch to a disjunctive ("any of these terms") query for long input,
+ranked by match density rather than gated by an all-must-match filter, or (b) actual query
+understanding (extracting salient terms) rather than feeding raw text straight into a boolean
+full-text function. This codebase took option (a), the cheaper of the two and sufficient for a
+strict two-population split (short questions vs. long narratives) — see `_lexical_query_text` in
+`app/services/retrieval.py`.
+
+**Fixed**: `_lexical_query_text()` OR-joins the query's words instead of AND-ing them once the
+word count passes a threshold (10) comfortably above any real `/legal/query` question, so the
+already-verified short-query precision is untouched — confirmed by re-running the
+theft/defamation/murder/marital-abuse/Titan/easement battery after the change, all unchanged.
+
 ## Grounding the complaint-drafting path (2026-09-01)
 
 `/complaints` never had retrieval wired in at all — `generate_complaint_draft` took a
@@ -610,16 +656,8 @@ what you were given" contract as `_STRUCTURED_PROMPT`.
 Building this surfaced two retrieval bugs that had never mattered before, because `/legal/query`
 never sends input long enough to trigger them:
 
-1. **`websearch_to_tsquery` ANDs every word by default** (already known — see
-   `expand_query_synonyms`'s docstring — but never applied to the raw query text itself). A
-   6-8 word question ANDs fine; a full incident-narrative paragraph does not. Verified directly:
-   a real dowry-cruelty narrative containing the literal word "cruelty" produced a 19-term AND
-   tsquery that matched **zero** rows, even though BNS §85/86 and IPC §498A all contain that word
-   verbatim — full-text search contributed nothing, silently, for every long query. Fixed:
-   `_lexical_query_text()` OR-joins the query's words instead of AND-ing them once the word count
-   passes a threshold (10) comfortably above any real `/legal/query` question, so the already-verified
-   short-query precision is untouched — confirmed by re-running the theft/defamation/murder/
-   marital-abuse/Titan/easement battery after the change, all unchanged.
+1. **The conjunctive-tsquery bug** — its own finding above, since it's a general hybrid-retrieval
+   lesson, not a complaints-specific one.
 2. **`relief_sought` pollutes retrieval when included in the query text**: "Registration of FIR
    and protection order" contains "FIR", which `expand_query_synonyms` expands to "information in
    cognizable cases" — outranking the actual offense sections with CrPC §154/155 (FIR filing
@@ -647,3 +685,232 @@ registering them with reportlab, selected by `Complaint.language`; re-verified t
 round-trip afterward and got the real Devanagari/Tamil text back, not boxes. Known limitation,
 documented rather than hidden: these are variable fonts (reportlab registers one static weight),
 so hi/mr/ta body text has no separate bold face.
+
+## Finding: the fabricated mapping this project refused to build was already shipping (2026-09-02)
+
+A user asked, for the second time, whether an IPC↔BNS mapping exists anywhere in the corpus or
+codebase, wanting to build a comparison feature on it. It was checked properly this time, not
+assumed: the DB schema (no such column or table), the actual ingested BNS/IPC PDFs (full-text
+searched directly — BNS's only reference to IPC is a generic repeal/savings clause, "anything
+done shall be deemed done under the *corresponding provisions* of this Sanhita," with no
+per-section table; zero literal mentions of "IPC" anywhere in BNS's 112 pages, zero mentions of
+"BNS" anywhere in IPC's 119), and CrPC's own First Schedule (which *does* tabulate by IPC section
+number — offence classification, not a cross-Act bridge — and is deliberately excluded from
+ingestion, see `schedule_exclusion.py`, because its row numbers collide with CrPC's own real
+sections). Verdict: no substrate for this mapping exists anywhere, at any granularity. The
+feature was correctly declined rather than built from guesswork — see
+`docs/caseiq-industry-readiness.md`'s C2 item, which scoped this as a real hand-verified
+~500-row data-contribution task, never done.
+
+**The finding that mattered more**: that exact mapping was already shipping, in every live
+`/legal/query` answer, as an unverified LLM guess. `_STRUCTURED_PROMPT`'s schema asked for
+`laws_applicable[].ipc_equivalent` — "IPC 378" for BNS 303, filled from the model's own training
+memory on every request, with no retrieved section backing it, rendered in the answer screen
+right alongside genuinely grounded fields with no visual distinction. The project had just spent
+real effort refusing to *hand-build* this mapping because a fabricated legal cross-reference is
+exactly the failure this project exists to prevent — while an *LLM-built* one had been shipping
+in production the whole time. The two are the same fabrication; only the author differs, and the
+side door (a schema field baked into a prompt, reviewed once and then invisible) is far easier to
+miss than a deliberate feature request.
+
+**Auditing the rest of the schema for the same shape of problem** (a field the corpus
+structurally cannot ground, not merely one that's sometimes weak) turned up two more. One of
+them is more consequential than the mapping that prompted this audit.
+
+### `punishments[].bailable` / `.cognizable` — the most consequential of the three
+
+This is not a peer of `ipc_equivalent`; it's worse, and it deserves to be read as its own
+finding rather than a bullet next to it. Cognizability is the fact that determines whether
+police **can arrest without a warrant and must register an FIR on the spot** — it is the single
+most practically urgent thing a citizen asks a legal-awareness tool: *"can I be arrested for
+this?"* Bailability determines whether bail is a matter of right or a magistrate's discretion.
+Neither is a cosmetic detail in a punishments table; each is a load-bearing legal fact that
+changes what a person should actually do in the next hour.
+
+This classification lives in CrPC's First Schedule — the same schedule already confirmed
+excluded from ingestion earlier in this document (`schedule_exclusion.py`, to stop its row
+numbers colliding with CrPC's own real sections). Checked directly, not assumed: `category` (the
+column that would hold this if ingestion had captured it) is empty for every row in
+`section_versions`, and only 56 of the corpus's ~2155 sections even mention the words
+"bailable"/"cognizable" in their own text. For the other ~97%, every value this field ever
+produced could only have been the model's memory, presented with the same confidence and the
+same visual weight as `imprisonment` and `fine` right next to it — fields that *were* grounded.
+
+**This is not a hypothetical risk — it already happened.** This project's very first recorded
+test query, *"what is the punishment for defamation?"*, got back defamation labelled
+**"Cognizable."** It is **non-cognizable** — meaning the original prototype's answer told
+someone the opposite of the truth about whether police could arrest them on the spot for it. See
+the case study above and `docs/caseiq-industry-readiness.md`'s recorded-incidents table for the
+full trace. That specific error is the reason `category` was ever a punishments field at all —
+and it was never fixed at the *data* level; only the abstention/grounding work done since made
+the model less likely to answer confidently over a weak match. The field that caused the
+project's first hallucination was still capable of causing the same one, for any offence,
+right up until this fix.
+
+**The honest consequence, stated plainly**: removing this field is not free. CaseIQ can no
+longer answer "can I be arrested for this?" at all — not wrongly, not vaguely, not with a
+disclaimer; the field is simply gone, because there was no honest way to answer it from what the
+corpus contains. That is the correct trade against shipping a coin-flip on arrest risk, but it
+leaves a real, practically urgent question unanswered, and that gap should be named rather than
+quietly absorbed into "removed some fields."
+
+**This makes checklist item C1 — the `offence_attributes` table
+(`docs/caseiq-industry-readiness.md`: `act, section, offence_description, cognizable, bailable,
+compoundable, triable_by, punishment_min, punishment_max, fine`, sourced from CrPC's First
+Schedule as real structured data, joined rather than generated) — the single highest-value
+unbuilt item in this project, ahead of the embedding model upgrade this document elsewhere calls
+the highest-leverage lever on retrieval quality** (see "Tradeoff, stated plainly," above). Those
+two recommendations are not in tension, they're answering different questions: a better embedding
+model raises the *quality* of answers to questions the corpus can already address. C1 restores an
+entire *class* of question — arrest risk, bail eligibility — that the system can currently not
+address at all, honestly or otherwise, for any offence. Closing a capability gap outranks
+improving precision on one already closed. If only one more thing gets built after this sprint,
+this document's recommendation is C1, not a retrieval upgrade.
+
+- **`your_rights[].law`**, whose own schema example was `"Article 39A"` — a constitutional
+  citation. `_STRUCTURED_PROMPT`'s own first paragraph says constitutional law is out of scope
+  for this corpus. This field was asking the model to cite outside the one thing the prompt
+  told it not to cite from, guaranteed-ungrounded by construction, not merely unlucky.
+
+`critical_deadlines` was checked against the same standard and kept: unlike the two above, a
+specific deadline (e.g. producing an arrested person before a magistrate within 24 hours) *can*
+be stated in a retrieved section's own text (BNSS s.58 does), so it's covered by the prompt's
+existing general grounding rule rather than being structurally unable to comply with it.
+
+**The reusable rule this audit actually ran on** — worth naming so it's applied again, not
+reinvented each time a new field is proposed: *is there any retrieval outcome that grounds this
+field, or does the corpus have no path to a true value regardless of what's retrieved?* A field
+that's sometimes weak is a retrieval-quality problem, worth improving. A field with no path to a
+true value under any retrieval outcome is not a quality problem — no amount of better retrieval
+fixes it, because the data it would need to ground on was never ingested (or, for `your_rights.law`,
+was never even in scope). That's the test for "remove this field," not "this looks unreliable."
+
+**Fixed**: all three removed from `_STRUCTURED_PROMPT`'s schema (backend) and from
+`StructuredData`/`AnswerBriefing.tsx` (frontend) — not left in with a "only if grounded"
+instruction, since for these three there is no retrieval outcome that grounds them, so an empty
+field is the honest ceiling, not a fallback. Verified live: a real `/legal/query` response for
+"what is the punishment for theft" now returns `laws_applicable`/`punishments`/`your_rights`
+objects with none of the three keys present at all, not merely empty values.
+
+**The general lesson**: a grounding audit has to include the LLM's own *output schema*, not just
+its prompt instructions and the retrieval pipeline feeding it. A field can look like ordinary
+detail-completion ("of course a punishments table has a bail/cognizable column") while being
+structurally unverifiable — and unlike a wrong retrieval result, which shows up in the answer
+looking uncertain, a schema field the model fills confidently from memory looks exactly like
+every other field around it. The tell isn't how the answer reads; it's whether the retrieval
+pipeline that feeds the prompt could ever have supplied that specific value.
+
+## C1: cognizable/bailable/court as real structured data (2026-09-02)
+
+Putting `bailable`/`cognizable` back — properly this time, as parsed data rather than an LLM
+guess — meant parsing CrPC's First Schedule (Classification of Offences), a ~28-page, six-column
+table (`Section | Offence | Punishment | Cognizable or non-cognizable | Bailable or non-bailable |
+By what Court triable`) tabulating by IPC section number. Full account of the investigation,
+three parser architectures tried in sequence, and why each of the first two failed, lives in
+`scripts/parse_crpc_schedule.py`'s module docstring — not repeated here. The short version: linear
+text extraction interleaves columns unrecoverably on any row where more than one of
+cognizable/bailable/court wraps across several lines at once (confirmed directly on the
+abetment/conspiracy family); word x-position bucketing works, but only once column boundaries are
+derived from the body text's own clustering, not the header row's digit positions (confirmed
+directly: header digit "2" sits at x=161, but that column's own body text starts at x=87.5).
+
+**Coverage is intentionally partial, stated as a number, not hidden**: **212 of 381 distinct
+section numbers (56%)** have a complete, ingested row as of this writing. The gap is a
+row-boundary detection problem, not a wrong-value problem — confirmed by testing an inverted
+closing heuristic (close a row when the *next* section's number appears, rather than when the
+current row's tail looks finished) that didn't measurably improve the fragmentation rate for
+CrPC's schedule specifically, because CrPC's blank-column sub-clauses (no section number at all
+on the continuation line) don't give that signal anything to close on. The remaining 169 sections
+aren't wrong; they're absent, which is the correct failure mode here — same rule as everywhere
+else in this document.
+
+### Known failure: IPC §498A is excluded, not corrected
+
+**§498A — cruelty by husband or relatives — is the single most-cited provision in this project**
+(the marital-abuse grounding bug, the dowry-harassment complaint-drafting fix, this table's own
+acceptance test). It does not have a row in `offence_attributes`. This is deliberate and
+documented, not an oversight to be found later by someone wondering why the app's most-discussed
+section has no classification data.
+
+**The mechanism**: §498A's cognizable value is itself a long conditional clause — *"Cognizable if
+information relating to the commission of the offence is given to an officer in charge of a
+police station by the person aggrieved by the offence or by any person related to her by blood,
+marriage or adoption or if there is no such relative, by any public servant belonging to such
+class or category as may be notified by the State Government in this behalf."* — long enough that
+it wraps across many physical lines and, doing so, bleeds across the column boundary into
+`bailable`'s own bucket, corrupting it to `"if Non-bailable"` — even though the real,
+**unconditional** answer, read directly from the source, is flatly **Non-bailable**. Shipping that
+corrupted fragment as a "conditional bailable value" would have been actively worse than shipping
+nothing: it dresses up a parser artifact as if it were the statute's own wording.
+
+**What was tried and rejected**: an earlier version of this work hardcoded §498A's correct values
+directly in the parser, on the reasoning that the values were independently verified against the
+source PDF already (they were, in this document, in the C1 investigation write-up). That was the
+wrong call, caught before shipping: a hand-verification test exists to test whether the *parser*
+produces the right value from the *source document*, not to check a value someone already knows
+is right. A hardcoded row passes the acceptance test regardless of whether the parser works,
+which is a self-fulfilling check on the one row this table most needs to get right. Reverted.
+§498A is excluded via a general, mechanism-based rule instead — any row whose raw column value
+starts with a lowercase "if " is rejected, since a genuine conditional clause always opens with a
+capitalised word ("Cognizable if...", "According as...") — not a rule naming §498A specifically.
+That rule happens to catch exactly one row in the current dataset (verified by checking), and
+§498A is it.
+
+**The property that held**: a user asking "is marital abuse cognizable?" gets an explicit "no row
+in our classification data for this section" from the UI (see the three-state design below), never
+a wrong flat answer and never a corrupted fragment presented as the schedule's own text. Absent,
+not wrong — the same rule this table exists to enforce, applied to the parser's own confidence
+about itself.
+
+### The three-state UI rule
+
+`RetrievedSection.offence_attributes` renders one of exactly three states, and the interface must
+never let two of them look alike:
+
+1. **Resolved value** — a plain "Cognizable: Yes" / "Bail: No" pill, DB-sourced.
+2. **Conditional** — the schedule's own wording shown verbatim (not summarised, not flattened to a
+   boolean), visually distinct (a different colour, not just a label) so it can't be mistaken for
+   a confident yes/no at a glance.
+3. **No row in our data** — stated explicitly ("No row in our classification data for this
+   section — not verified either way"), never rendered as a blank field. A blank here would read
+   as "checked, nothing special" — which is worse than the LLM guess this feature replaced, since
+   it looks like a considered answer instead of an admitted gap.
+
+Gated to `act in {"IPC", "BNS"}`, deliberately: this data comes from CrPC's First Schedule
+(classifies IPC offences, act='IPC') and BNSS's equivalent (classifies BNS offences, act='BNS') —
+found and fixed before shipping the first of the two: the model's `act` column was initially set
+to `'CrPC'`, which would have made the join against retrieved sections, which carry `act='IPC'`,
+never match anything at all. Showing "no row in our data" for a BSA/CrPC/BNSS citation right now
+would misrepresent a class of data never attempted yet as one that was tried and came up empty —
+those acts get this treatment only if their own schedule is ever parsed too.
+
+### BNSS: the same table, a different result, because the source data is different
+
+Built next, same day, using the working agreement's own inverted heuristic (close a row when the
+*next* section's number appears, rather than guessing at when the current row's tail looks
+finished) — proposed specifically because BNSS labels essentially every sub-clause explicitly
+("58(a)", "58(b)", "297(1)", "297(2)"), removing the blank-column ambiguity that kept fragmenting
+CrPC's parse. It worked far better than CrPC's: **398 of 434 distinct BNS section numbers (92%)**
+resolved to a complete, clean row, against CrPC's 56%. The two coverage numbers aren't a
+before/after of the same fix — they're measuring genuinely different source documents, and BNSS's
+is more tractable for a structural reason (real, checkable), not because the second attempt was
+more careful than the first.
+
+That said, BNSS was **not** entirely free of CrPC's problem — checked directly, not assumed after
+seeing the encouraging headline number. BNS §303 (theft) has a blank-continuation sub-clause too
+(an alternate, lower-value theft variant punishable by community service, with its own different
+cognizable/bailable values) that the inverted heuristic silently merged into the preceding labelled
+row, §303(2) — its cognizable value flipped from the correct `True` (its own line reads
+"Cognizable.") to a wrong `False` once the merge pulled in "Non-cognizable." from the unlabelled
+clause after it. Caught by a general signature, not a rule about §303: a raw value containing both
+a word and its own negation ("Cognizable." and "Non-cognizable." both present) can never be a real
+single answer. Excluded on that basis — §303 currently has no row, same "absent, not wrong"
+outcome as §498A, for a related but structurally distinct reason (a genuine merge corrupting a
+resolved boolean, not a long conditional bleeding into a neighbouring column).
+
+**BNS §85 (cruelty by husband or relatives, BNS's current-law equivalent of IPC §498A) resolved
+correctly** — cognizable stays a genuine conditional (the full verbatim clause, not flattened),
+bailable resolves cleanly to `False` (Non-bailable), with no cross-column corruption. §85 does not
+share §498A's specific failure mode; the two are different provisions in different source
+documents, and it would have been exactly the fabrication this table exists to prevent to assume
+one's fix transfers to the other without checking.

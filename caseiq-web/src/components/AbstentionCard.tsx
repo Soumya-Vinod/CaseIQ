@@ -1,3 +1,4 @@
+import type { HelplineOut } from "../api/types";
 import styles from "./AbstentionCard.module.css";
 
 /**
@@ -6,13 +7,22 @@ import styles from "./AbstentionCard.module.css";
  * this is the deliberate result of that decision, not a failed request, so
  * it gets its own designed layout rather than reusing an error/toast style
  * or the empty-sources fallback in SourcesPanel.
+ *
+ * C4: helplines come from the backend's static, hand-verified table
+ * (app.services.helplines) — this is the ONE path with nowhere else to
+ * send someone, so it's the most important place to get this right. Used
+ * to hardcode just NALSA here; now renders whatever the backend actually
+ * verified, so a wrong number here can never again drift out of sync with
+ * what's actually been checked.
  */
 export function AbstentionCard({
   message,
   confidence,
+  helplines,
 }: {
   message: string;
   confidence: number;
+  helplines: HelplineOut[];
 }) {
   return (
     <section className={styles.card} aria-label="No confident answer">
@@ -23,14 +33,21 @@ export function AbstentionCard({
         Best match against the statutory text: {Math.round(confidence * 100)}% — below the
         threshold CaseIQ requires before it will answer.
       </p>
-      <div className={styles.actions}>
-        <a className={styles.action} href="tel:15100">
-          📞 NALSA Helpline — 15100
-        </a>
-        <a className={styles.action} href="https://nalsa.gov.in" target="_blank" rel="noreferrer">
-          🔗 nalsa.gov.in
-        </a>
-      </div>
+      {helplines.length > 0 && (
+        <div className={styles.helplines}>
+          <p className={styles.helplinesLabel}>Verified helplines</p>
+          <ul className={styles.helplinesList}>
+            {helplines.map((h) => (
+              <li key={h.number} className={styles.helplineItem}>
+                <a className={styles.action} href={`tel:${h.number}`}>
+                  📞 {h.name} — {h.number}
+                </a>
+                <p className={styles.helplineWhen}>{h.when_to_use}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

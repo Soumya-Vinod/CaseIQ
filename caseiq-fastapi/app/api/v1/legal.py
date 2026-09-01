@@ -11,6 +11,7 @@ from app.models.audit import AuditLog
 from app.models.corpus import CorpusVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
+from app.services.helplines import get_helplines
 from app.services.llm import llm_service
 from app.services.retrieval import (
     build_rag_context,
@@ -188,4 +189,5 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,
+        helplines=get_helplines(),
     )

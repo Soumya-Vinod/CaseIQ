@@ -60,6 +60,7 @@ export function NewsPage() {
           link out.
         </p>
       </header>
+      <div className={styles.rule} aria-hidden="true" />
 
       {loading && <p className={styles.loading}>Loading…</p>}
       {error && <div className={styles.errorBox}>{error}</div>}
