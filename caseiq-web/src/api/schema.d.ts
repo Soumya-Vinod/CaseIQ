@@ -149,6 +149,14 @@ export interface paths {
          *     semantic_search/keyword_search which exclude struck-down entirely (K2's
          *     hard rule for organic/ranked results). Also carries the previous
          *     version's text when recently_amended, for K7's old/new diff.
+         *
+         *     FIXED 2026-09-02: this used to force `act.upper()` before an
+         *     exact-match query against `Act.act_code` -- fine for the four acts
+         *     that are already all-uppercase (BNS/BNSS/BSA/IPC), but "CrPC" is
+         *     stored mixed-case, so `.upper()` turned it into "CRPC", which matched
+         *     nothing. Confirmed directly: every CrPC lookup 404'd regardless of the
+         *     casing a caller sent. `normalize_act` resolves case-insensitively
+         *     against the five real act codes and returns the DB's actual casing.
          */
         get: operations["get_section_api_v1_knowledge_sections__act___section_number__get"];
         put?: never;
@@ -796,6 +804,7 @@ export interface components {
             recently_amended: boolean;
             previous_version?: components["schemas"]["PreviousVersionOut"] | null;
             judicial_status?: components["schemas"]["JudicialStatusOut"] | null;
+            offence_attributes?: components["schemas"]["OffenceAttributesOut"] | null;
         };
         /** SectionHistoryEntry */
         SectionHistoryEntry: {

@@ -1,15 +1,11 @@
-import type { OffenceAttributesOut, RetrievedSection } from "../api/types";
+import { useState } from "react";
+import type { RetrievedSection } from "../api/types";
+import { ACT_LABELS } from "../utils/acts";
 import { isRedundantTitle } from "../utils/text";
 import { JudicialStatusBadge } from "./JudicialStatusBadge";
+import { OFFENCE_ATTR_ACTS, OffenceAttributesBlock } from "./OffenceAttributesBlock";
+import { SectionDetailSheet } from "./SectionDetailSheet";
 import styles from "./SourcesPanel.module.css";
-
-const ACT_LABELS: Record<string, string> = {
-  BNS: "Bharatiya Nyaya Sanhita, 2023",
-  BNSS: "Bharatiya Nagarik Suraksha Sanhita, 2023",
-  BSA: "Bharatiya Sakshya Adhiniyam, 2023",
-  IPC: "Indian Penal Code, 1860",
-  CrPC: "Code of Criminal Procedure, 1973",
-};
 
 /**
  * The centrepiece of the query screen, not a collapsed footer. Statutory
@@ -17,6 +13,9 @@ const ACT_LABELS: Record<string, string> = {
  * and section number leading every card, not buried in a snippet.
  */
 export function SourcesPanel({ sections }: { sections: RetrievedSection[] }) {
+  const [detail, setDetail] = useState<{ act: string; section: string } | null>(null);
+  const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null);
+
   if (sections.length === 0) {
     return (
       <div className={styles.empty}>
@@ -37,15 +36,36 @@ export function SourcesPanel({ sections }: { sections: RetrievedSection[] }) {
       <ol className={styles.list}>
         {sections.map((s, i) => (
           <li key={`${s.act}-${s.section}-${i}`}>
-            <SourceCard section={s} />
+            <SourceCard
+              section={s}
+              onViewDetail={(el) => {
+                setTriggerEl(el);
+                setDetail({ act: s.act, section: s.section });
+              }}
+            />
           </li>
         ))}
       </ol>
+
+      {detail && (
+        <SectionDetailSheet
+          act={detail.act}
+          section={detail.section}
+          triggerEl={triggerEl}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </section>
   );
 }
 
-function SourceCard({ section }: { section: RetrievedSection }) {
+function SourceCard({
+  section,
+  onViewDetail,
+}: {
+  section: RetrievedSection;
+  onViewDetail: (triggerEl: HTMLElement) => void;
+}) {
   return (
     <article className={styles.card}>
       <header className={styles.cardHeader}>
@@ -68,8 +88,8 @@ function SourceCard({ section }: { section: RetrievedSection }) {
         </div>
       )}
 
-      {_OFFENCE_ATTR_ACTS.has(section.act) && (
-        <OffenceAttributesRow attrs={section.offence_attributes} />
+      {OFFENCE_ATTR_ACTS.has(section.act) && (
+        <OffenceAttributesBlock attrs={section.offence_attributes} />
       )}
 
       <p className={styles.text}>
@@ -84,61 +104,14 @@ function SourceCard({ section }: { section: RetrievedSection }) {
           <span>Relevance {(section.similarity * 100).toFixed(0)}%</span>
         )}
       </footer>
+
+      <button
+        type="button"
+        className={styles.viewDetail}
+        onClick={(e) => onViewDetail(e.currentTarget)}
+      >
+        View full details →
+      </button>
     </article>
-  );
-}
-
-/**
- * C1: three states, never allowed to look alike (see docs/evaluation.md):
- *   1. resolved value -- a clean "Cognizable" / "Non-cognizable" pill
- *   2. conditional -- the schedule's own wording shown verbatim, labelled
- *      as conditional rather than flattened into a guess
- *   3. no row in our data -- stated explicitly. A blank field here would
- *      read as "checked, nothing special" -- worse than the LLM guess this
- *      replaced, since it looks like an answer instead of an admitted gap.
- * Gated to IPC and BNS only: offence_attributes comes from CrPC's First
- * Schedule (act='IPC' -- classifies IPC offences, not CrPC's own procedural
- * sections) and BNSS's equivalent (act='BNS', same relationship). Rendering
- * "no row in our data" for a BNSS/BSA/CrPC citation would misrepresent a
- * class of data never attempted yet as one that was tried and came up
- * empty -- those acts get this block only if their own schedule is ever
- * parsed too.
- */
-const _OFFENCE_ATTR_ACTS = new Set(["IPC", "BNS"]);
-
-function OffenceAttributesRow({ attrs }: { attrs: OffenceAttributesOut | null | undefined }) {
-  return (
-    <div className={styles.offenceAttrs}>
-      <p className={styles.offenceAttrsLabel}>Cognizable / bailable / court</p>
-      {attrs == null ? (
-        <p className={styles.offenceAttrsMissing}>
-          No row in our classification data for this section — not verified either way.
-        </p>
-      ) : (
-        <>
-          <div className={styles.offenceAttrsPills}>
-            <AttrPill label="Cognizable" value={attrs.cognizable} raw={attrs.cognizable_raw} />
-            <AttrPill label="Bail" value={attrs.bailable} raw={attrs.bailable_raw} />
-            <span className={styles.offenceAttrsCourt}>{attrs.triable_by}</span>
-          </div>
-          <p className={styles.offenceAttrsSource}>Source: {attrs.source}</p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function AttrPill({ label, value, raw }: { label: string; value: boolean | null | undefined; raw: string }) {
-  if (value == null) {
-    return (
-      <span className={styles.offenceAttrsConditional} title={raw}>
-        {label}: conditional — {raw}
-      </span>
-    );
-  }
-  return (
-    <span className={styles.offenceAttrsPill}>
-      {label}: {value ? "Yes" : "No"}
-    </span>
   );
 }

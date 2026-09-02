@@ -62,6 +62,11 @@ HELPLINES: tuple[Helpline, ...] = (
         verified_on="2026-09-02",
     ),
     Helpline(
+        # 181 (Ministry of Women and Child Development's own scheme), not
+        # NCW's separate 14490 -- two different real helplines run by two
+        # different bodies. 181 chosen because it verifies against the
+        # number's own owning ministry (wcd.gov.in); see the module
+        # docstring above for the full note.
         name="Women's Helpline",
         number="181",
         when_to_use="Domestic violence, harassment, or any distress situation faced by a woman",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { SectionOut } from "../api/types";
+import { SectionDetailSheet } from "../components/SectionDetailSheet";
 import { isRedundantTitle } from "../utils/text";
 import styles from "./BrowseByActPage.module.css";
 
@@ -24,7 +25,8 @@ export function BrowseByActPage() {
   const [sections, setSections] = useState<SectionOut[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ act: string; section: string } | null>(null);
+  const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     const handle = setTimeout(async () => {
@@ -102,25 +104,32 @@ export function BrowseByActPage() {
           ) : (
             <ol className={styles.list}>
               {sections.map((s) => {
-                const expanded = expandedId === s.id;
                 const showTitle =
                   s.section_title && !isRedundantTitle(s.section_title, s.section_text);
                 return (
                   <li key={s.id}>
                     <article
                       className={styles.card}
-                      onClick={() => setExpandedId(expanded ? null : s.id)}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        setTriggerEl(e.currentTarget);
+                        setDetail({ act: s.act, section: s.section_number });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setTriggerEl(e.currentTarget);
+                          setDetail({ act: s.act, section: s.section_number });
+                        }
+                      }}
                     >
                       <div className={styles.cardHeader}>
                         <span className={styles.act}>{s.act}</span>
                         <span className={styles.sectionNo}>§ {s.section_number}</span>
                       </div>
                       {showTitle && <h3 className={styles.title2}>{s.section_title}</h3>}
-                      {expanded ? (
-                        <p className={styles.fullText}>{s.section_text}</p>
-                      ) : (
-                        <p className={styles.snippet}>{s.section_text.slice(0, 220)}…</p>
-                      )}
+                      <p className={styles.snippet}>{s.section_text.slice(0, 220)}…</p>
                       {s.keywords?.length > 0 && (
                         <div className={styles.keywords}>
                           {s.keywords.map((kw, i) => (
@@ -137,6 +146,15 @@ export function BrowseByActPage() {
             </ol>
           )}
         </>
+      )}
+
+      {detail && (
+        <SectionDetailSheet
+          act={detail.act}
+          section={detail.section}
+          triggerEl={triggerEl}
+          onClose={() => setDetail(null)}
+        />
       )}
     </main>
   );

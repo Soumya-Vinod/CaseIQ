@@ -23,18 +23,6 @@ function isWithinCachedRegion([lat, lon]: [number, number]): boolean {
   );
 }
 
-function formatFetchedDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 // Vite bundles Leaflet's default marker images under a hashed path Leaflet's
 // own icon resolution can't find at runtime -- the standard fix is pointing
 // it at the bundled asset URLs directly.
@@ -42,8 +30,16 @@ delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIc
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow });
 
 // Required fallback path, not an edge case: shown whenever geolocation is
-// denied, unsupported, or times out.
-const MUMBAI_CENTER: [number, number] = [19.076, 72.8777];
+// denied, unsupported, or times out. VESIT, Chembur (verified via
+// Nominatim, 2026-09-02 -- the VES campus's Pharmacy building, the nearest
+// named POI OSM has tagged on that same campus block; VESIT itself has no
+// separate node) -- this is where the app gets demoed from, so the no-
+// permission default should already be right for that, not generic
+// Mumbai. Confirmed directly against the cached dataset before changing
+// this: nearest cached stations from here are Tilak Nagar (2.2km),
+// Chembur (2.3km), and Govandi (2.7km) -- genuinely close, no re-fetch of
+// the cached set was needed.
+const DEFAULT_CENTER: [number, number] = [19.0460308, 72.8900446];
 // FIXED 2026-09-02: this used to be a hard cutoff on the cached path too --
 // found via a full grid-scan of the cached bbox (~2km spacing), not
 // assumed: 58% of the bbox's claimed area has ZERO cached stations within
@@ -54,11 +50,13 @@ const MUMBAI_CENTER: [number, number] = [19.076, 72.8777];
 // in that 58% correctly used the cache (it's inside the bbox) and then
 // correctly computed zero results, because real, present stations farther
 // than 5km were being discarded rather than shown. 10km is now only the
-// LIVE Overpass query's own server-side search radius and the distance
-// past which the UI notes cached coverage is thin -- the cached path
-// itself no longer hard-filters by distance at all; see below.
+// LIVE Overpass query's own server-side search radius -- the cached path
+// itself no longer hard-filters by distance at all; see below. FIXED
+// 2026-09-02: dropped the on-page note that used to explain this (a
+// "cached coverage is thinner here" message) per explicit instruction --
+// it narrated an implementation detail; the distance already shown on
+// every result card says everything a user actually needs.
 const SEARCH_RADIUS_M = 10000;
-const NOTE_THIN_COVERAGE_KM = 8; // nearest cached match beyond this gets an honest note, not a cutoff
 const MAX_RESULTS = 20; // capped, not unbounded -- see fetchOverpass
 
 // Public, unmetered mirrors -- tried in order, first success wins. No API
@@ -137,14 +135,13 @@ export function PoliceStationsPage() {
   const [stations, setStations] = useState<Station[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<"cache" | "live" | null>(null);
 
-  // Geolocation on mount -- falls back to Mumbai on denial, timeout, or an
-  // unsupported browser. Required path, not an edge case.
+  // Geolocation on mount -- falls back to DEFAULT_CENTER on denial, timeout,
+  // or an unsupported browser. Required path, not an edge case.
   useEffect(() => {
     if (!navigator.geolocation) {
       setGeoStatus("denied");
-      setCenter(MUMBAI_CENTER);
+      setCenter(DEFAULT_CENTER);
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -154,7 +151,7 @@ export function PoliceStationsPage() {
       },
       () => {
         setGeoStatus("denied");
-        setCenter(MUMBAI_CENTER);
+        setCenter(DEFAULT_CENTER);
       },
       { timeout: 8000 },
     );
@@ -199,7 +196,6 @@ export function PoliceStationsPage() {
             .sort((a, b) => a.distanceKm - b.distanceKm)
             .slice(0, MAX_RESULTS);
           setStations(list);
-          setDataSource("cache");
           renderMarkers(center, list);
           return;
         }
@@ -225,12 +221,10 @@ export function PoliceStationsPage() {
           }))
           .sort((a, b) => a.distanceKm - b.distanceKm);
         setStations(list);
-        setDataSource("live");
         renderMarkers(center, list);
       } catch {
         setError("Could not reach the police-station data source (Overpass API). Please try again.");
         setStations(null);
-        setDataSource(null);
       } finally {
         setLoading(false);
       }
@@ -288,7 +282,7 @@ export function PoliceStationsPage() {
             </button>
           </form>
           <p className={styles.geoNote}>
-            Location access wasn't available — showing Mumbai by default. Search a city above, or
+            Location access wasn't available — showing a default location. Search a city above, or
             enable location access and reload.
           </p>
           {cityError && <p className={styles.cityError}>{cityError}</p>}
@@ -297,23 +291,8 @@ export function PoliceStationsPage() {
 
       <div ref={mapContainerRef} className={styles.map} />
 
-      {dataSource === "cache" && (
-        <p className={styles.dataSourceNote}>
-          Station data cached from OpenStreetMap · fetched {formatFetchedDate(cachedStations.fetched_at)}
-        </p>
-      )}
-      {dataSource === "live" && (
-        <p className={styles.dataSourceNote}>Live data from OpenStreetMap (outside the cached region)</p>
-      )}
-
       {loading && <p className={styles.loading}>Finding nearby stations…</p>}
       {error && <div className={styles.errorBox}>{error}</div>}
-
-      {!loading && !error && stations && stations.length > 0 && stations[0].distanceKm > NOTE_THIN_COVERAGE_KM && (
-        <p className={styles.geoNote}>
-          Cached coverage is thinner here — the nearest match is {stations[0].distanceKm.toFixed(0)} km away.
-        </p>
-      )}
 
       {!loading && !error && stations && stations.length === 0 && (
         <div className={styles.empty}>

@@ -1,4 +1,5 @@
 from app.models.audit import AuditLog
+from app.models.citation_stats import CitationVerificationStats
 from app.models.complaint import Complaint
 from app.models.corpus import (
     Act,
@@ -19,6 +20,7 @@ __all__ = [
     "Amendment",
     "AmendmentEffect",
     "AuditLog",
+    "CitationVerificationStats",
     "Complaint",
     "CorpusStagingChange",
     "CorpusVersion",

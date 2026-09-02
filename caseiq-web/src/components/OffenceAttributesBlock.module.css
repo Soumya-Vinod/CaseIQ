@@ -1,0 +1,64 @@
+.offenceAttrs {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.offenceAttrsLabel {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.offenceAttrsMissing {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.offenceAttrsPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.offenceAttrsPill {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.2rem 0.55rem;
+}
+
+/* Conditional -- deliberately NOT the same visual weight as a resolved
+   pill (readdown blue, not a flat fill) so it can never be mistaken for a
+   confident yes/no at a glance; the verbatim schedule wording is the
+   point, not a colour. */
+.offenceAttrsConditional {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--readdown);
+  background: var(--readdown-bg);
+  border: 1px solid var(--readdown-border);
+  border-radius: 6px;
+  padding: 0.2rem 0.55rem;
+  max-width: 100%;
+}
+
+.offenceAttrsCourt {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.offenceAttrsSource {
+  margin-top: 0.4rem;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}

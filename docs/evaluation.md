@@ -914,3 +914,102 @@ bailable resolves cleanly to `False` (Non-bailable), with no cross-column corrup
 share §498A's specific failure mode; the two are different provisions in different source
 documents, and it would have been exactly the fabrication this table exists to prevent to assume
 one's fix transfers to the other without checking.
+
+**The result worth generalising from**: BNSS's raw parse produced *zero* fragmentation —
+434 distinct section-number tokens in, 434 rows out, one row per section, no merges, no splits.
+Compare CrPC's raw parse: rows outnumbered distinct sections by nearly 2:1 before any quality
+filtering, purely from the row-boundary ambiguity a blank continuation line creates. That
+difference traces to one structural fact, not to which attempt got more careful: **BNSS labels
+almost every sub-clause with an explicit number** ("58(a)", "58(b)", "297(1)", "297(2)"); **CrPC's
+1973 typesetting leaves the section-number cell blank** on a continuation row and relies on
+position alone to say "this is still part of the row above." The inverted close-signal (close on
+the *next* section number, not on "this row looks finished") is trivially correct against
+explicit numbering and structurally unable to help against blank continuations, which is exactly
+the pattern observed: it eliminated fragmentation entirely for BNSS and would have done nothing
+for CrPC's core problem if tried there instead. **The parsing difficulty was a property of
+1970s-era gazette typesetting, not a property of the task of parsing a classification schedule.**
+Worth remembering the next time a new source document needs the same treatment: check its own
+numbering convention before assuming either heuristic transfers.
+
+**Coverage, stated plainly, both numbers together**: **BNS (BNSS's First Schedule, the
+currently-in-force law) — 398 of 434 distinct sections (92%)**. **IPC (CrPC's First Schedule,
+authoritative only for pre-1 July 2024 offences) — 212 of 381 distinct sections (56%)**. BNS is
+both the more complete table and the one that matters more day-to-day, since it's the regime
+actually governing new offences.
+
+## C5: verifying citations after generation, not just asking for them in the prompt (2026-09-02)
+
+`_STRUCTURED_PROMPT` has always told the model to cite only sections in the retrieved-sections
+block — but nothing downstream ever checked that instruction was followed. If a future prompt
+change, a model update, or plain bad luck produced a citation the model wasn't given, it would
+have shipped, indistinguishable from a grounded one. `app/services/citation_verification.py`
+closes that gap: every entry in `structured_data.laws_applicable` is checked, post-generation,
+pre-response, against two independent questions —
+
+1. **Does this section exist in the corpus at all** (for that act, in force, not struck down,
+   as-of today)? If not: **fabrication**, the same failure class as this project's founding
+   incident (an invented "BNS 2023, Section 499").
+2. **Was this section actually in THIS query's own retrieved set?** A section can be real and
+   still ungrounded for a specific answer — the model naming a section it happens to remember
+   correctly, with nothing in this query's actual evidence pointing to it, is not meaningfully
+   different from inventing one; it just looks more convincing, because the number is real.
+
+Failing either check strips the citation and counts it under a distinct label — `nonexistent` or
+`not_retrieved` — persisted in `citation_verification_stats` (a running total, not just a log
+line), because "how often does the prompt's own constraint actually hold" is a standing question
+this project keeps coming back to, not a one-off debugging fact.
+
+**Scope, stated honestly**: `laws_applicable` is the only field in `structured_data` that carries
+a structured (act, section) pair — checked directly, not assumed (`punishments`, `immediate_steps`,
+`critical_deadlines`, `your_rights`, `dos_and_donts` are all free text or don't reference a
+specific section). It's therefore the only field this layer can safely strip from: removing a
+list entry is a clean operation; surgically deleting "BNS 303" out of the middle of a sentence in
+`conversational_summary` without breaking its grammar is a different, harder problem, not solved
+here. `scan_free_text_for_citations` runs a detection-only pass over the prose fields for the same
+pattern and logs what it finds (`citation_free_text_ungrounded`) without touching the text — so
+how often that happens is at least measured, rather than assumed away because it's harder to fix.
+
+**Result, run against the exact battery named for this**: theft, defamation, murder, culpable
+homicide, criminal breach of trust, marital abuse, plus the two adversarial regressions (Titan's
+methane boiling point, the right-of-way easement question). Persisted counters after the full
+run:
+
+```
+citations_total:                 13
+citations_stripped_nonexistent:   0
+citations_stripped_not_retrieved: 0
+```
+
+**Order matters here, and it's deliberate, not incidental: the layer was proven capable of firing
+BEFORE that zero was ever reported, not after.** Trusting a zero-strip result without first
+confirming the mechanism can strip anything would make the result meaningless — a broken check
+that never fires looks identical, in the data, to a constraint that's actually holding. So: fed
+`verify_citations` synthetic input first — a real, retrieved section (IPC §379, kept), a
+non-existent one (`IPC 999999`), and a real-but-not-retrieved one (IPC §302, seeded and in force
+but absent from that call's own retrieved set). Result: exactly the first was kept, the second
+counted as `stripped_nonexistent`, the third as `stripped_not_retrieved`. Only *then* does the
+battery's `13 / 0 / 0` mean what it appears to mean: **the prompt's grounding constraint held
+across every one of these six real queries, measured, not assumed — a finding about the prompt,
+not an untested layer.**
+
+**Defence in depth, and which specific layer stopped what, named rather than left vague**:
+the two adversarial queries never gave C5 anything to check in the first place, and they were
+stopped by two *different* earlier layers:
+
+| Query | Layer that stopped it | Mechanism |
+|---|---|---|
+| Easement / right-of-way (civil) | `is_abstention` / `is_civil_scope_mismatch` | Abstained before the LLM was ever called — no citation was ever generated to verify |
+| Titan's methane boiling point | The model's own prompt-following | LLM was called, produced an empty `laws_applicable` on its own — declined to cite anything for a question with no retrieved evidence |
+
+C5 is the backstop for when an earlier layer *doesn't* catch something — not the only thing
+standing between a fabricated section number and the response, and not the layer that actually
+stopped either adversarial case here. Worth keeping straight which layer did what, rather than
+crediting C5 for a save it didn't make.
+
+The one behaviour not independently exercised end-to-end: if stripping ever does empty out an
+initially non-empty `laws_applicable`, `app/api/v1/legal.py` appends a plain-language note to
+`conversational_summary` (the same "say so, don't go quiet" pattern as the existing abstention
+path) rather than returning a confident summary above an empty citations list. Confirmed by
+direct code review, not by provoking a real model into citing something ungrounded — reaching
+that path organically would need either an adversarial prompt-injection attempt against the
+model itself or a bug this layer isn't designed to introduce, neither of which this pass manufactured.

@@ -92,6 +92,11 @@ class SectionDetailOut(BaseModel):
     recently_amended: bool = False
     previous_version: PreviousVersionOut | None = None
     judicial_status: JudicialStatusOut | None = None
+    # C1, same treatment as RetrievedSection.offence_attributes -- gated to
+    # IPC/BNS at the DB level (attach_offence_attributes), same three-state
+    # contract: a real value, a conditional with verbatim wording, or
+    # explicitly absent, never blank.
+    offence_attributes: OffenceAttributesOut | None = None
 
 
 class HelplineOut(BaseModel):

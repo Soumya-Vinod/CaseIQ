@@ -198,6 +198,7 @@ async def get_section_with_history(
     if current is None:
         return None
     current["previous_version"] = None
+    (current,) = await attach_offence_attributes(db, [current])
     if current["recently_amended"] and current["version_no"] > 1:
         prev_stmt = (
             select(SectionVersion)

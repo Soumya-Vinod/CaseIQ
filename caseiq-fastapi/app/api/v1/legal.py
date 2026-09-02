@@ -11,6 +11,12 @@ from app.models.audit import AuditLog
 from app.models.corpus import CorpusVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
+from app.services.citation_verification import (
+    NOTE_CITATIONS_STRIPPED,
+    record_stats,
+    scan_free_text_for_citations,
+    verify_citations,
+)
 from app.services.helplines import get_helplines
 from app.services.llm import llm_service
 from app.services.retrieval import (
@@ -154,6 +160,28 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
             q.status = QueryStatus.FAILED
             logger.exception("legal_query_failed", error=str(exc))
             raise
+
+        # C5: _STRUCTURED_PROMPT only ASKS the model to cite only retrieved
+        # sections -- nothing enforced that until now. Strip anything that
+        # doesn't check out (either fabricated outright, or real-but-not-
+        # retrieved-here), count both failure modes separately, persist the
+        # counters (not just log them) so "how often does this actually
+        # fire" is an answerable question, not a one-off debugging fact.
+        had_laws = bool(result["structured_data"].get("laws_applicable"))
+        result["structured_data"], citation_counters = await verify_citations(
+            db, result["structured_data"], sections, as_of,
+        )
+        if had_laws and not result["structured_data"].get("laws_applicable"):
+            result["conversational_summary"] += NOTE_CITATIONS_STRIPPED
+        await record_stats(db, citation_counters)
+        free_text_citations = scan_free_text_for_citations(
+            result["structured_data"], result["conversational_summary"],
+        )
+        ungrounded_free_text = free_text_citations - {
+            (s["act"], s["section"]) for s in sections
+        }
+        if ungrounded_free_text:
+            logger.warning("citation_free_text_ungrounded", sections=sorted(ungrounded_free_text))
 
     related = [] if abstained or result["is_followup"] else await llm_service.related_questions(
         payload.query, result["conversational_summary"]

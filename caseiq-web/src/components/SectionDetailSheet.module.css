@@ -1,0 +1,206 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.sheet {
+  width: 100%;
+  max-width: 760px;
+  max-height: 88vh;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s ease-out;
+  outline: none;
+}
+
+.dragHandleRow {
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 0 0.3rem;
+  /* touch-action: none lets the drag handler see every touchmove itself
+     rather than the browser treating it as a page-scroll gesture first. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.dragHandle {
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 1.1rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.locus {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.act {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bg);
+  background: var(--gold);
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+}
+
+.sectionNo {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.sheetBody {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem 1.1rem 2rem;
+}
+
+.loading, .errorBox {
+  font-size: 0.88rem;
+}
+
+.errorBox {
+  border: 1px solid var(--struck-border);
+  background: var(--struck-bg);
+  color: var(--struck);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+
+.loading {
+  color: var(--text-dim);
+}
+
+.actFullName {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.title {
+  font-size: 1.2rem;
+  margin-top: 0.4rem;
+  line-height: 1.3;
+}
+
+.statusRow {
+  margin-top: 0.9rem;
+}
+
+.sectionLabel {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.text {
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  line-height: 1.75;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.metaRow {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+
+.historySection {
+  margin-top: 1.2rem;
+}
+
+.historyToggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0 0.9rem;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.historyToggle:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.historyBody {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px dashed var(--border);
+}
+
+.historyMeta {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}

@@ -6,6 +6,7 @@ from sqlalchemy import and_, select
 from app.api.deps import DB, OptionalUser
 from app.models.corpus import Act, JudicialStatus, SectionVersion
 from app.schemas.legal import RetrievedSection, SectionDetailOut, SectionOut
+from app.services.citation_verification import normalize_act
 from app.services.retrieval import get_section_with_history, in_force, judicial_status_dict, \
     not_struck_down, semantic_search
 
@@ -67,10 +68,21 @@ async def get_section(
     semantic_search/keyword_search which exclude struck-down entirely (K2's
     hard rule for organic/ranked results). Also carries the previous
     version's text when recently_amended, for K7's old/new diff.
+
+    FIXED 2026-09-02: this used to force `act.upper()` before an
+    exact-match query against `Act.act_code` -- fine for the four acts
+    that are already all-uppercase (BNS/BNSS/BSA/IPC), but "CrPC" is
+    stored mixed-case, so `.upper()` turned it into "CRPC", which matched
+    nothing. Confirmed directly: every CrPC lookup 404'd regardless of the
+    casing a caller sent. `normalize_act` resolves case-insensitively
+    against the five real act codes and returns the DB's actual casing.
     """
-    result = await get_section_with_history(db, act.upper(), section_number, as_of)
+    act_code = normalize_act(act)
+    if act_code is None:
+        raise HTTPException(404, f"'{act}' is not a recognised act")
+    result = await get_section_with_history(db, act_code, section_number, as_of)
     if result is None:
-        raise HTTPException(404, f"no in-force version of {act} {section_number} as of "
+        raise HTTPException(404, f"no in-force version of {act_code} {section_number} as of "
                                   f"{as_of or date.today()}")
     return result
 
