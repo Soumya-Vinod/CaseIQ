@@ -167,6 +167,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/cognizability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cognizability Search
+         * @description "Can I be arrested for this?" -- pure DB lookup over offence_attributes
+         *     (CrPC/BNSS First Schedule data, C1), never an LLM. See
+         *     app/services/cognizability.py for the search logic and docs/evaluation.md
+         *     for the coverage numbers this endpoint states on every response.
+         */
+        get: operations["cognizability_search_api_v1_knowledge_cognizability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/semantic-search": {
         parameters: {
             query?: never;
@@ -429,6 +452,20 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** CognizabilitySearchOut */
+        CognizabilitySearchOut: {
+            /** Query */
+            query: string;
+            /** Mode */
+            mode: string;
+            /** Results */
+            results: components["schemas"]["OffenceResultOut"][];
+            /**
+             * Coverage Note
+             * @default Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC is partial (212 of 381 sections) -- a section not found here may still be real; it may simply not be in this table yet.
+             */
+            coverage_note: string;
+        };
         /** ComplaintIn */
         ComplaintIn: {
             complaint_type: components["schemas"]["ComplaintType"];
@@ -638,6 +675,57 @@ export interface components {
             /** Source */
             source: string;
         };
+        /** OffenceResultOut */
+        OffenceResultOut: {
+            /** Act */
+            act: string;
+            /** Section Number */
+            section_number: string;
+            /** Title */
+            title: string;
+            /** Title Source */
+            title_source: string;
+            /** Cognizable */
+            cognizable?: boolean | null;
+            /**
+             * Cognizable Raw
+             * @default
+             */
+            cognizable_raw: string;
+            /** Bailable */
+            bailable?: boolean | null;
+            /**
+             * Bailable Raw
+             * @default
+             */
+            bailable_raw: string;
+            /** Compoundable */
+            compoundable?: boolean | null;
+            /** Compoundable With Permission */
+            compoundable_with_permission?: boolean | null;
+            /** Compoundable By */
+            compoundable_by?: string | null;
+            /**
+             * Triable By
+             * @default
+             */
+            triable_by: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /**
+             * Has Data
+             * @default true
+             */
+            has_data: boolean;
+            /**
+             * Section Exists
+             * @default true
+             */
+            section_exists: boolean;
+        };
         /** PreviousVersionOut */
         PreviousVersionOut: {
             /** Version No */
@@ -667,6 +755,11 @@ export interface components {
             incident_date?: string | null;
             /** As Of */
             as_of?: string | null;
+            /**
+             * Skip Incident Date
+             * @default false
+             */
+            skip_incident_date: boolean;
         };
         /** QueryOut */
         QueryOut: {
@@ -698,6 +791,11 @@ export interface components {
              * @default false
              */
             abstained: boolean;
+            /**
+             * Needs Incident Date
+             * @default false
+             */
+            needs_incident_date: boolean;
             /**
              * As Of
              * Format: date
@@ -1158,6 +1256,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SectionDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cognizability_search_api_v1_knowledge_cognizability_get: {
+        parameters: {
+            query: {
+                /** @description offence name or section number */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CognizabilitySearchOut"];
                 };
             };
             /** @description Validation Error */

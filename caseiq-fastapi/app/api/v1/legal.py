@@ -17,12 +17,14 @@ from app.services.citation_verification import (
     scan_free_text_for_citations,
     verify_citations,
 )
-from app.services.helplines import get_helplines
+from app.services.helplines import get_helplines, select_helplines
 from app.services.llm import llm_service
 from app.services.retrieval import (
     build_rag_context,
+    implies_past_incident,
     is_abstention,
     is_civil_scope_mismatch,
+    regime_note,
     semantic_search,
 )
 from app.services.safety import screen_query
@@ -63,6 +65,23 @@ _CIVIL_SCOPE_MESSAGE = (
     "area -- which is outside this corpus, so I'm not going to answer it. For guidance specific to "
     "your situation, please consult a lawyer or your nearest legal aid clinic (NALSA "
     "helpline: 15100, or https://nalsa.gov.in)."
+)
+
+# C8: fixed text, not LLM-generated -- same reasoning as _ABSTENTION_MESSAGE
+# above (a considered question, not a decoration the model could phrase
+# inconsistently or get the cutover date wrong on). Shown only when
+# implies_past_incident recognised the query as describing something that
+# already happened AND no incident_date/skip was given -- see that
+# function's docstring for what does and doesn't trigger this.
+_INCIDENT_DATE_PROMPT = (
+    "This sounds like something that already happened. Indian criminal law changed on "
+    "1 July 2024 -- IPC/CrPC applied before that date, BNS/BNSS on or after -- so knowing when "
+    "this happened lets me cite the law that actually applied, not just the current one. If you "
+    "know the date, please share it. If you don't, let me know and I'll check both."
+)
+_SKIPPED_DATE_NOTE = (
+    " (No incident date was given, so this searched across both the pre-2024 (IPC/CrPC) and "
+    "current (BNS/BNSS) regimes.)"
 )
 
 router = APIRouter(prefix="/legal", tags=["Legal Query"])
@@ -110,6 +129,34 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
 
     history = await _history(db, payload.session_id)
     as_of = payload.as_of or date.today()
+
+    # C8: ask BEFORE generating, not after -- a query that reads as
+    # describing something that already happened, with no incident_date and
+    # no explicit skip, gets the date prompt instead of an answer computed
+    # against a guessed regime. Short-circuits before retrieval even runs,
+    # same shape as the abstention short-circuit below (a designed pause,
+    # not a failure -- persisted and returned the same way).
+    if payload.incident_date is None and not payload.skip_incident_date \
+            and implies_past_incident(payload.query):
+        took_ms = int((time.perf_counter() - started) * 1000)
+        q = LegalQuery(user_id=user.id if user else None, original_query=payload.query,
+                       detected_language=language, status=QueryStatus.PROCESSED,
+                       session_id=payload.session_id, ip_address=client_ip(request))
+        db.add(q)
+        await db.flush()
+        db.add(QueryResponse(
+            query_id=q.id, conversational_summary=_INCIDENT_DATE_PROMPT, structured_data={},
+            retrieved_sections=[], confidence_score=0.0, response_language=language,
+            processing_time_ms=took_ms, is_followup=False, as_of=as_of, corpus_version_id=None,
+        ))
+        return QueryOut(
+            query_id=q.id, original_query=payload.query,
+            conversational_summary=_INCIDENT_DATE_PROMPT, structured_data={}, confidence_score=0.0,
+            legal_sections=[], language=language, related_questions=[], is_followup=False,
+            processing_time_ms=took_ms, abstained=False, needs_incident_date=True, as_of=as_of,
+            corpus_version_id=None, helplines=select_helplines(payload.query),
+        )
+
     sections = await semantic_search(
         db, payload.query, as_of=as_of, incident_date=payload.incident_date
     )
@@ -186,6 +233,17 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     related = [] if abstained or result["is_followup"] else await llm_service.related_questions(
         payload.query, result["conversational_summary"]
     )
+
+    # C8: make the routing visible, not just correct -- computed here, from
+    # the same acts_for_incident_date the retrieval call above already used,
+    # never phrased by the LLM (see regime_note's docstring). Appended after
+    # related_questions so that call sees the answer itself, not this note.
+    if not abstained:
+        if payload.incident_date is not None:
+            result["conversational_summary"] += " " + regime_note(payload.incident_date)
+        elif payload.skip_incident_date:
+            result["conversational_summary"] += _SKIPPED_DATE_NOTE
+
     took_ms = int((time.perf_counter() - started) * 1000)
 
     # K4/K7: whatever corpus_version was live when this answer was generated,
@@ -217,5 +275,9 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,
-        helplines=get_helplines(),
+        # Abstention path stays exhaustive (nowhere else to send someone --
+        # see AbstentionCard's docstring); an answered query gets only the
+        # numbers actually relevant to it, chosen from the query itself, not
+        # from whatever the LLM happened to generate.
+        helplines=get_helplines() if abstained else select_helplines(payload.query),
     )

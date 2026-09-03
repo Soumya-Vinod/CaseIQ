@@ -5,8 +5,10 @@ from sqlalchemy import and_, select
 
 from app.api.deps import DB, OptionalUser
 from app.models.corpus import Act, JudicialStatus, SectionVersion
+from app.schemas.cognizability import CognizabilitySearchOut
 from app.schemas.legal import RetrievedSection, SectionDetailOut, SectionOut
 from app.services.citation_verification import normalize_act
+from app.services.cognizability import search_offences
 from app.services.retrieval import get_section_with_history, in_force, judicial_status_dict, \
     not_struck_down, semantic_search
 
@@ -85,6 +87,21 @@ async def get_section(
         raise HTTPException(404, f"no in-force version of {act_code} {section_number} as of "
                                   f"{as_of or date.today()}")
     return result
+
+
+@router.get("/cognizability", response_model=CognizabilitySearchOut)
+async def cognizability_search(
+    db: DB, user: OptionalUser,
+    q: str = Query(min_length=1, max_length=200, description="offence name or section number"),
+):
+    """"Can I be arrested for this?" -- pure DB lookup over offence_attributes
+    (CrPC/BNSS First Schedule data, C1), never an LLM. See
+    app/services/cognizability.py for the search logic and docs/evaluation.md
+    for the coverage numbers this endpoint states on every response.
+    """
+    q = q.strip()
+    mode, results = await search_offences(db, q)
+    return {"query": q, "mode": mode, "results": results}
 
 
 @router.post("/semantic-search", response_model=list[RetrievedSection])

@@ -19,6 +19,14 @@ class QueryIn(BaseModel):
     # Distinct from incident_date -- incident_date picks the REGIME (which
     # acts), as_of picks the VERSION within whichever acts are searched.
     as_of: date | None = None
+    # C8: set by the frontend's clarification prompt when the user picks "I
+    # don't know" rather than entering a date -- tells the backend not to
+    # ask again this turn and to proceed across both regimes, same as
+    # incident_date=None always has, just now an explicit choice instead of
+    # a default nobody was ever asked about. See
+    # app.services.retrieval.implies_past_incident for what triggers the
+    # prompt in the first place.
+    skip_incident_date: bool = False
 
 
 class JudicialStatusOut(BaseModel):
@@ -123,6 +131,13 @@ class QueryOut(BaseModel):
     # deliberately not fabricated in that case (empty sections, low confidence).
     # A designed refusal, not an error: render it as one, not as a failure state.
     abstained: bool = False
+    # C8: True when app.services.retrieval.implies_past_incident recognised
+    # this query as describing a past incident and no incident_date (or
+    # explicit skip) was given -- the LLM was never called, same
+    # short-circuit shape as `abstained`. structured_data/legal_sections
+    # stay empty; the frontend's job is to show the date prompt, get an
+    # answer, and resubmit -- see QueryPage's handling of this flag.
+    needs_incident_date: bool = False
     # Part K / K7: the date retrieval was filtered as-of -- an answer must be
     # able to state what date it was computed against.
     as_of: date
@@ -132,12 +147,13 @@ class QueryOut(BaseModel):
     # queryable fact, not silently defaulted to a fake id.
     corpus_version_id: UUID | None = None
     # C4: a small, static, hand-verified table (app.services.helplines) --
-    # never LLM output, never in a prompt. Same on every response,
-    # abstained or not, since it's a reference list, not query-specific;
-    # the abstention state is where it matters most (see AbstentionCard),
-    # since that's the one path with nowhere else to send someone. See
-    # docs/evaluation.md for the incident this replaces ("1516" / "1800-
-    # 111-222", both fabricated, both wrong).
+    # never LLM output, never in a prompt. The abstention path (nowhere else
+    # to send someone -- see AbstentionCard) always gets the full table.
+    # An answered query gets only the numbers actually relevant to it
+    # (app.services.helplines.select_helplines, on the query's own text) --
+    # empty for an ordinary query, chosen for one that touches violence,
+    # self-harm, or harm to others. See docs/evaluation.md for the incident
+    # this replaces ("1516" / "1800-111-222", both fabricated, both wrong).
     helplines: list[HelplineOut] = []
 
 

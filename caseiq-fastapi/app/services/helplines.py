@@ -98,3 +98,66 @@ def get_helplines() -> list[dict]:
         }
         for h in HELPLINES
     ]
+
+
+def _helpline(number: str) -> dict:
+    h = next(h for h in HELPLINES if h.number == number)
+    return {
+        "name": h.name, "number": h.number, "when_to_use": h.when_to_use,
+        "source_url": h.source_url, "verified_on": h.verified_on,
+    }
+
+
+# Same heuristic-phrase-list style as is_civil_scope_mismatch in retrieval.py
+# -- a keyword net, not a classifier; false negatives (violence described
+# without any of these words) are expected, same tradeoff made there.
+# Deliberately about the query's TOPIC (does this touch violence/self-harm/
+# harm-to-others at all), independent of whether the query is a neutral
+# factual question ("what is the punishment for murder") or one that reads
+# as seeking to commit or evade detection for an act -- that second
+# distinction is the LLM's job (see _STRUCTURED_PROMPT's discouragement
+# framing instructions), not this function's. This function only decides
+# which verified numbers, if any, are relevant to surface -- it never
+# decides how the LLM should frame its answer.
+_VIOLENCE_HARM_PHRASES = (
+    "murder", "kill", "killing", "homicide", "stab", "shoot", "shooting",
+    "assault", "attack", "beat up", "beating", "hurt someone", "harm someone",
+    "hurt him", "hurt her", "violence", "strangle", "poison someone",
+    "rape", "molest", "kidnap", "abduct", "acid attack", "torture",
+)
+_SELF_HARM_PHRASES = (
+    "suicide", "kill myself", "end my life", "hurt myself", "self-harm",
+    "self harm", "harm myself", "end it all",
+)
+# Additive, not exclusive: a query can match both this and the violence set
+# (e.g. "my husband beats me") and gets both 112 and the women's helpline.
+_WOMAN_CONTEXT_PHRASES = (
+    "wife", "husband", "domestic violence", "dowry", "marital", "girlfriend",
+    "stalking", "stalk", "in-laws", "mother-in-law", "cruelty by husband",
+)
+_CHILD_CONTEXT_PHRASES = (
+    "child", "minor", "my son", "my daughter", "school student",
+)
+
+
+def select_helplines(query: str) -> list[dict]:
+    """The answered-query path's helpline set -- situational, not the fixed
+    five get_helplines() returns for the abstention path (which deliberately
+    stays exhaustive: it's the one path with nowhere else to send someone,
+    per AbstentionCard's own docstring). Here, showing all five on every
+    ordinary answer ("what is the punishment for theft" pulling up a cyber
+    crime line and a child helpline) is noise, not help -- so this returns
+    an empty list unless the query itself touches violence, self-harm, or
+    harm to others, and even then only the numbers actually relevant to it.
+    """
+    q = query.lower()
+    is_violent = any(p in q for p in _VIOLENCE_HARM_PHRASES)
+    is_self_harm = any(p in q for p in _SELF_HARM_PHRASES)
+    if not is_violent and not is_self_harm:
+        return []
+    selected = [_helpline("112")]
+    if any(p in q for p in _WOMAN_CONTEXT_PHRASES):
+        selected.append(_helpline("181"))
+    if any(p in q for p in _CHILD_CONTEXT_PHRASES):
+        selected.append(_helpline("1098"))
+    return selected

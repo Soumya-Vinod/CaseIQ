@@ -7,6 +7,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.api.v1.router import api_router
+from app.core.build_info import get_build_info
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, logger
@@ -17,8 +18,14 @@ from app.middleware.request_context import RequestContextMiddleware
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    # A stale --reload worker on Windows logs no error (see
+    # app.core.build_info's docstring for the incident this is for) -- this
+    # is what makes that visible: compare this line's source_fingerprint
+    # against a fresh call to get_build_info() run separately, right now,
+    # against the files on disk. Different fingerprint means this worker
+    # is running old code no matter what its own logs claim.
     logger.info("app_starting", env=settings.ENV, project=settings.PROJECT_NAME,
-                db_host=settings.DATABASE_HOST_FOR_LOGGING)
+                db_host=settings.DATABASE_HOST_FOR_LOGGING, **get_build_info())
     yield
     logger.info("app_stopping")
 

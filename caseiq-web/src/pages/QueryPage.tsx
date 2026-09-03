@@ -4,6 +4,7 @@ import type { QueryOut } from "../api/types";
 import { AbstentionCard } from "../components/AbstentionCard";
 import { AnswerBriefing } from "../components/AnswerBriefing";
 import { HelplineStrip } from "../components/HelplineStrip";
+import { IncidentDatePrompt } from "../components/IncidentDatePrompt";
 import { RelatedQuestions } from "../components/RelatedQuestions";
 import { SourcesPanel } from "../components/SourcesPanel";
 import styles from "./QueryPage.module.css";
@@ -23,18 +24,33 @@ export function QueryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QueryOut | null>(null);
+  // The text a needs_incident_date prompt is waiting on an answer for --
+  // kept separate from `query` (the live textarea value) so editing the box
+  // while the prompt is showing can't change what the date/skip choice
+  // actually resubmits. Set alongside every runQuery call, not just this one.
+  const [pendingQuery, setPendingQuery] = useState("");
 
-  async function runQuery(text: string) {
+  async function runQuery(
+    text: string,
+    opts?: { incidentDate?: string; skipIncidentDate?: boolean },
+  ) {
     if (!text.trim() || loading) return;
     setLoading(true);
     setError(null);
+    setPendingQuery(text);
     try {
       const { data, error: apiError } = await api.POST("/api/v1/legal/query", {
         // language/session_id are optional server-side (Pydantic defaults) but
         // openapi-typescript emits fields with a `default` as required-with-default,
         // not optional -- supplying the same defaults explicitly here satisfies
         // the generated type without fighting the generator.
-        body: { query: text.trim(), language: "en", session_id: "" },
+        body: {
+          query: text.trim(),
+          language: "en",
+          session_id: "",
+          ...(opts?.incidentDate ? { incident_date: opts.incidentDate } : {}),
+          ...(opts?.skipIncidentDate ? { skip_incident_date: true } : {}),
+        },
       });
       if (apiError) {
         setError("Something went wrong reaching the backend. Please try again.");
@@ -111,7 +127,18 @@ export function QueryPage() {
       {error && <div className={styles.errorBox}>{error}</div>}
       {loading && <p className={styles.loading}>Searching the corpus…</p>}
 
-      {result && result.abstained && (
+      {result && result.needs_incident_date && (
+        <section className={styles.sourcesSection}>
+          <IncidentDatePrompt
+            message={result.conversational_summary}
+            disabled={loading}
+            onSubmitDate={(d) => void runQuery(pendingQuery, { incidentDate: d })}
+            onSkip={() => void runQuery(pendingQuery, { skipIncidentDate: true })}
+          />
+        </section>
+      )}
+
+      {result && !result.needs_incident_date && result.abstained && (
         <section className={styles.sourcesSection}>
           <AbstentionCard
             message={result.conversational_summary}
@@ -121,7 +148,7 @@ export function QueryPage() {
         </section>
       )}
 
-      {result && !result.abstained && (
+      {result && !result.needs_incident_date && !result.abstained && (
         <>
           <section className={styles.answer}>
             <AnswerBriefing result={result} />

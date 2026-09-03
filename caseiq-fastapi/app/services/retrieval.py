@@ -67,6 +67,25 @@ _SYNONYM_EXPANSIONS: dict[str, str] = {
     "domestic violence": "cruelty",
     "husband beating wife": "cruelty",
     "in-laws harassment": "cruelty",
+    # Added 2026-09-03: the intent-aware-response work's own test queries
+    # ("what happens if I kill someone", "how do I hurt someone without
+    # getting caught") were ABSTAINING before ever reaching the LLM --
+    # is_abstention fires on retrieval weakness alone, with no idea the
+    # query is about violence, and a bare verb like "kill" or "hurt" has
+    # near-zero lexical or vector overlap with this corpus's own heading
+    # style ("302. Punishment for murder.--Whoever commits murder...").
+    # Confirmed directly: querying "murder" alone (bare word) ALSO fails to
+    # surface IPC 302/BNS 103 -- it's not these two phrases specifically,
+    # it's that natural-language paraphrase doesn't anchor to statutory
+    # heading phrasing at all (same gap this map already exists to patch;
+    # see "dowry harassment" above). The expansion target is the corpus's
+    # own literal heading text, not a guessed synonym -- verified against
+    # section_versions.section_text directly before adding: "kill someone"
+    # -> IPC 302/303 now rank #1/#2 (was: neither in the top 5, both weak);
+    # "hurt someone" -> IPC 321/323/337/334 now rank in the top 6 (was: no
+    # hurt/assault provision anywhere in the results at all).
+    "kill someone": "punishment for murder",
+    "hurt someone": "punishment for voluntarily causing hurt",
 }
 
 
@@ -111,6 +130,56 @@ RECENTLY_AMENDED_WINDOW = timedelta(days=365)
 
 def acts_for_incident_date(incident_date: date) -> tuple[str, ...]:
     return OLD_REGIME_ACTS if incident_date < CUTOVER_DATE else NEW_REGIME_ACTS
+
+
+def regime_note(incident_date: date) -> str:
+    """C8: the sentence that makes temporal routing VISIBLE, not just
+    correct. acts_for_incident_date has silently picked the right regime
+    since Part K -- this is the plain-language statement of what it just
+    did, computed deterministically from the same cutover date the routing
+    itself uses (never phrased by the LLM: getting the date or direction
+    backwards here would be worse than saying nothing, and it's exactly
+    the kind of fact this project insists on computing, not generating).
+    """
+    # Fixed string, not CUTOVER_DATE.strftime("%-d %B %Y") -- "%-d" is a
+    # glibc/macOS extension, not supported by Python's strftime on Windows
+    # (this app's own dev environment); CUTOVER_DATE is a fixed constant, so
+    # there's nothing gained by formatting it at call time.
+    cutover = "1 July 2024"
+    if incident_date < CUTOVER_DATE:
+        return (
+            f"Since this happened on {incident_date.isoformat()}, before {cutover}, the older "
+            "regime applied: IPC 1860 and CrPC 1973 -- not BNS/BNSS 2023, which only took effect "
+            f"from {cutover} onward."
+        )
+    return (
+        f"Since this happened on {incident_date.isoformat()}, on or after {cutover}, BNS/BNSS "
+        "2023 applied -- not IPC 1860/CrPC 1973, which this replaced."
+    )
+
+
+# C8: a first-person marker AND a past-tense/completed-action or relative-
+# time marker, together -- either alone is too loose ("my rights" has no
+# incident; "someone was arrested yesterday" [no first person] isn't this
+# user's situation). Same heuristic-pair pattern as is_civil_scope_mismatch
+# and helplines.select_helplines: a keyword net, not a classifier, and
+# false negatives are expected -- a past incident described without any of
+# these words won't trigger the prompt, and that's an accepted cost, not a
+# bug, per the same tradeoff made everywhere else in this file.
+_FIRST_PERSON_MARKERS = (
+    " my ", "my ", " me", "i was", "i've", "i had", "i am", "i'm", "against me", "to me",
+)
+_PAST_INCIDENT_MARKERS = (
+    "stole", "stolen", "took", "hit", "beat", "beaten", "assaulted", "attacked", "threatened",
+    "cheated", "harassed", "kidnapped", "raped", "murdered", "killed", "robbed", "happened",
+    "occurred", "broke into", "broken into", "yesterday", "last night", "last week",
+    "last month", "last year", "days ago", "week ago", "weeks ago", "months ago",
+)
+
+
+def implies_past_incident(query: str) -> bool:
+    q = f" {query.lower()} "
+    return any(m in q for m in _FIRST_PERSON_MARKERS) and any(m in q for m in _PAST_INCIDENT_MARKERS)
 
 
 def in_force(as_of: date):
