@@ -24,10 +24,8 @@ export function QueryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<QueryOut | null>(null);
-  // The text a needs_incident_date prompt is waiting on an answer for --
-  // kept separate from `query` (the live textarea value) so editing the box
-  // while the prompt is showing can't change what the date/skip choice
-  // actually resubmits. Set alongside every runQuery call, not just this one.
+
+  // The text a needs_incident_date prompt is waiting on an answer for.
   const [pendingQuery, setPendingQuery] = useState("");
 
   async function runQuery(
@@ -35,30 +33,38 @@ export function QueryPage() {
     opts?: { incidentDate?: string; skipIncidentDate?: boolean },
   ) {
     if (!text.trim() || loading) return;
+
     setLoading(true);
     setError(null);
     setPendingQuery(text);
+
     try {
-      const { data, error: apiError } = await api.POST("/api/v1/legal/query", {
-        // language/session_id are optional server-side (Pydantic defaults) but
-        // openapi-typescript emits fields with a `default` as required-with-default,
-        // not optional -- supplying the same defaults explicitly here satisfies
-        // the generated type without fighting the generator.
-        body: {
-          query: text.trim(),
-          language: "en",
-          session_id: "",
-          ...(opts?.incidentDate ? { incident_date: opts.incidentDate } : {}),
-          ...(opts?.skipIncidentDate ? { skip_incident_date: true } : {}),
+      const { data, error: apiError } = await api.POST(
+        "/api/v1/legal/query",
+        {
+          body: {
+            query: text.trim(),
+            language: "en",
+            session_id: "",
+            incident_date: opts?.incidentDate ?? null,
+            skip_incident_date:
+              opts?.skipIncidentDate ?? !opts?.incidentDate,
+          },
         },
-      });
+      );
+
       if (apiError) {
-        setError("Something went wrong reaching the backend. Please try again.");
+        setError(
+          "Something went wrong reaching the backend. Please try again.",
+        );
         return;
       }
+
       setResult(data);
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(
+        "Could not reach the server. Check your connection and try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -83,12 +89,16 @@ export function QueryPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <p className={styles.eyebrow}>Indian Law, Cited</p>
+
         <h1 className={styles.title}>Ask a legal question</h1>
+
         <p className={styles.subtitle}>
-          Answers are grounded in the actual text of BNS, BNSS, BSA, IPC and CrPC — five criminal
-          statutes, every answer cites the section it came from.
+          Answers are grounded in the actual text of BNS, BNSS, BSA, IPC and
+          CrPC — five criminal statutes, every answer cites the section it
+          came from.
         </p>
       </header>
+
       <div className={styles.rule} aria-hidden="true" />
 
       <form className={styles.form} onSubmit={handleSubmit}>
@@ -99,8 +109,13 @@ export function QueryPage() {
           onChange={(e) => setQuery(e.target.value)}
           maxLength={2000}
         />
+
         <div className={styles.submitRow}>
-          <button className={styles.submit} type="submit" disabled={loading || !query.trim()}>
+          <button
+            className={styles.submit}
+            type="submit"
+            disabled={loading || !query.trim()}
+          >
             {loading ? "Asking…" : "Ask"}
           </button>
         </div>
@@ -109,6 +124,7 @@ export function QueryPage() {
       {!result && !loading && !error && (
         <div className={styles.examples}>
           <p className={styles.examplesLabel}>Try one of these</p>
+
           <div className={styles.exampleList}>
             {EXAMPLE_QUESTIONS.map((q) => (
               <button
@@ -125,15 +141,26 @@ export function QueryPage() {
       )}
 
       {error && <div className={styles.errorBox}>{error}</div>}
-      {loading && <p className={styles.loading}>Searching the corpus…</p>}
+
+      {loading && (
+        <p className={styles.loading}>Searching the corpus…</p>
+      )}
 
       {result && result.needs_incident_date && (
         <section className={styles.sourcesSection}>
           <IncidentDatePrompt
             message={result.conversational_summary}
             disabled={loading}
-            onSubmitDate={(d) => void runQuery(pendingQuery, { incidentDate: d })}
-            onSkip={() => void runQuery(pendingQuery, { skipIncidentDate: true })}
+            onSubmitDate={(d) =>
+              void runQuery(pendingQuery, {
+                incidentDate: d,
+              })
+            }
+            onSkip={() =>
+              void runQuery(pendingQuery, {
+                skipIncidentDate: true,
+              })
+            }
           />
         </section>
       )}
@@ -148,36 +175,40 @@ export function QueryPage() {
         </section>
       )}
 
-      {result && !result.needs_incident_date && !result.abstained && (
-        <>
-          <section className={styles.answer}>
-            <AnswerBriefing result={result} />
-          </section>
-
-          {result.related_questions.length > 0 && (
-            <section className={styles.relatedSection}>
-              <RelatedQuestions
-                questions={result.related_questions}
-                onSelect={handleFollowUp}
-                disabled={loading}
-              />
+      {result &&
+        !result.needs_incident_date &&
+        !result.abstained && (
+          <>
+            <section className={styles.answer}>
+              <AnswerBriefing result={result} />
             </section>
-          )}
 
-          <section className={styles.sourcesSection}>
-            <SourcesPanel sections={result.legal_sections} />
-          </section>
+            {result.related_questions.length > 0 && (
+              <section className={styles.relatedSection}>
+                <RelatedQuestions
+                  questions={result.related_questions}
+                  onSelect={handleFollowUp}
+                  disabled={loading}
+                />
+              </section>
+            )}
 
-          <div className={styles.helplineRow}>
-            <HelplineStrip helplines={result.helplines} />
-          </div>
-        </>
-      )}
+            <section className={styles.sourcesSection}>
+              <SourcesPanel sections={result.legal_sections} />
+            </section>
+
+            <div className={styles.helplineRow}>
+              <HelplineStrip helplines={result.helplines} />
+            </div>
+          </>
+        )}
 
       {result && (
         <footer className={styles.pageFooter}>
           {result.corpus_version_id && (
-            <span>Corpus version {result.corpus_version_id.slice(0, 8)}</span>
+            <span>
+              Corpus version {result.corpus_version_id.slice(0, 8)}
+            </span>
           )}
         </footer>
       )}
