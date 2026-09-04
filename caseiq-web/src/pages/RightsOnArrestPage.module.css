@@ -1,5 +1,5 @@
 .page {
-  max-width: 1100px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 2rem 1.1rem 4rem;
   width: 100%;
@@ -26,7 +26,7 @@
 
 .subtitle {
   font-family: var(--font-serif);
-  font-size: 0.92rem;
+  font-size: 0.94rem;
   line-height: 1.65;
   color: var(--text-muted);
   margin-top: 0.7rem;
@@ -39,73 +39,22 @@
   background: linear-gradient(90deg, var(--gold-border), transparent);
 }
 
-.search {
-  display: block;
-  width: 100%;
-  max-width: 640px;
-  min-height: var(--tap-min);
-  margin-top: 1.8rem;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 0.6rem 0.85rem;
-  color: var(--text);
-  font-size: 0.95rem;
-}
-
-.search:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
-.coverageNote {
-  font-size: 0.78rem;
-  line-height: 1.55;
-  color: var(--text-dim);
-  margin-top: 0.7rem;
-  padding: 0.6rem 0.75rem;
-  border-left: 2px solid var(--gold-border);
-}
-
-.loading {
-  color: var(--text-dim);
-  font-size: 0.85rem;
-  margin-top: 1.2rem;
-}
-
-.errorBox {
-  border: 1px solid var(--struck-border);
-  background: var(--struck-bg);
-  color: var(--struck);
-  border-radius: 8px;
-  padding: 0.8rem 1rem;
-  font-size: 0.86rem;
-  margin-top: 1.2rem;
-}
-
-.empty {
-  color: var(--text-dim);
-  font-size: 0.88rem;
-  line-height: 1.6;
-  padding: 1.6rem 0;
-  max-width: var(--measure);
-}
-
 .list {
   list-style: none;
-  margin: 1.2rem 0 0;
+  margin: 1.8rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 1.1rem;
+  counter-reset: right-index;
 }
 
 .card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--gold-border);
-  border-radius: 10px;
-  padding: 1.1rem 1.2rem 1rem;
+  border-radius: 12px;
+  padding: 1.3rem 1.35rem 1.2rem;
 }
 
 .cardHeader {
@@ -116,9 +65,9 @@
 
 .act {
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--gold);
   background: var(--gold-dim);
   border: 1px solid var(--gold-border);
@@ -128,16 +77,36 @@
 
 .sectionNo {
   font-family: var(--font-serif);
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--gold);
 }
 
-.offenceTitle {
-  font-size: 0.94rem;
-  font-weight: 600;
-  line-height: 1.45;
+.label {
+  font-size: 1.08rem;
+  line-height: 1.35;
+  margin-top: 0.65rem;
+  max-width: var(--measure);
+}
+
+.detail {
+  font-family: var(--font-serif);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-muted);
   margin-top: 0.5rem;
+  max-width: var(--measure);
+}
+
+.quote {
+  margin: 0.9rem 0 0;
+  padding: 0.15rem 0 0.15rem 0.9rem;
+  border-left: 2px solid var(--gold-border);
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text);
   max-width: var(--measure);
 }
 
@@ -145,7 +114,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--tap-min);
-  margin-top: 0.9rem;
+  margin-top: 0.8rem;
   background: transparent;
   border: none;
   padding: 0;
@@ -159,4 +128,15 @@
 .viewDetail:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
+}
+
+/* Wide viewports: two per row once there's room, rather than one long
+   single column stretching the reading measure past what's comfortable --
+   reference material this dense reads better as a grid than a scroll. */
+@media (min-width: 760px) {
+  .list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.1rem;
+  }
 }

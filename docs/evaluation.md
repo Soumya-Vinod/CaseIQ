@@ -1340,3 +1340,191 @@ transfer to `SectionDetailSheet`, which is built around one section producing on
 a UI change to show multiple sub-clause rows when they exist. Left as a reported finding, not a
 same-session fix: the risk of a rushed, wrong collapse outweighs the benefit of closing this
 particular gap today.
+
+## Live bug: harm queries still abstaining, and why the fix has to sit before the similarity gate (2026-09-04)
+
+A harm query came back the generic "Not confident enough to answer, best match 23%" refusal card
+-- the exact failure "Intent-aware responses" (above) was built to fix, happening anyway. Traced
+the actual control flow in `app/api/v1/legal.py::process_query` before touching anything, as
+asked:
+
+```
+screen_query (safety) -> C8 date-prompt check -> semantic_search -> is_abstention /
+is_civil_scope_mismatch -> [if abstained: return fixed refusal text, STOP -- LLM never called]
+-> llm_service.process_query (this is where _STRUCTURED_PROMPT's discouragement-framing
+instructions live, and the ONLY place they live)
+```
+
+There was no separate "intent check" anywhere in this flow. Intent-awareness is entirely a
+prompt-level instruction inside `_STRUCTURED_PROMPT`, and the abstention gate sits strictly
+before the LLM is ever invoked, with no idea what the query is about beyond raw retrieval
+strength. Any harm-topic phrasing that didn't happen to retrieve strongly enough died at the gate
+regardless of what the prompt said to do next, because the prompt never got a turn -- confirmed,
+not assumed, exactly the order the report predicted.
+
+**Fix, and a self-caught gap in the first version of it**: added `touches_violence_or_harm()` to
+`app/services/retrieval.py`, checked in `process_query` *before* `is_abstention`/
+`is_civil_scope_mismatch` are allowed to short-circuit -- a query naming violence or self-harm now
+always reaches the LLM, regardless of retrieval strength. Safe to bypass unconditionally: the
+LLM's own grounding rules already forbid inventing a citation from weak/absent evidence, and C5
+still backstops anything that slips through -- this only ever changes *whether* the LLM is asked,
+never what it's allowed to answer with. The first version matched compound phrases ("hurt
+someone", "hurt him", "hurt her") and still missed real phrasings while stress-testing it myself
+("I want to hurt somebody badly", "can I get away with hurting my roommate") -- the same
+whack-a-mole shape as every retrieval-anchoring gap in this file, just relocated. Switched to
+word-stem matching at a word boundary (`\bhurt` matches "hurt"/"hurting"/"hurts"/"hurtful") instead
+of enumerating phrases, which is what actually closes the class of failure rather than one
+instance of it. One shared definition -- `app.services.helplines.select_helplines` now imports
+this function rather than keeping its own near-duplicate list, so the two decisions ("does this
+reach the LLM," "does this get a helpline") can't quietly drift apart.
+
+Also hardened `_STRUCTURED_PROMPT`/`_FOLLOWUP_PROMPT` to explicitly forbid the model from writing
+out a helpline number or link itself, defensively -- see the markdown-helplines finding directly
+below, which this doesn't explain but closes off as a possibility regardless.
+
+Verified live, all four required queries plus three adversarial phrasings, against a freshly
+restarted worker (fingerprint confirmed, not assumed -- see the build-marker finding above):
+"can I commit murder," "what happens if I kill someone," "how do I hurt someone without getting
+caught," "what is the punishment for murder" (neutral control, confirmed still neutral), plus "I
+want to hurt somebody badly," "can I get away with hurting my roommate," "is it legal to attack
+someone who wronged me." All seven: `abstained: false`, real citations, helpline 112 attached,
+discouragement framing present where the query reads as intent (absent for the neutral control).
+
+## Investigated: markdown-formatted helplines reported live, not reproduced locally (2026-09-04)
+
+Reported symptom: the abstention card showing literal markdown ("* [NALSA Legal Aid --
+15100](tel:15100)") instead of a tappable link. Checked both plausible causes directly before
+concluding anything:
+
+- `_ABSTENTION_MESSAGE`/`_CIVIL_SCOPE_MESSAGE` (the only text the abstention path can ever show --
+  it never calls the LLM) -- read verbatim from the current file, contain no markdown, no emoji,
+  no bracket/paren link syntax.
+- The `helplines` field on a live abstention response (queried directly) -- clean structured JSON,
+  each entry a plain `name`/`number`/`when_to_use` string, no formatting artifacts.
+- Both render paths (`AbstentionCard`, `AnswerBriefing`) print these as plain React text/JSX
+  elements -- correct behaviour given clean input, and would show markdown literally rather than
+  interpret it if the input ever did contain it, consistent with what was reported, but not
+  evidence of where that input would come from.
+
+Could not reproduce against current local code on either the abstention path or the answered
+path (checked all four harm queries' raw JSON too). Most likely explanation: this was seen against
+the deployed Render backend, which is still running whatever it last had before this session --
+none of today's work is pushed yet (commits/pushes are the user's, never run here), and helplines
+were LLM-generated free text before C4 replaced them with the verified table, which is exactly the
+shape markdown-formatted output like this would take. Hardened the prompt regardless (see the fix
+above) so the model can't produce this even in a scenario not yet found: it's now explicitly told
+never to write out a helpline number, link, or contact list itself, in any format, since that data
+has its own verified channel.
+
+## Confidence calibration, checked against the golden set, and relabelled instead (2026-09-04)
+
+"Confidence 48%" on a correct, correctly-cited answer reads as a claim the number doesn't
+support -- it's `max(cosine similarity)` across the retrieved set (`app/services/llm.py`'s
+formula), a raw distance measure, not a probability of correctness. Asked instead of assumed:
+does the 44-pair golden set (`docs/golden_set.json`) support mapping raw score to an observed
+"correct section actually present" rate, bucketed at 0.05 width as specified?
+
+`scripts/calibrate_confidence.py` -- same production settings (`semantic_search`, `top_k = 6`),
+same golden set, records confidence alongside whether an acceptable `(act, section)` pair is
+present in the retrieved set for each of the 44 queries. Full result:
+
+| Bucket | N | Correct-present rate |
+|---|---|---|
+| 0.25-0.30 | 2 | 0.50 |
+| 0.30-0.35 | 4 | 0.75 |
+| 0.40-0.45 | 7 | 0.57 |
+| 0.45-0.50 | 23 | 0.78 |
+| 0.50-0.55 | 4 | 0.75 |
+| 0.55-0.60 | 2 | 1.00 |
+| 0.65-0.70 | 2 | 0.50 |
+
+**Too small to calibrate meaningfully, and the data itself makes that case, not just N alone.**
+Half the buckets have N=2 -- a rate of 50% there could just as easily be 20% or 80% in the true
+distribution, nowhere near enough to trust as a lookup value. Worse than sparse: over half the
+entire golden set (23 of 44 queries) lands in one bucket (0.45-0.50) regardless of whether
+retrieval actually succeeded for that query, the exact behaviour the headline finding at the top
+of this file already describes ("punishment for theft" at 0.478 is indistinguishable by score
+from a query that fails). And the bucket-to-bucket progression isn't even monotonic --
+0.40-0.45 (57%) sits below 0.30-0.35 (75%), and 0.65-0.70 drops back to 50% -- so a calibration
+table built from this would sometimes show a *higher* score as *less* reliable than a lower one.
+Shipping that would be worse than the raw percentage: actively misleading in a specific,
+falsifiable direction, not just imprecise.
+
+**Decision: relabel, not calibrate**, exactly the fallback the request itself anticipated.
+"Confidence NN%" -> "Match strength NN%" in `AnswerBriefing.tsx` (the answered-query path);
+`AbstentionCard.tsx` already said "Best match against the statutory text: NN%," which was already
+honest and needed no change. The underlying number and API field (`confidence_score`) are
+untouched -- this is a display-label fix, not a schema change requiring a migration, scoped to
+match what was actually asked. A real calibration remains possible later if the golden set grows
+substantially (an order of magnitude more pairs, at minimum, to get workable N per bucket) --
+recorded here so that threshold is explicit rather than re-discovered.
+
+## Navigation, layout width, "Your rights on arrest," and a self-caught regression (2026-09-04)
+
+**Sidebar nav**: replaced the horizontal tab strip with `Sidebar.tsx` -- a persistent, collapsible-
+to-icons rail at >=860px (collapse state kept in `localStorage`, a per-viewer convenience, not
+app state), an off-canvas drawer behind a hamburger below that. The drawer got the same
+accessibility treatment as `SectionDetailSheet`'s bottom sheet, deliberately, not by coincidence:
+focus moves in on open, Tab is trapped, Escape closes it, focus returns to the hamburger, and
+picking a destination auto-closes it. Verified live, not just by inspection: focus-in, Escape +
+focus-restore, 12-tab trap, and select-then-auto-close all confirmed via real synthetic keyboard/
+click events, at 390px. `AppHeader.tsx` was removed -- the brand mark now lives in the sidebar/
+drawer, and a second copy in a header above it would have been the wrong kind of visual weight
+duplication this pass exists to fix.
+
+One real bug caught building this, not shipped silently: the first collapsed-rail render still
+showed truncated labels ("A...", "L...") next to the icons -- `.railCollapsed .navLabel` had no
+`display: none` rule, so the CSS to actually collapse the rail never existed even though the JS
+state did. Fixed, and re-screenshotted to confirm the icon-only rail is what actually renders now,
+not what the code looked like it should do.
+
+**Layout width**: seven pages shared the exact same `max-width: 760px` -- widened to 1100px so the
+freed sidebar space is actually used, per the request. Individual form/search inputs (Complaint,
+Ask, Look-up, Browse, Cognizability) got their OWN narrower cap (`640px`-`680px`) rather than
+inheriting the page's new width directly -- a single-line "your name" field or search box
+stretched to 1100px is a worse reading experience than a wide page, not a better one; only the
+outer column and reference-card grids (Cognizability's results, Rights-on-arrest's cards) use the
+full new width.
+
+**Two-column answer layout**: `QueryPage`'s results (briefing + related questions left, sources
+right) now use a CSS grid at >=960px (1.15fr/0.85fr, briefing wider since it carries the prose),
+collapsing to the original single stacked column below that -- verified at both 1440px (two
+columns, sources scrolling independently) and 390px (single column, unchanged).
+
+**"Your rights on arrest"**: entirely frontend, no new backend endpoint -- five hand-curated BNSS
+sections (47/48/58/38/53: grounds of arrest, informing a relative, the 24-hour production rule,
+right to a lawyer during interrogation, medical examination), each verified against the real
+corpus *before* writing the page, not transcribed from memory:
+
+| Right | Section | Confirmed against |
+|---|---|---|
+| Grounds of arrest communicated | BNSS 47 | "Person arrested to be informed of grounds of arrest" (heading fragment) + body text |
+| Relative/friend informed | BNSS 48 | Body text: informs the relative/friend named, records who was told, Magistrate must verify compliance |
+| Produced before magistrate within 24h | BNSS 58 | Body text: detention "shall not... exceed more than twenty-four hours exclusive of... journey... to the Magistrate's Court" absent a Magistrate's own order |
+| Lawyer during interrogation | BNSS 38 | Body text: "entitled to meet an advocate of his choice during interrogation" |
+| Medical examination | BNSS 53 | Body text: examined by a medical officer soon after arrest, female arrestee examined only by/under a female officer |
+
+Surfaced a second, distinct BNSS data-quality issue while picking quotes (beyond marginal_note
+being empty, see the cognizability finding above): `section_text` itself carries short
+marginal-note fragments injected mid-sentence into the body text (a two-column PDF layout's
+columns merged in reading order, is the likely mechanism, not confirmed against the raw PDF this
+session) -- e.g. BNSS 58's real text reads "...for a **Person** longer period... such **period
+arrested not to be detained** shall not... arrest to **twenty-four** the Magistrate's Court...
+jurisdiction or not. **hours.**" (bolded = injected fragments). Every quote used on the page is a
+verified-by-substring-match, contiguous clean span specifically chosen to avoid these
+interruptions -- never a splice across one, never the raw interleaved text shown as if it were
+clean. Full sections still show this artifact when tapped through to `SectionDetailSheet` (that
+component shows whatever `section_text` actually contains, unchanged, for every section already);
+recorded here as a corpus-ingestion finding for BNSS specifically, not fixed.
+
+**Self-caught regression, found by looking at my own screenshot, not reported by anyone**:
+widening `QueryPage` for the two-column layout surfaced that every *ordinary* answer -- including
+"what is the punishment for defamation?", which never touches C8 at all -- was appending "(No
+incident date was given, so this searched across both... regimes.)" to the summary. Traced to
+`skip_incident_date: opts?.skipIncidentDate ?? !opts?.incidentDate` in `QueryPage.tsx`: with no
+`opts` (every first-time query), this evaluates `!undefined` = `true`, so every plain query
+silently told the backend to treat itself as an explicit "I don't know" skip. Fixed to
+`opts?.skipIncidentDate ?? false` -- only `IncidentDatePrompt`'s own "I don't know" button should
+ever set this. Re-verified both directions afterward: the spurious note is gone from an ordinary
+query, and the real C8 flow (date prompt appears for a past-incident query, explicit skip still
+adds its note) still works.

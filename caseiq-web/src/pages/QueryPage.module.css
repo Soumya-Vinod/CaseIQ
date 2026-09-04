@@ -43,6 +43,7 @@
   flex-direction: column;
   gap: 0.6rem;
   margin-top: 1.8rem;
+  max-width: 680px;
 }
 
 .textarea {
@@ -134,8 +135,31 @@
   cursor: pointer;
 }
 
-.answer {
+.resultsGrid {
   margin-top: 1.75rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+.resultsLeft,
+.resultsRight {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (min-width: 960px) {
+  .resultsGrid {
+    /* Briefing gets the larger share -- it carries the actual prose;
+       sources is a reference list that doesn't need as much width to
+       stay readable. */
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: start;
+  }
+}
+
+.answer {
   padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--border);
 }
@@ -146,6 +170,14 @@
 
 .sourcesSection {
   margin-top: 1.75rem;
+}
+
+@media (min-width: 960px) {
+  /* Inside the right column there's nothing above it to separate from --
+     the left column's own first section already carries that gap. */
+  .sourcesSection {
+    margin-top: 0;
+  }
 }
 
 .helplineRow {

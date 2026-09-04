@@ -47,8 +47,14 @@ export function QueryPage() {
             language: "en",
             session_id: "",
             incident_date: opts?.incidentDate ?? null,
-            skip_incident_date:
-              opts?.skipIncidentDate ?? !opts?.incidentDate,
+            // FIXED 2026-09-04: this previously defaulted to
+            // `!opts?.incidentDate`, which is true whenever opts is
+            // unset -- i.e. every ordinary first-time query, not just an
+            // explicit "I don't know" skip. That made every plain answer
+            // append the C8 both-regimes note regardless of whether a
+            // date was ever relevant. Only the IncidentDatePrompt's own
+            // "I don't know" button should ever set this true.
+            skip_incident_date: opts?.skipIncidentDate ?? false,
           },
         },
       );
@@ -179,23 +185,33 @@ export function QueryPage() {
         !result.needs_incident_date &&
         !result.abstained && (
           <>
-            <section className={styles.answer}>
-              <AnswerBriefing result={result} />
-            </section>
+            {/* Briefing left, sources right at wide viewports -- the two
+                halves of an answer someone reads together, not one after
+                the other; collapses to the same stacked single column as
+                before once there's no room to set them side by side. */}
+            <div className={styles.resultsGrid}>
+              <div className={styles.resultsLeft}>
+                <section className={styles.answer}>
+                  <AnswerBriefing result={result} />
+                </section>
 
-            {result.related_questions.length > 0 && (
-              <section className={styles.relatedSection}>
-                <RelatedQuestions
-                  questions={result.related_questions}
-                  onSelect={handleFollowUp}
-                  disabled={loading}
-                />
-              </section>
-            )}
+                {result.related_questions.length > 0 && (
+                  <section className={styles.relatedSection}>
+                    <RelatedQuestions
+                      questions={result.related_questions}
+                      onSelect={handleFollowUp}
+                      disabled={loading}
+                    />
+                  </section>
+                )}
+              </div>
 
-            <section className={styles.sourcesSection}>
-              <SourcesPanel sections={result.legal_sections} />
-            </section>
+              <div className={styles.resultsRight}>
+                <section className={styles.sourcesSection}>
+                  <SourcesPanel sections={result.legal_sections} />
+                </section>
+              </div>
+            </div>
 
             <div className={styles.helplineRow}>
               <HelplineStrip helplines={result.helplines} />

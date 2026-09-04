@@ -26,6 +26,7 @@ from app.services.retrieval import (
     is_civil_scope_mismatch,
     regime_note,
     semantic_search,
+    touches_violence_or_harm,
 )
 from app.services.safety import screen_query
 from sqlalchemy import select
@@ -169,7 +170,22 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     # threshold catches the former without also catching the latter two. The
     # civil-phrase check is a second, narrower net for exactly that gap.
     civil_scope_mismatch = is_civil_scope_mismatch(payload.query)
-    abstained = is_abstention(sections) or civil_scope_mismatch
+    # FIXED 2026-09-04 (found live): a harm query came back the generic
+    # abstention refusal at 23% similarity, never reaching the LLM -- which
+    # meant it never reached the intent-aware discouragement-framing
+    # instructions either, since those live entirely in _STRUCTURED_PROMPT,
+    # not in any gate here. touches_violence_or_harm is checked on the
+    # query's own text, independent of retrieval strength, and bypasses
+    # this gate when it fires -- intent has to be checked BEFORE the
+    # similarity threshold, not patched around it one failing phrase at a
+    # time (see that function's docstring for why this is a structural fix,
+    # not another synonym-map entry). Safe: the LLM still won't fabricate a
+    # citation with weak/no evidence (_STRUCTURED_PROMPT's own GROUNDING
+    # rules), and C5 backstops anything that slips through anyway -- this
+    # only changes whether the LLM is asked, never what it's allowed to
+    # answer with.
+    abstained = (is_abstention(sections) or civil_scope_mismatch) \
+        and not touches_violence_or_harm(payload.query)
     if abstained:
         # No fabricated citations alongside a refusal -- see is_abstention's
         # docstring for exactly what counts as "not enough evidence".

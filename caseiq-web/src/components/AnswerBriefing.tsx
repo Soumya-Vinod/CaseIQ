@@ -56,8 +56,8 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
       {asOfLabel && <p className={styles.asOf}>Law as it stood on {asOfLabel}</p>}
 
       <div className={styles.topRow}>
-        <p className={styles.confidence}>
-          Confidence{" "}
+        <p className={styles.confidence} title="Raw retrieval similarity, not a probability of correctness -- checked against the 44-pair golden set and found too small and too noisy to calibrate into one (see docs/evaluation.md).">
+          Match strength{" "}
           <span className={styles.confidenceValue}>{Math.round(result.confidence_score * 100)}%</span>
         </p>
         {severityLabel && (

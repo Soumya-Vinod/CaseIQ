@@ -182,6 +182,71 @@ def implies_past_incident(query: str) -> bool:
     return any(m in q for m in _FIRST_PERSON_MARKERS) and any(m in q for m in _PAST_INCIDENT_MARKERS)
 
 
+# FIXED 2026-09-04 (real bug, found live): a harm query ("what happens if I
+# kill someone" phrased in a way this session's synonym-map entries don't
+# happen to cover) came back the generic abstention refusal, at 23%
+# similarity, never reaching the LLM at all -- which means it never reached
+# the intent-aware discouragement-framing instructions either, since those
+# live entirely in _STRUCTURED_PROMPT (app/services/llm.py), not in any
+# Python gate. is_abstention only ever asks "was retrieval strong enough,"
+# with no idea what the query is ABOUT -- so any new phrasing that doesn't
+# happen to anchor to statutory heading text (the same retrieval-anchoring
+# gap this file's docstring calls out repeatedly) dies at this gate
+# regardless of what the prompt says to do next, because the prompt never
+# gets a turn. Chasing this one phrase at a time (another synonym-map
+# entry) doesn't fix the actual defect: intent has to be checked BEFORE the
+# similarity gate, not patched around it per-phrasing. This is that check --
+# shared with app.services.helplines.select_helplines (same phrase lists,
+# one definition) so a query recognised as touching violence or self-harm
+# is NEVER refused pre-LLM for weak retrieval alone. Safe to bypass: the
+# LLM's own grounding rules already require it to say "no grounded answer"
+# rather than invent a citation when retrieved evidence is weak or empty
+# (see _STRUCTURED_PROMPT's GROUNDING paragraph), and C5 backstops any
+# citation that slips through anyway -- this bypass only ever changes
+# WHETHER the LLM is asked, never what it's allowed to answer with.
+# FIXED 2026-09-04 (found live, a second time, in the same session): the
+# first version of this matched compound phrases ("hurt someone", "hurt
+# him", "hurt her") rather than the bare verb -- so "I want to hurt
+# somebody badly" and "can I get away with hurting my roommate" both
+# missed every entry and fell straight back through to is_abstention,
+# reproducing the exact bug this function exists to close. A phrase list
+# is inherently this brittle: every noun/pronoun/inflection combination
+# needs its own entry, forever. Switched to STEMS matched at a word
+# boundary with no boundary required after (`\bhurt` matches "hurt",
+# "hurting", "hurts", "hurtful") -- covers the inflections a compound
+# phrase list never will, for the same handful of verbs. False positives
+# (a stem matching an unrelated word, or a genuinely non-violent use of
+# "hurt") cost almost nothing here: the abstention-bypass side just means
+# the LLM gets asked instead of refused outright, and its own grounding
+# rules still apply; the helpline side just means 112 shows up once when
+# it wasn't strictly needed. Both are cheap wrong answers next to the one
+# this replaced -- a harm query silently refused because its exact
+# phrasing wasn't on a list.
+_VIOLENCE_HARM_STEMS = (
+    "murder", "kill", "homicide", "stab", "shoot", "assault", "attack",
+    "beat", "hurt", "harm", "violence", "strangle", "poison", "rape",
+    "molest", "kidnap", "abduct", "torture", "wound", "injure", "punch",
+    "slap", "choke", "stalk",
+)
+_SELF_HARM_STEMS = ("suicide", "self-harm", "self harm", "end my life", "end it all")
+
+_VIOLENCE_HARM_RE = re.compile(
+    r"\b(?:" + "|".join(_VIOLENCE_HARM_STEMS + _SELF_HARM_STEMS) + r")", re.IGNORECASE,
+)
+
+
+def touches_violence_or_harm(query: str) -> bool:
+    """True when the query's own text names violence or self-harm, by the
+    same keyword-net heuristic as every other gate in this file (false
+    negatives -- violence described without any of these words -- are
+    accepted, not solved, per the same tradeoff made everywhere else here).
+    The one canonical definition: app.services.helplines.select_helplines
+    imports this rather than keeping its own copy, so the word list used to
+    decide "does this query get the abstention bypass" and "does this
+    query get a helpline shown" can't quietly drift apart."""
+    return bool(_VIOLENCE_HARM_RE.search(query))
+
+
 def in_force(as_of: date):
     return and_(
         SectionVersion.valid_from <= as_of,

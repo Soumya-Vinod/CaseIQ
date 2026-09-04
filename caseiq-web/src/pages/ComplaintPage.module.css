@@ -1,5 +1,5 @@
 .page {
-  max-width: 760px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem 1.1rem 4rem;
   width: 100%;
@@ -99,6 +99,7 @@
 /* ── Form ────────────────────────────────────────────────────────────── */
 .form {
   margin-top: 1.8rem;
+  max-width: 640px;
 }
 
 .fieldset {

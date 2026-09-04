@@ -1,34 +1,16 @@
-.nav {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+.shell {
   display: flex;
-  gap: 0.4rem;
-  padding: 0.7rem 1rem;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  align-items: flex-start;
+  min-height: 100svh;
+  width: 100%;
 }
 
-.tab {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  min-height: var(--tap-min);
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.5rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-
-.tabActive {
-  color: var(--gold);
-  background: var(--gold-dim);
-  border-color: var(--gold-border);
+.content {
+  flex: 1;
+  /* min-width: 0 is load-bearing in a flex row -- without it, a wide child
+     (a table, a long code/citation string) refuses to shrink below its
+     own content width and forces the whole shell wider than the
+     viewport, reintroducing horizontal scroll at exactly the widths this
+     app has to work at. */
+  min-width: 0;
 }
