@@ -1283,7 +1283,8 @@ stores whole sections only -- a naive join missed 220 of 647 rows (34%), and eve
 220 had exactly this kind of suffix, none a genuine gap. Stripping it before joining fixed all
 220. Building it surfaced a second, unrelated gap in the same join: **BNS's own `marginal_note`
 column is empty for all 358 of its sections** (confirmed directly: 0/358 non-empty, vs. 563/563
-for IPC -- a real BNS-ingestion gap, not touched here). The join alone wasn't enough; for BNS the
+for IPC -- a BNS/BNSS ingestion gap with a confirmed root cause, not touched here; see "BNS/BNSS
+marginal notes" below). The join alone wasn't enough; for BNS the
 clean heading has to be derived from `section_text` itself (`_heading_from_text`, anchored on the
 section's own "{number}. {heading}.--" marker rather than the string's start, since a chapter
 heading can precede it in the same field -- e.g. "Of cheating 318. Cheating.--..."). Both fixes
@@ -1505,17 +1506,17 @@ corpus *before* writing the page, not transcribed from memory:
 | Medical examination | BNSS 53 | Body text: examined by a medical officer soon after arrest, female arrestee examined only by/under a female officer |
 
 Surfaced a second, distinct BNSS data-quality issue while picking quotes (beyond marginal_note
-being empty, see the cognizability finding above): `section_text` itself carries short
-marginal-note fragments injected mid-sentence into the body text (a two-column PDF layout's
-columns merged in reading order, is the likely mechanism, not confirmed against the raw PDF this
-session) -- e.g. BNSS 58's real text reads "...for a **Person** longer period... such **period
-arrested not to be detained** shall not... arrest to **twenty-four** the Magistrate's Court...
-jurisdiction or not. **hours.**" (bolded = injected fragments). Every quote used on the page is a
-verified-by-substring-match, contiguous clean span specifically chosen to avoid these
+being empty) -- `section_text` itself carries short marginal-note fragments injected mid-sentence
+into the body text, e.g. BNSS 58's real text reads "...for a **Person** longer period... such
+**period arrested not to be detained** shall not... arrest to **twenty-four** the Magistrate's
+Court... jurisdiction or not. **hours.**" (bolded = injected fragments). Every quote used on the
+page is a verified-by-substring-match, contiguous clean span specifically chosen to avoid these
 interruptions -- never a splice across one, never the raw interleaved text shown as if it were
 clean. Full sections still show this artifact when tapped through to `SectionDetailSheet` (that
-component shows whatever `section_text` actually contains, unchanged, for every section already);
-recorded here as a corpus-ingestion finding for BNSS specifically, not fixed.
+component shows whatever `section_text` actually contains, unchanged, for every section already).
+Root cause confirmed directly against the parser source, not left as a guess -- see "BNS/BNSS
+marginal notes: one root cause, two symptoms" below, which records this together with the empty-
+marginal_note finding, as asked.
 
 **Self-caught regression, found by looking at my own screenshot, not reported by anyone**:
 widening `QueryPage` for the two-column layout surfaced that every *ordinary* answer -- including
@@ -1528,3 +1529,223 @@ silently told the backend to treat itself as an explicit "I don't know" skip. Fi
 ever set this. Re-verified both directions afterward: the spurious note is gone from an ordinary
 query, and the real C8 flow (date prompt appears for a past-incident query, explicit skip still
 adds its note) still works.
+
+## BNS/BNSS marginal notes: one root cause, two symptoms (2026-09-04)
+
+Two findings recorded separately above -- `marginal_note` empty for all 358 BNS sections
+(cognizability lookup) and short marginal-note fragments injected mid-sentence into BNSS's
+`section_text` (Your rights on arrest) -- are the same root cause, confirmed against the parser
+source directly rather than left as a guess.
+
+`app/legal_corpus/parsing/gazette_parser.py` (the parser for BNS/BNSS/BSA, all three enacted-Act-
+format PDFs) says so in its own docstring and code comments, written when it was built: the
+source PDFs genuinely are two-column -- marginal notes run in a narrow column alongside the body
+text, not above or below it. `pdfplumber`'s extraction is column-unaware: reading a page in its
+default order pulls words from both columns into one stream, dropping "an arbitrary fragment of
+[the marginal note] next to the [section] number" (the parser's own words) -- e.g. "Trial of 4.
+(1) All offences..." or, in BNSS 58's case, fragments scattered through the whole section rather
+than just at the boundary. `RawSection.section_title` is set to `None` for every Gazette-format
+section with an explicit comment explaining why: "Gazette body text doesn't reliably separate a
+marginal-note title from operative text" -- a deliberate decision to leave the field honestly
+empty rather than populate it with an arbitrary, unreliable fragment. `section_text` doesn't get
+the same protection because it's built from the same raw extraction *before* that decision point
+-- there's no equivalent "give up cleanly" option for body text the way there is for a title field.
+
+So, precisely: **not** dropped (the notes aren't discarded, they're scattered into the wrong
+position in the body text), and **not** an inherent property of the PDF that makes them
+unextractable in principle -- a column-aware extraction (clustering words by x-position before
+reading order, the same technique C1's First Schedule parser already uses successfully for
+CrPC/BNSS's tabular data) could very plausibly separate the two columns correctly. `GazetteParser`
+simply doesn't attempt that; it was scoped to handle footnotes, section-boundary detection, and
+state-amendment exclusion for single-column Bill-style text, and the two-column marginal-note
+problem was a known, accepted limitation from the start, not an oversight discovered now. Fixing
+it properly means teaching `GazetteParser` (or a variant) to separate columns by position before
+extracting text -- a real re-ingestion project, not a quick patch, and not attempted here.
+
+## Media query range syntax: a build tool silently upgrading past this project's real support window (2026-09-04)
+
+**Reported symptom, from a real Android phone, Chrome, ~390px wide, not a screenshot**: the
+sidebar doesn't disappear on mobile -- it collapses to a narrow rail that still occupies layout
+space, squeezing page content into roughly the right half of the screen, with the header caught
+inside the squeeze rather than spanning full width. Every Playwright screenshot this project has
+ever taken at 390px shows the correct layout (hamburger only, full-width content, no rail) -- the
+bug is real on the phone and invisible to every automated check that exists.
+
+**Root cause, verified against the actual deployed artifact, not the source code**:
+
+```
+curl https://caseiq-web.vercel.app/assets/index-ClKOXBf7.css
+-> @media (width<=859px){...}
+```
+
+`Sidebar.module.css` authors the ordinary, decades-old `@media (max-width: 859px)`. What Vercel
+actually serves is the CSS Media Queries Level 4 **range syntax**, `(width<=859px)` -- confirmed
+present for all five of this project's own breakpoints, not the sidebar alone (`min-width: 480px`,
+`760px`, `960px` x2 all came back the same way). Traced into Vite's own installed source
+(`node_modules/vite/dist/node/chunks/node.js`): Vite 8 minifies CSS with **lightningcss** by
+default, and `build.cssTarget` -- unset anywhere in this project's `vite.config.ts` -- was
+defaulting to Vite's new **Baseline Widely Available (2025-05-01)** target (`chrome111`, `edge111`,
+`firefox114`, `safari16.4`, `ios16.4`). Every one of those floors sits at or above the range-syntax
+support threshold, so lightningcss was correctly, deliberately choosing the shorter modern syntax
+for the audience it was told to target -- **the default target itself was wrong for this project**,
+not a tooling bug.
+
+That target needs Chrome/Chrome-for-Android 104+, Safari 16.4+, Samsung Internet 20+ -- **94.82%
+global support (caniuse)**, meaning ~5% of real traffic does not parse it, concentrated in exactly
+the older/non-flagship Android devices docs/caseiq-industry-readiness.md's G13 names as this
+project's own target audience. On such a browser the *entire* `@media(width<=859px){...}` block is
+invalid CSS and is dropped outright -- not degraded, not partially applied -- so `.rail` keeps its
+unconditional `display:flex`/fixed width, `.mobileBar`'s `display:flex` override never fires (no
+hamburger at all), and the screenshot symptom follows exactly.
+
+**Why Playwright could never have caught this, verified rather than assumed**:
+
+```
+Chromium version: 151.0.7922.34
+matchMedia('(width<=859px)').matches at 390px viewport -> true
+```
+
+This was never a viewport-width, device-pixel-ratio, touch-capability, or mobile-user-agent
+problem -- no Playwright context option changes which CSS syntax the browser's own engine
+understands. Playwright always ships an evergreen Chromium; the gap only exists on an aging real
+engine, which is a dimension no headless-browser test tool can vary. A screenshot tool verifies
+layout; it cannot verify which CSS features the renderer taking the screenshot itself supports.
+
+### Fix: an explicit, usage-justified `cssTarget`, not a guess
+
+`vite.config.ts` now sets `build.cssTarget` explicitly (esbuild-style target strings are the only
+format Vite's `convertTargets` accepts for this option -- confirmed by reading it directly, not a
+browserslist string, which is why the query below informs the choice rather than being pasted in
+verbatim):
+
+```
+cssTarget: ['chrome90', 'edge90', 'firefox91', 'safari14', 'ios14']
+```
+
+**The browserslist query that informed it, run against real caniuse-lite data, not guessed**:
+`npx browserslist "> 0.5%, last 2 versions, not dead"` -- 84.59% global coverage per the tool's own
+report -- resolves no lower than **Chrome 109**. That's already *above* the Chrome 104 range-syntax
+cutoff, which means plugging that query's result straight into `cssTarget` would not have fixed
+anything -- lightningcss would still judge range syntax safe. This is exactly why the floor above
+is hand-set lower than what the usage query alone gives, not equal to it: **live usage-share data
+systematically under-counts this project's own real audience.** A phone frozen on Chrome 90
+because its Android 8/9 build stopped receiving Play Store Chrome updates years ago still shows up
+in a usage crawl as "some old traffic below 0.5%, rounded away" -- it doesn't stop existing because
+the stats can't see it, and it's disproportionately exactly who G13 names. `Android >= 5` was tried
+as an explicit browserslist floor and rejected as decorative: caniuse-lite's live "android" (stock
+WebView) bucket only carries current top-share data (`android 151` and nothing else at normal
+thresholds -- the true old tail only appears under a `cover 99.5%` query, which is so broad it pulls
+in Chrome 4 and isn't a usable engineering target). So the floor is a hand-chosen, stated
+engineering judgment, not a query result: **Chrome/Edge 90** (April 2021 -- a version budget
+Android 8/9 devices plausibly got frozen on; Samsung Internet has no separate esbuild target key
+and is Chromium-based, so the same floor covers it), **Firefox 91**, **Safari/iOS 14** -- each
+comfortably below its own engine's range-syntax cutoff, verified directly against the installed
+lightningcss binary before trusting it:
+
+```js
+lightningcss.transform({ code: '@media (max-width: 859px) {...}', targets: {chrome: 90<<16, ...} })
+-> '@media (max-width:859px){.rail{display:none}}'   // legacy form, confirmed
+```
+
+**Explicitly out of scope, stated rather than silently dropped**: KaiOS (JioPhone) shows up with
+real share in the same India-scoped browserslist query (`cover 99.5% in IN`) and is a genuinely
+relevant device for this project's stated audience -- but its Gecko-derived engine is missing far
+more than range-syntax media queries, and targeting it would mean not shipping a React SPA in the
+first place. Naming the exclusion, not pretending the fix covers every device this audience uses.
+
+**Rebuilt and verified against the actual output, not just the config**: `npm run build` now
+produces `@media (max-width:859px){...}` (and all four other breakpoints in their legacy form) in
+`dist/assets/*.css` -- checked directly, not assumed from the config change.
+
+### The CI guard: two independent checks, because they catch different failure classes
+
+`caseiq-web/scripts/check-css-media-queries.mjs`, wired as the literal last step of `npm run build`
+(`tsc -b && vite build && node scripts/check-css-media-queries.mjs`) and run again in a new,
+scoped GitHub Actions workflow (`.github/workflows/frontend-ci.yml`, triggered on any push/PR
+touching `caseiq-web/**`) so a regression fails CI, not just a build nobody happened to inspect:
+
+1. **No range syntax in the built CSS.** A direct regex sweep (`@media[^{]*[<>][^{]*\{`) over
+   every file in `dist/**/*.css` -- the exact regression that already happened.
+2. **Every one of this project's own `@media` conditions survives into the build, the same number
+   of times, unchanged.** Deliberately per-condition (a multiset, not a single total), because a
+   raw @media-count comparison against `src/**/*.css` false-fails the moment third-party CSS joins
+   the bundle -- confirmed hitting this directly while building the check: `leaflet.css` (imported
+   by `PoliceStationsPage.tsx`, bundled globally since `App.tsx` imports every page eagerly) adds
+   its own `@media print`, one block dist has that source-scoped counting would never expect.
+   Comparing per-condition against only what this project's own source authors sidesteps that
+   noise entirely, and this check is *why* check 1 alone isn't enough: a future minifier change, a
+   different transform, or a merge bug could drop or duplicate one of our blocks without ever
+   touching range syntax, and check 1 would report a clean pass while a real breakpoint silently
+   stopped working.
+
+**Both checks negative-tested before trusting them, not assumed to work from reading the code**:
+reverted `cssTarget` to confirm check 1 fires (it did, on all 5 conditions, with the exact
+`vite.config.ts` culprit named in its own error text); separately hand-deleted one media block from
+an otherwise-correct built CSS file, source untouched, to confirm check 2 fires independently of
+check 1 (it did -- `0/1` for `max-width:859px`, check 1 silent, since no range syntax was
+involved). Both restored before the real build was left in place.
+
+### Not yet closed -- the one thing that can close it hasn't happened
+
+**This is fixed at the build-tool level and CI-gated against recurring; it is not confirmed fixed
+on a real device, and won't be called that until it is.** Every verification above -- the curl'd
+bundle, the rebuilt CSS, the negative-tested CI check -- proves the mechanism, using the same class
+of tool (a build inspected on this machine) that already produced false confidence once on this
+exact bug. The phone that found this is the only thing that has ever detected it; per instruction,
+this stays open until that same phone confirms the deployed fix, after these changes are committed,
+pushed, and redeployed -- none of which this session does itself.
+
+### Scope: which past "verified/screenshotted at 390px" claims in this document are now suspect
+
+Every screenshot this project has ever taken (dozens of `*-390.png` files under `caseiq-web/`, plus
+every "confirmed at 390px" sentence in this document) was taken through the same evergreen
+Playwright Chromium that this finding proves cannot detect this bug, regardless of what the
+specific claim was about -- so the honest scope statement is "any of them, on an affected real
+device," not "just the sidebar." Four claims in this document name 390px specifically, and are
+worth calling out individually rather than leaving as an unscoped worry:
+
+1. **"Screenshotted through the actual app at 390px" (C8, incident-date routing)** -- the
+   *functional* claim (the date prompt appears, the regime-note text is correct) is untouched, but
+   the visual claim of what that screen looks like on a real narrow phone assumed the rail was
+   absent and content had full width. On an affected device it wouldn't have.
+2. **"Verification battery, run through the real UI at 390px" (cognizability lookup)** -- same
+   split: the cognizable/bailable *data* shown is correct regardless; the "at 390px" framing
+   implied a clean full-width mobile view that an affected device would not actually show.
+3. **Sidebar nav accessibility -- "confirmed via real synthetic keyboard/click events, at 390px"
+   (focus-in, Escape, 12-tab trap, select-then-auto-close)** -- **the most seriously affected of
+   the four, worth flagging above the others.** This didn't just look different on an affected
+   device -- the hamburger button this entire test exercises never renders there at all (its
+   `display:flex` only exists inside the broken media query), so every one of these accessibility
+   guarantees was verified against a control path that a real user on an affected browser cannot
+   reach in the first place.
+4. **QueryPage two-column layout -- "verified at both 1440px ... and 390px (single column,
+   unchanged)"** -- the 390px half is actually *not* at risk: that breakpoint is `min-width: 960px`,
+   false at 390px regardless of which syntax parses, so the single-column fallback is the plain
+   default CSS either way. The **1440px** half of the same claim is the one that shares this bug's
+   exact mechanism (same range-syntax rewrite, same Vite/lightningcss cause) and was never
+   re-examined with that in mind -- a real desktop user on an old browser at 1440px would be stuck
+   single-column today, undetected until now.
+
+None of these need independent re-investigation now that the root cause and fix are shared across
+all five of this project's breakpoints -- the same `cssTarget` change and the same CI guard cover
+all four. They're listed to be explicit about what "verified at 390px" was actually worth in this
+project's history before today, not to reopen each one separately.
+
+### The general lesson, beyond CaseIQ
+
+A build tool optimizing CSS output for the newest syntax its default target allows is not a
+CaseIQ-specific footgun -- Vite 8 shipped a materially more modern default `cssTarget` (Baseline
+Widely Available, a rolling ~1-year-old floor) than earlier versions had, and any project that
+upgrades without setting `build.cssTarget` explicitly inherits whatever browser floor that default
+implies, silently, with no warning at build time and no failure any code review or type check would
+surface. The properties that made this specific instance dangerous rather than cosmetic generalise
+directly: (1) the tool's *output* changes even though no source line touched by a human changed,
+(2) the only artifact that reveals it is the *built, minified* file -- dev servers, unminified
+builds, and diffs of the source all look identical before and after, (3) the only thing that can
+observe the regression is a browser engine below the tool's chosen floor, and a project's own
+automated testing almost always runs on an evergreen engine that is definitionally never below any
+floor a tool would plausibly choose. Code review, type checking, and screenshot testing all passed
+throughout. The fix generalises the same way the bug does: pin the build's compatibility target
+explicitly, from real usage data adjusted for what that data under-counts about your actual
+audience, and add a check on the *shipped* artifact -- not the source, not the dev server -- that
+fails CI the moment the gap reopens.

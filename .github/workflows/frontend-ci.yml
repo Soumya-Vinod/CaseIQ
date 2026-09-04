@@ -1,0 +1,43 @@
+name: Frontend CI
+
+# Scoped to caseiq-web only -- this exists specifically to make the build
+# (and the CSS media-query check inside it) a required, non-bypassable gate
+# in CI, not just something that happens to run on a contributor's machine.
+# See docs/evaluation.md's "Media query range syntax silently breaks mobile
+# layout on real devices" finding for why this check exists at all: a
+# regression here passes every local `npm run build` too (that's not the
+# gap) -- the gap this workflow closes is a PR that never runs `npm run
+# build` locally before merging.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "caseiq-web/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    paths:
+      - "caseiq-web/**"
+      - ".github/workflows/frontend-ci.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: caseiq-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: caseiq-web/package-lock.json
+      - run: npm ci
+      # tsc -b && vite build && node scripts/check-css-media-queries.mjs --
+      # the last step is the one that matters here: it fails the workflow
+      # if the shipped CSS uses media-query range syntax (needs Chrome/
+      # Chrome-for-Android 104+, Safari 16.4+ -- not universal on the
+      # budget/older Android devices this project targets, docs G13) or if
+      # any of this project's own @media conditions went missing or
+      # duplicated between source and the built bundle.
+      - run: npm run build
