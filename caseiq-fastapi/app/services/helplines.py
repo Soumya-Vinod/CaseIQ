@@ -92,16 +92,6 @@ HELPLINES: tuple[Helpline, ...] = (
 )
 
 
-def get_helplines() -> list[dict]:
-    return [
-        {
-            "name": h.name, "number": h.number, "when_to_use": h.when_to_use,
-            "source_url": h.source_url, "verified_on": h.verified_on,
-        }
-        for h in HELPLINES
-    ]
-
-
 def _helpline(number: str) -> dict:
     h = next(h for h in HELPLINES if h.number == number)
     return {
@@ -120,17 +110,44 @@ _WOMAN_CONTEXT_PHRASES = (
 _CHILD_CONTEXT_PHRASES = (
     "child", "minor", "my son", "my daughter", "school student",
 )
+# FIXED 2026-09-06 (checklist item 4): cyber/financial fraud queries never
+# matched any of the phrase lists above, so a query about being scammed
+# got either nothing (answered path) or the full five-number wall
+# (abstention path, see select_helplines's old behaviour below) -- neither
+# surfaces 1930, the one number actually relevant to it. Same "narrow,
+# hand-picked list, not a classifier" caveat as every other phrase list in
+# this project: catches the phrasing someone thought to add, nothing more.
+_CYBER_FRAUD_PHRASES = (
+    "fraud", "scam", "scammed", "phishing", "cyber crime", "cybercrime",
+    "hacked", "otp", "upi fraud", "online fraud", "fake link", "fake call",
+)
 
 
-def select_helplines(query: str) -> list[dict]:
-    """The answered-query path's helpline set -- situational, not the fixed
-    five get_helplines() returns for the abstention path (which deliberately
-    stays exhaustive: it's the one path with nowhere else to send someone,
-    per AbstentionCard's own docstring). Here, showing all five on every
-    ordinary answer ("what is the punishment for theft" pulling up a cyber
-    crime line and a child helpline) is noise, not help -- so this returns
-    an empty list unless the query itself touches violence, self-harm, or
-    harm to others, and even then only the numbers actually relevant to it.
+def select_helplines(query: str, *, fallback_on_empty: str | None = None) -> list[dict]:
+    """Chosen by topic, capped at two -- never the wall of five. Checklist
+    item 4: showing all five numbers on every abstention was noise, not
+    help ("we show all five on every abstention. Select by topic... one or
+    two, never a wall"). This is now the ONE selection function for both
+    paths -- the old split (a topic-aware list for an answered query, a
+    hardcoded `get_helplines()` returning all five for every abstention,
+    regardless of what the query was actually about) meant an abstained
+    question about being scammed got a legal-aid pointer buried in a wall
+    of five numbers instead of 1930, the one that matters most in the first
+    hour. `get_helplines()` is removed, not just superseded -- once
+    abstention went through this same function, nothing called it any more,
+    and a function nobody calls is worse left in place than deleted: it
+    reads as a live code path when it isn't one.
+
+    Priority, most specific first, each additive up to the two-item cap:
+    cyber fraud (1930) -> woman-context (181) -> child-context (1098) ->
+    immediate danger/violence (112, added whenever the query names violence
+    or self-harm, even alongside a more specific match -- a scam that's
+    also a live threat still needs 112). If nothing above matched at all,
+    `fallback_on_empty` (a helpline number, e.g. "15100" for NALSA) is used
+    -- callers pass this only where "we genuinely have nothing more
+    specific to offer" is the honest state, i.e. the abstention path;
+    an ordinary answered query with no topic signal gets an empty list,
+    same as before.
 
     The violence/self-harm check itself lives in
     app.services.retrieval.touches_violence_or_harm -- ONE definition,
@@ -139,11 +156,18 @@ def select_helplines(query: str) -> list[dict]:
     query get to reach the LLM at all" can't quietly drift apart.
     """
     q = query.lower()
-    if not touches_violence_or_harm(query):
-        return []
-    selected = [_helpline("112")]
-    if any(p in q for p in _WOMAN_CONTEXT_PHRASES):
+    selected: list[dict] = []
+
+    if any(p in q for p in _CYBER_FRAUD_PHRASES):
+        selected.append(_helpline("1930"))
+    if any(p in q for p in _WOMAN_CONTEXT_PHRASES) and len(selected) < 2:
         selected.append(_helpline("181"))
-    if any(p in q for p in _CHILD_CONTEXT_PHRASES):
+    if any(p in q for p in _CHILD_CONTEXT_PHRASES) and len(selected) < 2:
         selected.append(_helpline("1098"))
-    return selected
+    if touches_violence_or_harm(query) and len(selected) < 2:
+        selected.append(_helpline("112"))
+
+    if not selected and fallback_on_empty:
+        selected.append(_helpline(fallback_on_empty))
+
+    return selected[:2]

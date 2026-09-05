@@ -147,13 +147,15 @@ class QueryOut(BaseModel):
     # queryable fact, not silently defaulted to a fake id.
     corpus_version_id: UUID | None = None
     # C4: a small, static, hand-verified table (app.services.helplines) --
-    # never LLM output, never in a prompt. The abstention path (nowhere else
-    # to send someone -- see AbstentionCard) always gets the full table.
-    # An answered query gets only the numbers actually relevant to it
-    # (app.services.helplines.select_helplines, on the query's own text) --
-    # empty for an ordinary query, chosen for one that touches violence,
-    # self-harm, or harm to others. See docs/evaluation.md for the incident
-    # this replaces ("1516" / "1800-111-222", both fabricated, both wrong).
+    # never LLM output, never in a prompt. Chosen by topic
+    # (app.services.helplines.select_helplines, on the query's own text),
+    # capped at two -- never the wall of five every abstention used to show
+    # regardless of what the query was about (checklist item 4). Empty for
+    # an ordinary answered query with no topic signal; on abstention, falls
+    # back to NALSA (15100) rather than ever showing nothing, since that's
+    # still the one path where the user got no answer at all. See
+    # docs/evaluation.md for the incident this whole field replaces
+    # ("1516" / "1800-111-222", both fabricated, both wrong).
     helplines: list[HelplineOut] = []
 
 

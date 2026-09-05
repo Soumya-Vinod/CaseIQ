@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/check-css-media-queries.mjs",
+    "validate:guides": "node --experimental-strip-types scripts/validate-guide-quotes.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

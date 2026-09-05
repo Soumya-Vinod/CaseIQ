@@ -17,7 +17,7 @@ from app.services.citation_verification import (
     scan_free_text_for_citations,
     verify_citations,
 )
-from app.services.helplines import get_helplines, select_helplines
+from app.services.helplines import select_helplines
 from app.services.llm import llm_service
 from app.services.retrieval import (
     build_rag_context,
@@ -291,9 +291,15 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,
-        # Abstention path stays exhaustive (nowhere else to send someone --
-        # see AbstentionCard's docstring); an answered query gets only the
-        # numbers actually relevant to it, chosen from the query itself, not
-        # from whatever the LLM happened to generate.
-        helplines=get_helplines() if abstained else select_helplines(payload.query),
+        # FIXED 2026-09-06 (checklist item 4): the abstention path used to
+        # show the full five-number table unconditionally -- noise, not
+        # help, per instruction ("we show all five on every abstention...
+        # select by topic... one or two, never a wall"). Now the SAME
+        # topic-selection select_helplines uses for an answered query, with
+        # NALSA (15100) as the honest fallback when abstention has nothing
+        # more specific to offer -- never zero numbers on a refusal, since
+        # that's still the one path where the user got no answer at all.
+        helplines=select_helplines(
+            payload.query, fallback_on_empty="15100" if abstained else None,
+        ),
     )

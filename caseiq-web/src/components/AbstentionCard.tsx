@@ -13,7 +13,10 @@ import styles from "./AbstentionCard.module.css";
  * send someone, so it's the most important place to get this right. Used
  * to hardcode just NALSA here; now renders whatever the backend actually
  * verified, so a wrong number here can never again drift out of sync with
- * what's actually been checked.
+ * what's actually been checked. Chosen by topic and capped at two, same
+ * as an answered query — this used to always be the full five regardless
+ * of what the query was about (checklist item 4); NALSA is still the
+ * floor when nothing more specific matched, never an empty list here.
  */
 export function AbstentionCard({
   message,

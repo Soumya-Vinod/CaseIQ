@@ -2047,3 +2047,64 @@ identical: read the actual list, not the label.
 woman-Magistrate entitlements. It states instead, honestly, that the statement can be recorded by
 any officer for this specific offence, and that asking for a woman officer is still a real option
 even though the law doesn't require one here -- see the guide's own content for the exact wording.
+
+## Situation guides: a quote sourced from the offence-attributes table, not section_text -- caught
+## before shipping, not after (2026-09-06)
+
+While drafting the domestic cruelty guide's "any station must take your complaint" entitlement, an
+early version added a second, reassuring point: that a report from the aggrieved woman herself, or
+a close relative, is enough for the police to treat it as a case they can act on immediately. That
+reassurance is real -- BNS §85's row in `offence_attributes` records exactly this as its
+`cognizable_raw` condition (see this document's C1 section, above). The draft quoted it as a
+blockquote attributed to **BNS §85**, with the usual "Read the full section" link.
+
+**It was wrong to cite it that way, and checking it against the live corpus caught this before
+building anything**: `offence_attributes.cognizable_raw` is not section_text. It comes from a
+*different* source document entirely -- CrPC's/BNSS's First Schedule (the classification table),
+parsed by `scripts/parse_crpc_schedule.py` into its own table -- not from BNS §85's own operative
+text, which is a two-sentence offence definition with no mention of who may report it. Verified
+directly: fetched BNS §85's actual `section_text` from the live corpus and confirmed the phrase
+does not appear anywhere in it. Had this shipped, tapping "Read the full section" on that card
+would have opened BNS §85's real text, which contains none of the words just quoted above it --
+a citation that visibly contradicts its own source, discoverable by any reader who tapped through,
+and exactly the kind of inconsistency this project's whole citation-verification discipline
+(`app/services/citation_verification.py`, `docs/caseiq-industry-readiness.md`'s C5) exists to
+prevent in LLM output. This would have been the same failure shape, introduced by hand instead of
+by a model.
+
+**Fixed** by dropping the blockquote-with-citation treatment entirely and folding the same
+reassurance into the entitlement's own plain-language body text, unquoted and uncited -- true
+information, just not presented as a verbatim statutory quote, because it isn't one.
+
+**The general rule this establishes, worth keeping for every situation guide added after this
+one**: a statutory `quote` field must be a substring of `section_text`, checked directly, never of
+`offence_attributes` (or any other derived/classification table). Those tables answer a different
+question (how a section is classified) from what a section's own text says, and the two must never
+be blended into a single quoted-and-cited unit -- a reader who taps through has to find the exact
+words they just read, every time, or the "verify before you tap" premise these guides are built on
+breaks.
+
+**Automated 2026-09-06**: `caseiq-web/scripts/validate-guide-quotes.mjs` (`npm run validate:guides`)
+now checks this rule against the live corpus for every guide, before shipping rather than after --
+this specific bug was caught by a manual re-read while drafting, which doesn't scale to a sixth or
+twentieth guide. Scope was decided deliberately, not left implicit: it checks only
+`GuideEntitlement.quote` and `GuideRecognitionItem.quote` -- the two content shapes whose TypeScript
+type requires an `act`+`section` alongside the quote, and which render as a bordered blockquote with
+a citation badge. The guides' "what to say" spoken-script lines (`GuidePracticalTip`) are out of
+scope by construction, not by exemption: that type carries no `quote`/`act`/`section` field at all,
+so a script line is structurally incapable of implying a citation -- six of them currently name a
+section *number* in the sentence itself ("under section 173") without being a statutory quote, and
+render in the plain dashed practical box, never a blockquote. Normalisation is whitespace/line-break
+collapse only, nothing that could mask a real mismatch (no case-folding, no punctuation stripping).
+An elided quote ("first part … second part") is split on the ellipsis and each segment must appear
+in the section text in left-to-right order -- not merely both present somewhere, which would pass a
+fabricated join of two unrelated fragments.
+
+Proven capable of firing before trusting the clean result, same discipline as C5's own verification
+(above): fed the validator's checking logic the exact original bug (the offence_attributes text
+quoted against BNS §85's real section_text) and it correctly failed; fed it a one-word-corrupted
+real quote and it failed; fed it a real ellipsis quote with its two segments swapped and it failed;
+fed it the real, correct quote and it passed. Only then does the real run's **21/21 passed** mean
+what it appears to mean. Not wired into `npm run build` -- it needs the live backend reachable,
+and coupling the frontend build to the backend's uptime is a worse failure mode than running this
+as a separate, deliberate pre-deploy step.
