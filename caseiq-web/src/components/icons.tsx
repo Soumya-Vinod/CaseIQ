@@ -90,6 +90,17 @@ export function StationsIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function GuidesIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M6 4.5h11.5v14.5a1 1 0 0 1-1 1H7.5A1.5 1.5 0 0 1 6 18.5z" />
+      <path d="M6 4.5A1.5 1.5 0 0 1 7.5 3H16" />
+      <path d="M9 8.5h6M9 12h4" />
+      <path d="M6 18.5a1.5 1.5 0 0 1 1.5-1.5H16" />
+    </Icon>
+  );
+}
+
 export function RightsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

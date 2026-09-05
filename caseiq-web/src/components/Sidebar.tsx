@@ -6,6 +6,7 @@ import {
   ChevronIcon,
   CloseIcon,
   ComplaintIcon,
+  GuidesIcon,
   LookupIcon,
   MenuIcon,
   NewsIcon,
@@ -20,6 +21,7 @@ export type Tab =
   | "browse"
   | "arrest"
   | "rights"
+  | "guides"
   | "complaint"
   | "news"
   | "stations";
@@ -30,6 +32,7 @@ const NAV_ITEMS: { id: Tab; label: string; Icon: typeof AskIcon }[] = [
   { id: "browse", label: "Browse by act", Icon: BrowseIcon },
   { id: "arrest", label: "Arrest & bail", Icon: ArrestIcon },
   { id: "rights", label: "Your rights", Icon: RightsIcon },
+  { id: "guides", label: "Situation guides", Icon: GuidesIcon },
   { id: "complaint", label: "File a complaint", Icon: ComplaintIcon },
   { id: "news", label: "News", Icon: NewsIcon },
   { id: "stations", label: "Nearby stations", Icon: StationsIcon },

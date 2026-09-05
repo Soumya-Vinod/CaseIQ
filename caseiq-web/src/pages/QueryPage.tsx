@@ -125,6 +125,13 @@ export function QueryPage() {
             {loading ? "Asking…" : "Ask"}
           </button>
         </div>
+
+        <p className={styles.privacyNote}>
+          CaseIQ detects and removes common personal details (phone numbers, email
+          addresses, Aadhaar/PAN numbers, and similar) before your question reaches our
+          AI model. This detection isn't perfect, especially for names and addresses —
+          please avoid including a full name or address you don't need to share.
+        </p>
       </form>
 
       {!result && !loading && !error && (

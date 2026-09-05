@@ -14,3 +14,40 @@
      app has to work at. */
   min-width: 0;
 }
+
+/* Breakpoint kept in sync with Sidebar.module.css's own `@media (max-width:
+   859px)` by value, not by a shared token -- same independent-per-file
+   pattern already used elsewhere (QueryPage/RightsOnArrestPage/
+   AnswerBriefing each own their own breakpoint number).
+
+   Root cause this fixes, confirmed live against the deployed site before
+   writing this rule: Sidebar renders as a React fragment, so its
+   mobile-only top bar (`.mobileBar`, in Sidebar.module.css) is a DIRECT
+   flex-row sibling of `.content` inside `.shell`, not a header stacked
+   above it. `.rail` is `display: none` on mobile (contributes nothing to
+   the row) and `.drawer` is `position: fixed` (out of flow, same reason)
+   -- so neither of those affects this. `.mobileBar`, with no explicit
+   width, sizes to its own content (hamburger + wordmark, ~148px on a
+   412px-wide device) and claims that as its own slice of the flex row,
+   squeezing `.content` into whatever's left instead of the full viewport
+   -- measured directly: `.content` computed to 264px of a 412px viewport
+   before this rule existed. See docs/evaluation.md's "mobileBar sharing
+   the flex row with content" finding for the full trace, including why
+   this survived the earlier CSS-range-syntax fix untouched (a completely
+   separate bug that happened to be reported at the same breakpoint). */
+@media (max-width: 859px) {
+  .shell {
+    flex-wrap: wrap;
+  }
+
+  .content {
+    /* Must be a real flex-basis, not the bare `flex: 1` above (which is
+       shorthand for `1 1 0%`). Confirmed live: with a 0% basis, the wrap
+       algorithm's hypothetical-size check treats `.content` as already
+       fitting on `.mobileBar`'s own line (0px never overflows it), so it
+       never wraps to a line of its own at all -- it gets squeezed to 0
+       width on `.mobileBar`'s line instead of the intended full-width
+       second row. */
+    flex-basis: 100%;
+  }
+}

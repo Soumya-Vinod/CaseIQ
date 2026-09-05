@@ -171,6 +171,12 @@ export function ComplaintPage() {
 
         {step === 1 && (
           <fieldset className={styles.fieldset}>
+            <p className={styles.privacyNote}>
+              Your own name, address and phone number above are removed before this draft
+              is sent to our AI model, and restored only in the letter shown to you. Detection
+              is less reliable for names and addresses written into the free-text fields below
+              (e.g. the accused's details) — please avoid including more than you need to.
+            </p>
             <label className={styles.field}>
               <span className={styles.label}>Your full name</span>
               <input

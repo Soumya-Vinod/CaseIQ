@@ -1685,15 +1685,147 @@ an otherwise-correct built CSS file, source untouched, to confirm check 2 fires 
 check 1 (it did -- `0/1` for `max-width:859px`, check 1 silent, since no range syntax was
 involved). Both restored before the real build was left in place.
 
-### Not yet closed -- the one thing that can close it hasn't happened
+### Confirmed deployed, and confirmed NOT the fix -- a second, unrelated bug was hiding behind it
 
-**This is fixed at the build-tool level and CI-gated against recurring; it is not confirmed fixed
-on a real device, and won't be called that until it is.** Every verification above -- the curl'd
-bundle, the rebuilt CSS, the negative-tested CI check -- proves the mechanism, using the same class
-of tool (a build inspected on this machine) that already produced false confidence once on this
-exact bug. The phone that found this is the only thing that has ever detected it; per instruction,
-this stays open until that same phone confirms the deployed fix, after these changes are committed,
-pushed, and redeployed -- none of which this session does itself.
+The range-syntax fix was deployed and independently re-verified from the live bundle (`@media
+(max-width:859px){._mobileBar{display:flex}._rail{display:none}}`, classic syntax, all five
+breakpoints correct) -- **and the phone still showed the broken layout, checked in incognito, not
+cache.** This was a real bug and a real fix, and it was not the cause of the reported symptom. See
+the next finding for what actually was -- recorded here rather than quietly folded into it, because
+the lesson of shipping a real, verified fix that doesn't fix the reported symptom is worth keeping
+separate from the lesson of the bug itself.
+
+## mobileBar sharing the flex row with content: a second bug at the same breakpoint (2026-09-04)
+
+Told explicitly not to assume the range-syntax conclusion and to re-diagnose from scratch. Direct
+evidence first, not a theory: loaded the live production URL in Playwright with real Android device
+emulation (`devices['Pixel 7']`, `isMobile: true`, `hasTouch: true`) and read computed styles
+straight off the rendered DOM, rather than reasoning about the CSS in the abstract.
+
+```
+innerWidth: 412
+.rail   -> display: none   (correct -- media query fires fine now)
+.drawer -> display: flex, position: fixed  (correct -- off-flow, off-screen when closed)
+.content (main) -> width: 264.203px   <- should be 412px
+.mobileBar -> width: 147.797px
+412 - 264.203 = 147.797  -- exact match, not a coincidence
+```
+
+**Root cause**: `Sidebar.tsx` returns a React fragment -- `.mobileBar`, `.rail`, the conditional
+backdrop, and `.drawer` are four flat siblings, not children of a wrapper element. `App.tsx` places
+`<Sidebar/>` and `<main className={styles.content}>` inside `.shell`, a `display: flex` row. Because
+a fragment doesn't create a DOM node, **`.mobileBar` lands as a direct flex-row sibling of
+`.content` inside `.shell`**, not as a header stacked above it. `.rail` (`display: none`) and
+`.drawer` (`position: fixed`) are both correctly removed from the flex layout and contribute
+nothing -- but `.mobileBar` has no explicit width, so as an ordinary flex item it sizes to its own
+content (hamburger + wordmark, 147.797px) and claims that as a slice of the row, leaving `.content`
+only the remainder. This is a completely different mechanism from the range-syntax bug -- it
+doesn't touch `@media` parsing at all -- and was always there, invisible in every prior 390px
+screenshot only because those screenshots were never compared against a full-width measurement, not
+because the layout happened to be correct at the time.
+
+**Verified as the actual mechanism, not just a plausible one, before writing any fix**: patched the
+hypothesis live into the running production page (`page.addStyleTag`, no source touched) and
+measured before/after computed widths.
+
+| Patch | `.content` width | Note |
+|---|---|---|
+| None | 264.203px | reproduces the bug exactly |
+| `.shell{flex-wrap:wrap}` + `.mobileBar{flex:1 0 100%}` only | **0px** | wrong first attempt, see below |
+| Same, plus `.content{flex-basis:100%}` (via `main{flex:0 0 100%}`) | 412px | confirmed fix |
+
+The middle row is worth keeping, not just the working answer: `.content`'s existing `flex: 1` is
+shorthand for `flex-basis: 0%`, not `auto`. Flexbox decides which items wrap onto a new line using
+each item's *hypothetical* (basis-only, pre-growth) size -- with `.mobileBar` forced to a 100% basis
+it fills line one alone as expected, but `.content` at a 0% hypothetical size never overflows that
+line and so never wraps to a line of its own; it gets placed on `.mobileBar`'s line and then has
+zero free space left to grow into, landing at 0px. Only giving `.content` its own real
+`flex-basis: 100%` puts it on the second line, where it alone fills the row. Screenshotted both
+outcomes, not just measured: the 0px version showed nothing at all where the page content should
+be; the fixed version showed the header spanning full width with the page stacked cleanly below it.
+
+**Fix applied** (`App.module.css`, `Sidebar.module.css`), scoped to the existing `@media (max-width:
+859px)` breakpoint in each file (same independent-per-file pattern already used for QueryPage/
+RightsOnArrestPage/AnswerBriefing's own breakpoints -- no shared token exists in this codebase to
+extend instead):
+
+```css
+/* App.module.css */
+@media (max-width: 859px) {
+  .shell { flex-wrap: wrap; }
+  .content { flex-basis: 100%; }
+}
+```
+```css
+/* Sidebar.module.css, inside the existing mobile block */
+.mobileBar {
+  display: flex;
+  flex: 0 0 100%;
+}
+```
+
+**Verified against the rebuilt production bundle** (`vite build` + `vite preview`, not dev server)
+via Playwright with real mobile emulation (`isMobile: true`, `hasTouch: true`, a real Android Chrome
+UA string) at all three requested widths, drawer closed, opened, and closed again:
+
+| Width | Closed: content width | Horizontal scroll | Drawer opens | Re-closed: content width |
+|---|---|---|---|---|
+| 360px | 360px (full) | none | yes (`transform: none`, correct on-screen position) | 360px (full) |
+| 390px | 390px (full) | none | yes | 390px (full) |
+| 414px | 414px (full) | none | yes | 414px (full) |
+
+The CI guard from the range-syntax finding above still passes unchanged (6 conditions now, since
+this fix added one, all in legacy syntax) -- this bug and its fix never touched media-query syntax,
+so that check correctly has nothing to say about it; it was never meant to catch this class of
+defect and isn't claimed to.
+
+**A bug in the CI guard itself, found immediately by using it**: the first rebuild after this fix
+failed the guard's own condition-count check -- not because of a real regression, but because this
+finding's own source-code comment in `App.module.css` contains the literal text `@media (max-width:
+859px)` in prose, which the checker's regex matched as if it were a third real rule. Fixed
+`check-css-media-queries.mjs` to strip `/* ... */` comments before scanning source (built/minified
+files never have comments, so this only mattered for the source side). Worth recording because it's
+the same general lesson as the checker's own purpose, one level up: a naive text-based check on
+source needs to account for source's own prose, the same way the range-syntax check needed to
+account for third-party CSS joining the bundle.
+
+### Still not confirmed -- correctly, this time, for a different reason
+
+**Two real, verified, differently-caused bugs have now been found and fixed at this exact
+breakpoint on the same report.** That is itself the reason to stay disciplined about not calling
+this closed from tooling alone: the range-syntax fix was deployed, re-verified from the live bundle,
+and still didn't fix the phone -- proof that "verified in the bundle" is necessary but was already
+shown, on this exact bug, to not be sufficient. This fix is verified by the same class of tooling
+(Playwright against a real production build, with device emulation) that already produced one
+false-confidence result this session, so it stays open, again, until the phone confirms it, again --
+not assumed closed because the mechanism is now well understood.
+
+### How to verify a real device without a phone in hand -- the actual gap, named
+
+Headless Chromium (any tool, any device-emulation preset) cannot substitute for a physical device on
+two specific axes, and this session hit both:
+
+1. **CSS feature support** (the range-syntax bug) -- Playwright always ships an evergreen engine;
+   no viewport, UA, or touch setting changes which CSS syntax that engine parses. Nothing run
+   locally can manufacture an old engine to test against.
+2. **Layout correctness under real device metrics** (the mobileBar bug) -- this one Playwright *can*
+   catch, and the fact that it didn't, for months of screenshots, was a gap in what was actually
+   being asserted, not a gap in the tool. Every prior 390px screenshot was a human (or an agent)
+   glancing at an image; none of them programmatically compared `document.querySelector('main')`'s
+   computed width against `window.innerWidth`. That comparison is cheap, exact, and would have
+   caught this the first time the fragment-sibling structure was introduced.
+
+**Recommendation, concrete rather than general**: add a Playwright assertion -- not just a
+screenshot -- at every tested mobile width, that fails the test if content width does not equal
+viewport width (`isVisible` on the hamburger, `display: none` on the rail, and `main`'s computed
+width all within a few px of `innerWidth`, drawer closed). That closes gap 2 completely; it cannot
+touch gap 1. For gap 1, the only mitigations are the ones already in place from the range-syntax
+finding -- pin `cssTarget` explicitly rather than trust a default, and gate the *built* CSS in CI --
+plus, if this class of regression ever needs to be caught in a test rather than by a person on a
+real phone, running the actual built bundle through a **real old device** (BrowserStack/Sauce Labs
+against a genuine low-end Android + old Chrome, not an emulated profile in an evergreen browser) is
+the only thing that closes it -- emulation profiles in Playwright/Chrome DevTools change viewport
+and UA, never the rendering engine's own feature set.
 
 ### Scope: which past "verified/screenshotted at 390px" claims in this document are now suspect
 
@@ -1749,3 +1881,169 @@ throughout. The fix generalises the same way the bug does: pin the build's compa
 explicitly, from real usage data adjusted for what that data under-counts about your actual
 audience, and add a check on the *shipped* artifact -- not the source, not the dev server -- that
 fails CI the moment the gap reopens.
+
+## PII redaction (Part F, F1) -- a cue-phrase heuristic, not detection, for names and addresses (2026-09-05)
+
+`app/services/pii_redaction.py` tokenises identifiers before every Groq call (`/legal/query`'s
+query and conversation history, `/complaints`' complaint-drafting prompt) and restores them in
+whatever comes back, so the user still sees their own details in the answer/draft. Same "stated
+plainly" discipline as the synonym-expansion stopgap above, because the failure shape is the
+same: this project has no NER model or entity-detection library in its dependencies (no spaCy, no
+presidio -- see `requirements.txt`), so two different mechanisms are doing this job, with two very
+different reliability profiles, and the gap between them matters.
+
+**Reliable, by construction, not by luck**: email, phone, Aadhaar, PAN, Indian vehicle
+registration, and FIR/case numbers all have a fixed, checkable shape -- a regex either matches
+that shape or it doesn't, and there's no middle ground. Verified against real section-number and
+date text from the corpus (`tests/test_pii_redaction.py`): "IPC Section 302," "15/08/2024," and
+the women's helpline "181" all correctly produce zero false positives, because none of them has
+the shape of a phone number, Aadhaar number, or case citation.
+
+**Not reliable, and not pretending to be**: names and addresses have no fixed shape at all, so
+`redact_text`'s only mechanism for either is a small, hand-picked list of cue phrases ("my name
+is," "residing at," "R/o," and similar -- see the module's own docstring for the full list) that
+must appear immediately before the value for it to be caught. **A name or address with no cue
+phrase in front of it passes through unredacted, silently.** Confirmed directly, not assumed: `"My
+husband Suresh Patil beats me, he lives at H.No 45 Gandhi Nagar"` redacts the address (a `H.No`
+cue is on the list) but leaves "Suresh Patil" untouched -- there is no cue word in front of a name
+mentioned in passing (e.g. "my husband \<name\>," "the accused \<name\>") that this list currently
+covers for that phrasing, and adding every such phrasing by hand has the same ceiling the synonym
+map already documents: it covers exactly the phrasings someone thought to add, nothing else.
+
+**Where this doesn't matter: the complaint form's own known fields.** `ComplaintIn.complainant_name`,
+`_address`, and `_phone` are tokenised directly (`redact_known_field`) because the schema already
+says what they are -- no pattern-matching, no cue phrase, no way to miss. The heuristic gap above
+applies only to names/addresses embedded in *free text*: a `/legal/query` question, or a
+complaint's own narrative fields (`incident_description`, `accused_details`, `witnesses`) where an
+accused's or a witness's name is exactly as likely to appear as the complainant's own is unlikely
+to, since that one has a dedicated typed field.
+
+**UI wording changed to match, not overstate, this** (`QueryPage.tsx`, `ComplaintPage.tsx`): the
+first draft of the privacy note said personal details "are automatically removed" outright, which
+is true for the fixed-shape entities and the complaint form's own typed fields, but overstates the
+free-text name/address path -- a real user reading "removed" would reasonably assume a name
+typed into the query box is always caught, and it isn't. Reworded to say CaseIQ "detects and
+removes common personal details" and asks the user to avoid including a full name or address they
+don't need to share -- under-promising on exactly the axis where the implementation is weakest,
+rather than a blanket claim the code can't back up on every input.
+
+**Consequence for the DPDP compliance note (Part H, H2)**: whatever that document claims about
+data minimisation for names and addresses must be scoped to what's actually true here -- reliable
+for the complaint form's own typed fields, cue-phrase-dependent (and therefore incomplete) for
+anything else. A compliance document asserting stronger redaction than this implementation
+delivers would be the same category of problem this whole section describes, just in a different
+document.
+
+**The fix, same answer as everywhere else in this document a lexical/pattern gap shows up**: a
+trained NER model would close this properly; a longer hand-picked cue list would not, for the same
+reason the six-entry synonym map was never going to generalise to every colloquial phrasing of
+"FIR." Out of scope for this pass -- recorded here so it isn't rediscovered as a surprise later,
+and so nothing downstream (the DPDP note, a future audit) claims more than this actually does.
+
+## Duplicate complaint rows from a single request -- investigated, not reproduced (2026-09-05)
+
+While verifying PII redaction end-to-end against the live Neon corpus and the real Groq API (see
+above), one `curl` invocation against `POST /complaints` resulted in **four** separate `Complaint`
+rows, each with a distinct `request_id`, arriving roughly 25-26 seconds apart over about 76
+seconds. Investigated as a possible real bug (a retrying client would create duplicate complaint
+drafts in production, silently) rather than dismissed:
+
+- **`caseiq-web/src/api/client.ts`** is a bare `openapi-fetch` client with no retry configuration
+  of any kind.
+- **`ComplaintPage.tsx`**'s `submit()` is called once per form submission, and the submit button is
+  `disabled` while `loading` is true -- no client-side loop or retry wrapper anywhere in the
+  component.
+- **`RequestContextMiddleware`** (`app/middleware/request_context.py`) calls `call_next` exactly
+  once per request; nothing server-side re-invokes a handler.
+- No proxy environment variables (`HTTP_PROXY`/`http_proxy`) are set in this environment.
+
+The four request IDs were genuinely distinct (`87b00111...`, `f198420d...`, `481c17cc...`,
+`fd3bebf3...`), meaning four separate inbound HTTP connections reached the server -- not one
+request processed four times internally. Since the only client involved was a single, unlooped
+`curl` command (not the deployed frontend), any retry that produced this had to originate outside
+CaseIQ's own code, in the test transport itself. **Not reproduced on a second attempt**: an
+identical `curl` POST against a fresh local instance (throwaway venv, same corpus) produced exactly
+one row, one request ID, in a single run. Given a code review that found no retry mechanism
+anywhere in the stack and a repro attempt that came back clean, this is recorded as a one-off,
+environmental artifact of that test session (most likely this sandbox's own command-execution
+layer) -- not a CaseIQ defect, and not chased further per instruction.
+
+**A separate, real finding surfaced by asking the question, kept distinct from the above**:
+`POST /complaints` has no idempotency protection of any kind -- no client-supplied idempotency
+key, no server-side dedup, no unique constraint that would catch two identical submissions. This
+specific incident wasn't caused by that gap (nothing in this codebase retried), but if a genuine
+retry ever did happen -- a flaky mobile connection causing a browser to resend, for instance --
+this endpoint would create a second, indistinguishable complaint draft with no error and no way to
+detect it after the fact. Worth fixing at some point; not fixed here, since nothing in this pass's
+own scope caused or required it.
+
+## Situation guides: a missing-person guide was attempted and dropped (2026-09-05)
+
+Checklist item 3's guide set named five situations, including "missing person." Checked directly
+against the live corpus before writing a word of it, same discipline as every other guide --
+searched BNSS and CrPC for "missing," "missing person," and "general diary" (the real-world
+mechanism most Indian police stations actually use to log a missing-person report before it
+becomes an FIR). **Zero relevant matches for any of the three.** The only adjacent provisions are
+BNS's kidnapping sections (§137, §139, §140) -- a different legal claim entirely (alleging
+abduction), not what "my relative hasn't come home" is on its own.
+
+Two things this guide would need to say, and can't, from this corpus:
+
+1. **A police duty to search or investigate a missing-person report promptly.** No such provision
+   exists in BNSS. This is governed in practice by Supreme Court directions (the *Lalita Kumari*
+   line of cases) and state police SOPs/circulars -- real, binding law, but outside the five Acts
+   this corpus ingests.
+2. **Anything distinguishing a missing child as more urgent.** Same answer: nothing in BNSS singles
+   this out; it's a matter of police manual practice, not statute here.
+
+**Even the guide's basic entitlements are shakier here than for the guides that shipped.**
+BNSS §173(1) (any station must register) and §193(3)(ii) (90-day update) both attach to
+"information relating to the commission of a cognizable offence" -- and a bare missing-person
+report, with no evidence of a crime, isn't unambiguously that. Unlike theft, fraud, or an arrest,
+where the offence is self-evident the moment it's described, a missing-person report only clearly
+qualifies once it's framed as suspected kidnapping or another specific offence.
+
+**Disposition**: dropped, not shipped thin. Per instruction, writing a guide that asserts an
+entitlement (a search duty, child-urgency handling) the corpus can't ground would be exactly the
+failure mode this project has spent months removing -- the same reasoning that excluded
+`ipc_equivalent`, the constitutional `your_rights.law` field, and the ungrounded
+bailable/cognizable guesses documented above. Domestic cruelty (BNS §85/§86, IPC §498A) was
+verified and substituted as the fifth guide instead -- see this document's next entry for that
+grounding.
+
+## Situation guides: the woman-officer proviso does not cover cruelty -- checking the offence
+## list, not the category, is what caught it (2026-09-05)
+
+While grounding the domestic cruelty guide, a plausible assumption turned out to be wrong, and is
+worth recording precisely because it's the kind of error that's easy to ship: BNSS §173(1)'s second
+proviso -- the one requiring a woman police officer to record the information when the informant is
+"the woman against whom" certain offences were committed -- reads, at a glance, like it should
+obviously extend to a woman reporting cruelty by her husband or his relatives (BNS §85/86, the
+current-law equivalent of IPC §498A). Cruelty is squarely a crime against a woman; the proviso's own
+framing ("the woman against whom an offence... is alleged to have been committed") sounds like it
+was written for exactly this situation.
+
+**It doesn't.** The proviso names an exact, closed list of BNS sections it applies to: §64, 65, 66,
+67, 68, 69, 70, 71, 74, 75, 76, 77, 78, 79, and 124 -- checked directly against the live section
+text, not inferred from the proviso's general framing. §85, §86 (cruelty) and §80 (dowry death) are
+not on that list, and neither BNSS §183(6)(a) (the equivalent list for a woman-Magistrate-recorded
+statement) includes them -- same exact fifteen sections, same absence. **The right one would
+reasonably assume attaches to "a woman reporting a crime against her" only attaches to a specific,
+named subset of offences -- category membership (rape-adjacent/sexual offences, largely) is what
+the list actually tracks, not "the victim is a woman," which is the broader, wrong generalisation an
+assumption based on the proviso's own wording would produce.**
+
+**Why this was caught**: the grounding process for this guide checked the proviso's actual offence
+list against BNS §85/86's specific section numbers, rather than checking whether cruelty
+*sounds like* the kind of offence the proviso was written for. The general shape of this mistake --
+trusting what a provision's own framing implies about its scope, rather than checking the literal
+list it names -- is the same class of error this project has caught before in a different guise
+(see "Bug: a criminal query told it was outside scope," above, where a domain-sounding word in a
+message caused a false scope claim). Here the direction is reversed -- an assumption of *broader*
+coverage than the text supports, rather than narrower -- but the discipline that catches both is
+identical: read the actual list, not the label.
+
+**Consequence for the guide**: the domestic cruelty guide does not claim the woman-officer or
+woman-Magistrate entitlements. It states instead, honestly, that the statement can be recorded by
+any officer for this specific offence, and that asking for a woman officer is still a real option
+even though the law doesn't require one here -- see the guide's own content for the exact wording.

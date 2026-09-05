@@ -218,6 +218,11 @@
 @media (max-width: 859px) {
   .mobileBar {
     display: flex;
+    /* Forces this onto its own full-width row in .shell's wrapped flex
+       layout (App.module.css) instead of sharing a row with .content --
+       see that file's comment on the same breakpoint for the full
+       mechanism this fixes. */
+    flex: 0 0 100%;
   }
 
   .rail {

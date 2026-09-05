@@ -58,6 +58,12 @@
   min-height: 4.5rem;
 }
 
+.privacyNote {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
 .textarea:focus {
   outline: none;
   border-color: var(--gold-border);

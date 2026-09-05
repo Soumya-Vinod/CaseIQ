@@ -47,10 +47,20 @@ function walkCssFiles(dir) {
 // source blocks sharing the same condition (QueryPage.module.css has two
 // `min-width: 960px` blocks) must each survive into the build -- a set
 // would hide one of the two silently disappearing.
+// Strip CSS block comments before scanning source -- a comment explaining a
+// media query in prose (this file's own vite.config.ts/App.module.css
+// comments do exactly this) contains the literal text `@media (...)` and
+// would otherwise be miscounted as a real rule. Built/minified files never
+// have comments, so this only matters for the source side, but it's cheap
+// to apply everywhere.
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 function extractConditions(files) {
   const counts = new Map();
   for (const file of files) {
-    const text = readFileSync(file, "utf8");
+    const text = stripComments(readFileSync(file, "utf8"));
     const re = /@media\s*\(([^)]*)\)/g;
     let m;
     while ((m = re.exec(text))) {
@@ -69,7 +79,7 @@ function extractConditions(files) {
 function findRangeSyntax(files) {
   const offenders = [];
   for (const file of files) {
-    const text = readFileSync(file, "utf8");
+    const text = stripComments(readFileSync(file, "utf8"));
     const re = /@media[^{]*[<>][^{]*\{/g;
     let m;
     while ((m = re.exec(text))) {

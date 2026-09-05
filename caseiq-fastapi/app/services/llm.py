@@ -14,6 +14,7 @@ from groq import AsyncGroq
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import logger
+from app.services.pii_redaction import PIIType, RedactionSession, TOKEN_PRESERVE_NOTE
 
 # FIXED 2026-09-02: this schema used to ask for three fields with no possible
 # grounding, shipping as fact in every live answer: `ipc_equivalent` (a
@@ -145,6 +146,35 @@ _CRIME_TERM_ALIASES = {
     "stalked": "stalking", "defamed": "defamation",
 }
 
+# Part F, F1: which ComplaintIn field is which PII type, for
+# redact_known_field's direct-tokenisation path (no pattern-matching needed
+# -- the schema already tells us the type). Every OTHER string field in the
+# dict handed to generate_complaint_draft (incident_description,
+# accused_details, witnesses, evidence_description, incident_location,
+# police_station_name/address, relief_sought) goes through the free-text
+# pattern battery instead, since an accused's name, phone, or address is
+# just as likely to be embedded in prose there as in the query text
+# /legal/query redacts. See app.services.pii_redaction's module docstring.
+_COMPLAINT_FIELD_TYPES: dict[str, PIIType] = {
+    "complainant_name": PIIType.NAME,
+    "complainant_address": PIIType.ADDRESS,
+    "complainant_phone": PIIType.PHONE,
+}
+
+
+def _restore_deep(obj: Any, session: RedactionSession) -> Any:
+    """Recursively swaps redaction tokens back to their real value across an
+    arbitrary JSON-shaped structure (structured_data's dicts/lists of
+    strings) -- a redacted detail could plausibly get echoed back inside any
+    string field, not just conversational_summary."""
+    if isinstance(obj, str):
+        return session.restore(obj)
+    if isinstance(obj, list):
+        return [_restore_deep(x, session) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _restore_deep(v, session) for k, v in obj.items()}
+    return obj
+
 
 class LLMService:
     def __init__(self) -> None:
@@ -201,9 +231,29 @@ class LLMService:
 
     async def process_query(self, query: str, *, language: str, history: list[dict],
                             rag_context: str, retrieval_strength: float) -> dict:
+        # is_new_topic runs on the RAW query/history (bag-of-words match against
+        # _CRIME_TERMS) -- purely local, never leaves this process, so redacting
+        # first would only cost accuracy (a token like [NAME_1] can't match a
+        # crime term) for no privacy benefit.
         new_topic = self.is_new_topic(query, history)
         rag_block = f"\nUse these retrieved sections as ground truth:\n{rag_context}\n" if rag_context else ""
         prompt = (_STRUCTURED_PROMPT if new_topic else _FOLLOWUP_PROMPT).format(rag_section=rag_block)
+
+        # Part F, F1: redact before this leaves the process for Groq. One
+        # session across the whole message set (every history turn plus the
+        # current query) so a detail repeated across turns gets one token,
+        # and so restore() below can undo all of it in a single pass over
+        # whatever the model echoed back. rag_context is never redacted --
+        # it's CaseIQ's own retrieved statutory text, not user-supplied.
+        session = RedactionSession()
+        redacted_history = [
+            {"role": h["role"], "content": session.redact(h["content"])} for h in history[-12:]
+        ]
+        redacted_query = session.redact(query)
+        if session.had_redactions:
+            prompt += TOKEN_PRESERVE_NOTE
+            # Entity-type counts only -- never the values. Per instruction.
+            logger.info("pii_redacted", endpoint="legal_query", counts=session.counts)
 
         lang_note = {
             "hi": "Respond entirely in Hindi. Keep JSON keys in English.",
@@ -211,8 +261,8 @@ class LLMService:
             "ta": "Respond entirely in Tamil. Keep JSON keys in English.",
         }.get(language, "")
 
-        messages = [{"role": "system", "content": prompt}, *history[-12:]]
-        messages.append({"role": "user", "content": f"{lang_note}\n\nUser Query: {query}".strip()})
+        messages = [{"role": "system", "content": prompt}, *redacted_history]
+        messages.append({"role": "user", "content": f"{lang_note}\n\nUser Query: {redacted_query}".strip()})
 
         raw = await self._call(messages, max_tokens=settings.GROQ_MAX_TOKENS)
         try:
@@ -222,6 +272,15 @@ class LLMService:
         except (json.JSONDecodeError, AttributeError) as exc:
             logger.warning("llm_json_parse_failed", error=str(exc))
             summary, structured = raw[:800], {}
+
+        # Restore: the user should still see their own name/phone/address in
+        # the answer, not a bracketed token -- see this module's docstring.
+        # Walks every string in structured_data too (immediate_steps'
+        # `details`, your_rights' `explanation`, etc. could plausibly echo a
+        # redacted detail back), not just the top-level summary.
+        if session.had_redactions:
+            summary = session.restore(summary)
+            structured = _restore_deep(structured, session)
 
         # Stripped, not fixed by hardcoding a number: `helplines` is LLM-generated
         # free text, not backed by a verified table (checklist item C4 was never
@@ -258,8 +317,14 @@ class LLMService:
 
     async def detect_language(self, text: str) -> str:
         try:
+            # Part F, F1: redact before truncation, not after -- slicing a
+            # raw phone/email first could cut a pattern in half and leave an
+            # un-redactable fragment. The token, once created, can safely be
+            # truncated like any other text. No restore needed: the only
+            # output here is a 2-letter language code, nothing to echo back.
+            redacted = RedactionSession().redact(text)[:200]
             out = await self._call(
-                [{"role": "user", "content": f"Detect language. Reply one word: en, hi, mr, ta, te.\nText: {text[:200]}"}],
+                [{"role": "user", "content": f"Detect language. Reply one word: en, hi, mr, ta, te.\nText: {redacted}"}],
                 temperature=0.0, max_tokens=5,
             )
             out = out.strip().lower().strip(".,")
@@ -289,6 +354,26 @@ class LLMService:
             "mr": "Write the letter body in Marathi. Keep section/act names (e.g. 'BNS Section 85') in English.",
             "ta": "Write the letter body in Tamil. Keep section/act names (e.g. 'BNS Section 85') in English.",
         }.get(language, "")
+
+        # Part F, F1: the higher-risk path -- this form collects a real name
+        # and address by design, and the narrative fields (incident_description,
+        # accused_details, witnesses) are exactly where an accused's or a
+        # witness's own name/phone/address tends to show up in prose. Fields
+        # the schema already labels (complainant_name/_address/_phone) are
+        # tokenised directly; everything else runs the free-text pattern
+        # battery. See _COMPLAINT_FIELD_TYPES and
+        # app.services.pii_redaction's module docstring.
+        session = RedactionSession()
+        redacted_data = {}
+        for k, v in data.items():
+            if not isinstance(v, str):
+                redacted_data[k] = v
+                continue
+            pii_type = _COMPLAINT_FIELD_TYPES.get(k)
+            redacted_data[k] = (
+                session.redact_known_field(v, pii_type) if pii_type else session.redact(v)
+            )
+
         prompt = (
             "You are an expert Indian legal document writer. Generate a formal complaint letter "
             "narrative with: subject line, detailed factual narrative, evidence summary, relief "
@@ -306,21 +391,41 @@ class LLMService:
             "act -- say plainly that the applicable provisions could not be confidently matched "
             "and should be identified by the reviewing officer or advocate. An unsupported "
             "citation in a document someone might actually file is worse than no citation.\n"
-            f"{lang_note}\n\n"
-            + "\n".join(f"{k}: {v}" for k, v in data.items())
+            f"{lang_note}"
+            + (TOKEN_PRESERVE_NOTE if session.had_redactions else "")
+            + "\n\n"
+            + "\n".join(f"{k}: {v}" for k, v in redacted_data.items())
         )
-        return await self._call([{"role": "user", "content": prompt}], temperature=0.05, max_tokens=2000)
+        if session.had_redactions:
+            logger.info("pii_redacted", endpoint="complaint_draft", counts=session.counts)
+
+        draft = await self._call([{"role": "user", "content": prompt}], temperature=0.05, max_tokens=2000)
+        # Restore: a complaint letter with [NAME_1] in place of the
+        # complainant's actual name is useless to file -- the user needs to
+        # see their own (and the accused's/witnesses') real details in the
+        # final draft. See this module's docstring.
+        return session.restore(draft) if session.had_redactions else draft
 
     async def related_questions(self, query: str, answer: str) -> list[str]:
         try:
+            # Part F, F1: same redact-before-egress contract as process_query.
+            # answer at this point is already restored (process_query's own
+            # call), so it can still contain the user's real details -- must
+            # be redacted again here rather than assumed already safe.
+            session = RedactionSession()
+            redacted_query = session.redact(query)
+            redacted_answer = session.redact(answer[:300])
+            if session.had_redactions:
+                logger.info("pii_redacted", endpoint="related_questions", counts=session.counts)
             out = await self._call(
                 [{"role": "user", "content":
                   f'Generate exactly 3 follow-up questions (<12 words each) as a JSON array.\n'
-                  f'Original: {query}\nResponse: {answer[:300]}'}],
+                  f'Original: {redacted_query}\nResponse: {redacted_answer}'}],
                 temperature=0.7, max_tokens=200,
             )
             q = self._parse_json(out)
-            return q[:3] if isinstance(q, list) else []
+            questions = q[:3] if isinstance(q, list) else []
+            return [session.restore(x) if isinstance(x, str) else x for x in questions]
         except Exception:
             return []
 

@@ -323,6 +323,14 @@ Almost no student project does this, and for a legal-domain app it is exactly wh
 - [ ] **I12.** **Load test** — establish p50/p95/p99 under concurrency and publish the numbers.
 - [ ] **I13.** **Graceful shutdown** — drain in-flight requests, close pools cleanly.
 - [ ] **I14.** **DB connection pool tuning** and slow-query logging.
+- [ ] **I15.** **`POST /complaints` idempotency.** No idempotency key, server-side dedup, or unique
+  constraint exists today — confirmed while investigating an unrelated duplicate-row incident
+  during PII-redaction testing (2026-09-05, `docs/evaluation.md`). A user double-tapping submit on
+  a slow connection, or a client-side retry after a dropped response, creates a second,
+  indistinguishable complaint draft with no error and no way to detect it after the fact. Not
+  caused by anything in this codebase (no retry logic exists anywhere in the stack, confirmed by
+  code review) — this is a latent gap, not an active bug, but worth closing before this handles
+  real traffic at volume.
 
 ---
 

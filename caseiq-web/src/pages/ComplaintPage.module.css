@@ -208,6 +208,13 @@
   color: var(--text-dim);
 }
 
+.privacyNote {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin-top: -0.3rem;
+}
+
 /* ── Result / preview screen ────────────────────────────────────────── */
 .disclaimer {
   margin-top: 1.6rem;
