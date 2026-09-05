@@ -69,6 +69,35 @@
   max-width: var(--measure);
 }
 
+/* Cross-link to the other safety-critical guide -- deliberately plain
+   inline text, not a boxed callout: this is navigation between two guides,
+   not advice or a statutory citation, so it gets neither the gold
+   entitlement treatment nor the dashed practical-box treatment. */
+.crossLink {
+  font-family: var(--font-serif);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin-top: 0.7rem;
+  max-width: var(--measure);
+}
+
+.crossLinkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--gold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.crossLinkButton:hover,
+.crossLinkButton:focus-visible {
+  color: var(--text);
+}
+
 /* ── Practical guidance -- deliberately NOT styled like an entitlement
    card: neutral border, no gold, no act/section badge. The visual
    difference IS the provenance disclosure, not just the text saying so. */

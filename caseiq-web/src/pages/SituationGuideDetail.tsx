@@ -6,9 +6,11 @@ import styles from "./SituationGuideDetail.module.css";
 export function SituationGuideDetail({
   guide,
   onBack,
+  onNavigateToGuide,
 }: {
   guide: SituationGuide;
   onBack: () => void;
+  onNavigateToGuide: (slug: string) => void;
 }) {
   const [detail, setDetail] = useState<{ act: string; section: string } | null>(null);
   const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null);
@@ -35,6 +37,24 @@ export function SituationGuideDetail({
           so someone landing from the list knows in two seconds whether
           they're in the right place. */}
       <p className={styles.openingLine}>{guide.openingLine}</p>
+
+      {/* At most one, phrased by circumstance -- redirect BEFORE any
+          statutory content, not after a reader has read a page that
+          doesn't quite match their situation. Deliberately a plain inline
+          line, not a boxed callout: this is navigation, not advice. */}
+      {guide.crossLink && (
+        <p className={styles.crossLink}>
+          {guide.crossLink.situationText}{" "}
+          <button
+            type="button"
+            className={styles.crossLinkButton}
+            onClick={() => onNavigateToGuide(guide.crossLink!.targetSlug)}
+          >
+            {guide.crossLink.linkLabel}
+          </button>
+          .
+        </p>
+      )}
 
       {/* Practical guidance -- NOT a statutory quote. Visibly different from
           the entitlement cards below: no act/section badge, a different

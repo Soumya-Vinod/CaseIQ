@@ -25,6 +25,15 @@
  * Every guide opens with `openingLine` -- one plain sentence saying what the
  * page is for, before any entitlement -- so someone landing from the list
  * page knows in two seconds whether they're in the right place.
+ *
+ * ARRAY ORDER IS DELIBERATE, not alphabetical or chronological-by-when-
+ * written: the two safety-critical guides (domestic cruelty, harassment/
+ * stalking) lead the list. No section header or "for women" grouping was
+ * added -- see docs/evaluation.md's "standalone women's-provisions surface
+ * considered and rejected" entry for why a demographic label was rejected
+ * even though ordering wasn't. A distressed person scanning this list on a
+ * phone is served by position, not by a category that would also imply the
+ * other three guides are for someone else.
  */
 
 export interface GuideEntitlement {
@@ -68,6 +77,16 @@ export interface GuideRefusalStep {
   section: string;
 }
 
+export interface GuideCrossLink {
+  /** Phrased by circumstance, not by legal category -- "if the person
+   * doing this lives with you or is family", not "related: domestic
+   * cruelty". The reader identifies by situation, not by which guide's
+   * title matches a label. */
+  situationText: string;
+  linkLabel: string;
+  targetSlug: string;
+}
+
 export interface SituationGuide {
   slug: string;
   navLabel: string;
@@ -78,6 +97,12 @@ export interface SituationGuide {
   /** One plain sentence, rendered before anything else in the body --
    * what this page is for. */
   openingLine: string;
+  /** Rendered right after openingLine, before any statutory content --
+   * someone in the wrong guide should be able to redirect before reading
+   * further, not after. Deliberately not a "related guides" list: at most
+   * one, phrased for the specific circumstance that would send a reader
+   * to the other guide. */
+  crossLink?: GuideCrossLink;
   leadCallout?: GuideLeadCallout;
   /** "Does this match what's happening to you?" -- offence definitions
    * quoted directly, rendered before the procedural entitlements. Optional;
@@ -104,6 +129,230 @@ export interface SituationGuide {
 }
 
 export const SITUATION_GUIDES: SituationGuide[] = [
+  {
+    slug: "domestic-cruelty",
+    navLabel: "Cruelty by a husband or his family",
+    navSummary:
+      "Physical or mental cruelty, or dowry-related harassment, by a husband or his relatives — help first, then what you're entitled to.",
+    eyebrow: "Situation guide",
+    title: "Cruelty by a husband or his family",
+    subtitle: "Help first. Then what counts, what you're entitled to, and what to say.",
+    openingLine:
+      "This page is for cruelty, threats, or dowry-related harassment by a husband or his relatives.",
+    crossLink: {
+      situationText: "If this is someone outside your home — a stranger, a coworker, someone following or watching you —",
+      linkLabel: "see Reporting harassment or stalking instead",
+      targetSlug: "woman-reporting-harassment",
+    },
+    leadCallout: {
+      heading: "If you're in danger right now",
+      note: "This is practical safety information, not a quote from the law.",
+      paragraphs: [
+        "Call 112 (police, fire, medical — any emergency) or 181 (Women's Helpline). Both are free, and both work any time, day or night.",
+        "You do not need to have already filed a complaint to call. You do not need to know what you want to happen next. You just need to be safe.",
+        "When you're ready — today, or another day — here is what the law says you're entitled to.",
+      ],
+    },
+    recognition: {
+      intro:
+        "The law names two different things as cruelty — not just physical violence. If either matches what's happening to you, it counts. The law doesn't set a minimum number of times this has to happen — one incident that matches this can already be a crime.",
+      items: [
+        {
+          label:
+            "Behaviour meant to push you toward suicide, or that risks serious injury or danger to your health, mental or physical.",
+          quote:
+            "any wilful conduct which is of such a nature as is likely to drive the woman to commit suicide or to cause grave injury or danger to life, limb or health",
+          act: "BNS",
+          section: "86",
+        },
+        {
+          label:
+            "Being harassed to pressure you or your family into giving money, property, or anything valuable — including dowry demands.",
+          quote:
+            "harassment of the woman where such harassment is with a view to coercing her … to meet any unlawful demand for any property or valuable security",
+          act: "BNS",
+          section: "86",
+        },
+      ],
+    },
+    entitlementsHeading: "What you're entitled to",
+    entitlementsIntro:
+      "A husband or any relative of his who does this can be punished with up to three years in prison, plus a fine. Here's what happens when you report it.",
+    entitlements: [
+      {
+        number: 1,
+        heading: "Any police station must take your complaint.",
+        body: [
+          "It does not matter where you live, or where this happened. Any station has to write it down.",
+          "If you report this yourself, or a close relative does, that's enough for the police to act on it right away — not something they can put off.",
+        ],
+        quote: "irrespective of the area where the offence is committed",
+        act: "BNSS",
+        section: "173",
+      },
+      {
+        number: 2,
+        heading: "You get a copy of your complaint, free, right away.",
+        body: ["Once the police write it down, ask for a copy. The law says you must get it"],
+        quote: "free of cost",
+        act: "BNSS",
+        section: "173",
+      },
+      {
+        number: 3,
+        heading: "The police must update you within 90 days — even if you don't ask.",
+        body: [
+          "This is the one most people never hear about. It's often the reason a case goes quiet after the first visit.",
+          "The law says the police must tell you how the investigation is going, within 90 days, on their own — you should not have to chase them for it.",
+        ],
+        quote: "inform the progress of the investigation … to the informant or the victim",
+        act: "BNSS",
+        section: "193",
+        weighted: true,
+      },
+    ],
+    practicalTips: [
+      {
+        afterEntitlement: 1,
+        tip: {
+          heading: "What to say",
+          items: [
+            "Say this: “This is a serious crime under section 85. I am entitled to have it registered here.”",
+            "You can also say: “I would like a woman officer to record my statement, if one is available.” The law doesn't specifically require a woman officer for this complaint — that requirement applies to a different set of offences — but you're allowed to ask, and many stations will do this if you ask.",
+            "Take someone with you if you can. A witness at the counter changes how a complaint like this gets received.",
+          ],
+        },
+      },
+    ],
+    refusalHeading: "If you're turned away",
+    refusalIntro: "Sometimes police say things like:",
+    refusalBullets: ["“This is a family matter, sort it out at home.”", "“Come back with your husband.”", "“This isn't serious enough.”"],
+    refusalOutro: "None of these are good reasons to refuse a serious crime. Here's what to do next.",
+    refusalSteps: [
+      {
+        heading: "Step 1 — Write to the Superintendent of Police.",
+        body: "Write down what happened, and send it by post to the Superintendent of Police — the senior police officer in charge of your district. The law says they must look into it themselves, or hand it to another officer to investigate.",
+        act: "BNSS",
+        section: "173",
+      },
+      {
+        heading: "Step 2 — If that doesn't work, a magistrate can order an investigation.",
+        body: "You can apply to a magistrate — a judge. You will need to sign a statement confirming what you're saying is true. The law lets the magistrate then order the police to investigate.",
+        act: "BNSS",
+        section: "175",
+      },
+    ],
+    closingNote: [
+      "If a death has occurred, that is a separate, far more serious matter with its own much heavier punishment — that is not something to handle through this page. Call 112 immediately.",
+      "The law changed in 2024. If your situation started before then, that's fine — the police will apply whichever law fits. You don't need to work this out yourself.",
+      "Every quote on this page is checked directly against the real law — nothing here is written from memory. Tap “Read the full section” to see the complete text.",
+      "This page tells you what the law says. It cannot guarantee how any one police station will actually behave. NALSA: 15100. Women's Helpline: 181.",
+    ],
+  },
+
+  {
+    slug: "woman-reporting-harassment",
+    navLabel: "Reporting harassment or stalking",
+    navSummary:
+      "Being followed, stalked, or harassed? What the law says the police and courts must do differently for you.",
+    eyebrow: "Situation guide",
+    title: "Reporting harassment or stalking",
+    subtitle: "What counts. What you can expect from the police and the court. What to say if you're turned away.",
+    openingLine:
+      "This page is for when someone is following you, touching you, or harassing you in a way that keeps happening.",
+    crossLink: {
+      situationText: "If the person doing this lives with you or is family — a husband, or his relatives —",
+      linkLabel: "see Facing cruelty at home instead",
+      targetSlug: "domestic-cruelty",
+    },
+    recognition: {
+      intro:
+        "The law names specific things as criminal harassment of a woman — not just a general feeling that something is wrong. If any of these matches what's happening to you, you have a real complaint.",
+      items: [
+        {
+          label:
+            "Being followed or contacted repeatedly, or watched online, when you've made it clear you don't want that — the law calls this stalking.",
+          quote:
+            "follows a woman and contacts, or attempts to contact such woman to foster personal interaction repeatedly despite a clear indication of disinterest by such woman",
+          act: "BNS",
+          section: "78",
+        },
+        {
+          label: "Someone touching you, or using force against you, meaning to disrespect you that way.",
+          quote:
+            "assaults or uses criminal force to any woman, intending to outrage or knowing it to be likely that he will thereby outrage her modesty",
+          act: "BNS",
+          section: "74",
+        },
+        {
+          label: "Words, sounds, gestures, or being intruded on, meant to insult you.",
+          quote: "utters any words, makes any sound or gesture, or exhibits any object … or intrudes upon the privacy of such woman",
+          act: "BNS",
+          section: "79",
+        },
+      ],
+    },
+    entitlementsHeading: "What you can expect from the police and the court",
+    entitlementsIntro:
+      "For these specific offences, the law adds protections that don't apply to every crime.",
+    entitlements: [
+      {
+        number: 1,
+        heading: "A woman police officer must record your complaint.",
+        body: ["For these specific offences, the officer who writes down what happened must be a woman."],
+        quote: "then such information shall be recorded, by a woman police officer or any woman officer",
+        act: "BNSS",
+        section: "173",
+      },
+      {
+        number: 2,
+        heading: "If it goes before a magistrate, a woman magistrate should record your statement wherever possible.",
+        body: [
+          "This should happen as soon as the police become aware of what happened, not months later.",
+        ],
+        quote:
+          "the Magistrate shall record the statement of the person against whom such offence has been committed … as far as practicable, be recorded by a woman Magistrate",
+        act: "BNSS",
+        section: "183",
+      },
+    ],
+    practicalTips: [
+      {
+        afterEntitlement: 1,
+        tip: {
+          heading: "If a woman officer isn't available",
+          items: [
+            "Say clearly: “The law requires a woman officer to record this, under section 173.”",
+            "Take someone with you if you can — a family member, a friend, anyone.",
+          ],
+        },
+      },
+    ],
+    refusalHeading: "If you're turned away",
+    refusalIntro: "Sometimes police say things like:",
+    refusalBullets: ["“This isn't serious enough.”", "“Sort it out privately.”", "“Come back later.”"],
+    refusalOutro: "None of these are good reasons to refuse a serious crime. Here's what to do next.",
+    refusalSteps: [
+      {
+        heading: "Step 1 — Write to the Superintendent of Police.",
+        body: "Write down what happened, and send it by post to the Superintendent of Police — the senior police officer in charge of your district. The law says they must look into it themselves, or hand it to another officer to investigate.",
+        act: "BNSS",
+        section: "173",
+      },
+      {
+        heading: "Step 2 — If that doesn't work, a magistrate can order an investigation.",
+        body: "You can apply to a magistrate — a judge. You will need to sign a statement confirming what you're saying is true. The law lets the magistrate then order the police to investigate.",
+        act: "BNSS",
+        section: "175",
+      },
+    ],
+    closingNote: [
+      "CaseIQ has confirmed outraging modesty and insulting modesty as serious crimes the police can act on immediately. For stalking alone, that specific confirmation isn't in CaseIQ's data yet — if a station argues stalking by itself isn't serious enough, ask a free legal aid clinic to check.",
+      "Every quote on this page is checked directly against the real law — nothing here is written from memory. Tap “Read the full section” to see the complete text.",
+      "This page tells you what the law says. It cannot guarantee how any one police station will actually behave. NALSA: 15100. Women's Helpline: 181.",
+    ],
+  },
+
   {
     slug: "online-fraud",
     navLabel: "Online fraud",
@@ -413,220 +662,6 @@ export const SITUATION_GUIDES: SituationGuide[] = [
       "This page describes what the law requires. It cannot guarantee how any one police station will behave in the moment.",
       "Every quote here is checked directly against the real law — nothing is written from memory. Tap “Read the full section” to see the complete text.",
       "If these rights aren't being honoured, tell a lawyer or a free legal aid clinic as soon as you can. NALSA: 15100.",
-    ],
-  },
-
-  {
-    slug: "woman-reporting-harassment",
-    navLabel: "Reporting harassment or stalking",
-    navSummary:
-      "Being followed, stalked, or harassed? What the law says the police and courts must do differently for you.",
-    eyebrow: "Situation guide",
-    title: "Reporting harassment or stalking",
-    subtitle: "What counts. What you can expect from the police and the court. What to say if you're turned away.",
-    openingLine:
-      "This page is for when someone is following you, touching you, or harassing you in a way that keeps happening.",
-    recognition: {
-      intro:
-        "The law names specific things as criminal harassment of a woman — not just a general feeling that something is wrong. If any of these matches what's happening to you, you have a real complaint.",
-      items: [
-        {
-          label:
-            "Being followed or contacted repeatedly, or watched online, when you've made it clear you don't want that — the law calls this stalking.",
-          quote:
-            "follows a woman and contacts, or attempts to contact such woman to foster personal interaction repeatedly despite a clear indication of disinterest by such woman",
-          act: "BNS",
-          section: "78",
-        },
-        {
-          label: "Someone touching you, or using force against you, meaning to disrespect you that way.",
-          quote:
-            "assaults or uses criminal force to any woman, intending to outrage or knowing it to be likely that he will thereby outrage her modesty",
-          act: "BNS",
-          section: "74",
-        },
-        {
-          label: "Words, sounds, gestures, or being intruded on, meant to insult you.",
-          quote: "utters any words, makes any sound or gesture, or exhibits any object … or intrudes upon the privacy of such woman",
-          act: "BNS",
-          section: "79",
-        },
-      ],
-    },
-    entitlementsHeading: "What you can expect from the police and the court",
-    entitlementsIntro:
-      "For these specific offences, the law adds protections that don't apply to every crime.",
-    entitlements: [
-      {
-        number: 1,
-        heading: "A woman police officer must record your complaint.",
-        body: ["For these specific offences, the officer who writes down what happened must be a woman."],
-        quote: "then such information shall be recorded, by a woman police officer or any woman officer",
-        act: "BNSS",
-        section: "173",
-      },
-      {
-        number: 2,
-        heading: "If it goes before a magistrate, a woman magistrate should record your statement wherever possible.",
-        body: [
-          "This should happen as soon as the police become aware of what happened, not months later.",
-        ],
-        quote:
-          "the Magistrate shall record the statement of the person against whom such offence has been committed … as far as practicable, be recorded by a woman Magistrate",
-        act: "BNSS",
-        section: "183",
-      },
-    ],
-    practicalTips: [
-      {
-        afterEntitlement: 1,
-        tip: {
-          heading: "If a woman officer isn't available",
-          items: [
-            "Say clearly: “The law requires a woman officer to record this, under section 173.”",
-            "Take someone with you if you can — a family member, a friend, anyone.",
-          ],
-        },
-      },
-    ],
-    refusalHeading: "If you're turned away",
-    refusalIntro: "Sometimes police say things like:",
-    refusalBullets: ["“This isn't serious enough.”", "“Sort it out privately.”", "“Come back later.”"],
-    refusalOutro: "None of these are good reasons to refuse a serious crime. Here's what to do next.",
-    refusalSteps: [
-      {
-        heading: "Step 1 — Write to the Superintendent of Police.",
-        body: "Write down what happened, and send it by post to the Superintendent of Police — the senior police officer in charge of your district. The law says they must look into it themselves, or hand it to another officer to investigate.",
-        act: "BNSS",
-        section: "173",
-      },
-      {
-        heading: "Step 2 — If that doesn't work, a magistrate can order an investigation.",
-        body: "You can apply to a magistrate — a judge. You will need to sign a statement confirming what you're saying is true. The law lets the magistrate then order the police to investigate.",
-        act: "BNSS",
-        section: "175",
-      },
-    ],
-    closingNote: [
-      "CaseIQ has confirmed outraging modesty and insulting modesty as serious crimes the police can act on immediately. For stalking alone, that specific confirmation isn't in CaseIQ's data yet — if a station argues stalking by itself isn't serious enough, ask a free legal aid clinic to check.",
-      "Every quote on this page is checked directly against the real law — nothing here is written from memory. Tap “Read the full section” to see the complete text.",
-      "This page tells you what the law says. It cannot guarantee how any one police station will actually behave. NALSA: 15100. Women's Helpline: 181.",
-    ],
-  },
-
-  {
-    slug: "domestic-cruelty",
-    navLabel: "Cruelty by a husband or his family",
-    navSummary:
-      "Physical or mental cruelty, or dowry-related harassment, by a husband or his relatives — help first, then what you're entitled to.",
-    eyebrow: "Situation guide",
-    title: "Cruelty by a husband or his family",
-    subtitle: "Help first. Then what counts, what you're entitled to, and what to say.",
-    openingLine:
-      "This page is for cruelty, threats, or dowry-related harassment by a husband or his relatives.",
-    leadCallout: {
-      heading: "If you're in danger right now",
-      note: "This is practical safety information, not a quote from the law.",
-      paragraphs: [
-        "Call 112 (police, fire, medical — any emergency) or 181 (Women's Helpline). Both are free, and both work any time, day or night.",
-        "You do not need to have already filed a complaint to call. You do not need to know what you want to happen next. You just need to be safe.",
-        "When you're ready — today, or another day — here is what the law says you're entitled to.",
-      ],
-    },
-    recognition: {
-      intro:
-        "The law names two different things as cruelty — not just physical violence. If either matches what's happening to you, it counts. The law doesn't set a minimum number of times this has to happen — one incident that matches this can already be a crime.",
-      items: [
-        {
-          label:
-            "Behaviour meant to push you toward suicide, or that risks serious injury or danger to your health, mental or physical.",
-          quote:
-            "any wilful conduct which is of such a nature as is likely to drive the woman to commit suicide or to cause grave injury or danger to life, limb or health",
-          act: "BNS",
-          section: "86",
-        },
-        {
-          label:
-            "Being harassed to pressure you or your family into giving money, property, or anything valuable — including dowry demands.",
-          quote:
-            "harassment of the woman where such harassment is with a view to coercing her … to meet any unlawful demand for any property or valuable security",
-          act: "BNS",
-          section: "86",
-        },
-      ],
-    },
-    entitlementsHeading: "What you're entitled to",
-    entitlementsIntro:
-      "A husband or any relative of his who does this can be punished with up to three years in prison, plus a fine. Here's what happens when you report it.",
-    entitlements: [
-      {
-        number: 1,
-        heading: "Any police station must take your complaint.",
-        body: [
-          "It does not matter where you live, or where this happened. Any station has to write it down.",
-          "If you report this yourself, or a close relative does, that's enough for the police to act on it right away — not something they can put off.",
-        ],
-        quote: "irrespective of the area where the offence is committed",
-        act: "BNSS",
-        section: "173",
-      },
-      {
-        number: 2,
-        heading: "You get a copy of your complaint, free, right away.",
-        body: ["Once the police write it down, ask for a copy. The law says you must get it"],
-        quote: "free of cost",
-        act: "BNSS",
-        section: "173",
-      },
-      {
-        number: 3,
-        heading: "The police must update you within 90 days — even if you don't ask.",
-        body: [
-          "This is the one most people never hear about. It's often the reason a case goes quiet after the first visit.",
-          "The law says the police must tell you how the investigation is going, within 90 days, on their own — you should not have to chase them for it.",
-        ],
-        quote: "inform the progress of the investigation … to the informant or the victim",
-        act: "BNSS",
-        section: "193",
-        weighted: true,
-      },
-    ],
-    practicalTips: [
-      {
-        afterEntitlement: 1,
-        tip: {
-          heading: "What to say",
-          items: [
-            "Say this: “This is a serious crime under section 85. I am entitled to have it registered here.”",
-            "You can also say: “I would like a woman officer to record my statement, if one is available.” The law doesn't specifically require a woman officer for this complaint — that requirement applies to a different set of offences — but you're allowed to ask, and many stations will do this if you ask.",
-            "Take someone with you if you can. A witness at the counter changes how a complaint like this gets received.",
-          ],
-        },
-      },
-    ],
-    refusalHeading: "If you're turned away",
-    refusalIntro: "Sometimes police say things like:",
-    refusalBullets: ["“This is a family matter, sort it out at home.”", "“Come back with your husband.”", "“This isn't serious enough.”"],
-    refusalOutro: "None of these are good reasons to refuse a serious crime. Here's what to do next.",
-    refusalSteps: [
-      {
-        heading: "Step 1 — Write to the Superintendent of Police.",
-        body: "Write down what happened, and send it by post to the Superintendent of Police — the senior police officer in charge of your district. The law says they must look into it themselves, or hand it to another officer to investigate.",
-        act: "BNSS",
-        section: "173",
-      },
-      {
-        heading: "Step 2 — If that doesn't work, a magistrate can order an investigation.",
-        body: "You can apply to a magistrate — a judge. You will need to sign a statement confirming what you're saying is true. The law lets the magistrate then order the police to investigate.",
-        act: "BNSS",
-        section: "175",
-      },
-    ],
-    closingNote: [
-      "If a death has occurred, that is a separate, far more serious matter with its own much heavier punishment — that is not something to handle through this page. Call 112 immediately.",
-      "The law changed in 2024. If your situation started before then, that's fine — the police will apply whichever law fits. You don't need to work this out yourself.",
-      "Every quote on this page is checked directly against the real law — nothing here is written from memory. Tap “Read the full section” to see the complete text.",
-      "This page tells you what the law says. It cannot guarantee how any one police station will actually behave. NALSA: 15100. Women's Helpline: 181.",
     ],
   },
 ];

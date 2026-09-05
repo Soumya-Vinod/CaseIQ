@@ -12,9 +12,20 @@ import styles from "./SituationGuidesPage.module.css";
 export function SituationGuidesPage() {
   const [selected, setSelected] = useState<string | null>(null);
 
+  function navigateTo(slug: string | null) {
+    setSelected(slug);
+    window.scrollTo(0, 0);
+  }
+
   const guide = selected ? SITUATION_GUIDES.find((g) => g.slug === selected) : null;
   if (guide) {
-    return <SituationGuideDetail guide={guide} onBack={() => setSelected(null)} />;
+    return (
+      <SituationGuideDetail
+        guide={guide}
+        onBack={() => navigateTo(null)}
+        onNavigateToGuide={navigateTo}
+      />
+    );
   }
 
   return (

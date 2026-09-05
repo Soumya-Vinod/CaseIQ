@@ -2105,6 +2105,59 @@ Proven capable of firing before trusting the clean result, same discipline as C5
 quoted against BNS §85's real section_text) and it correctly failed; fed it a one-word-corrupted
 real quote and it failed; fed it a real ellipsis quote with its two segments swapped and it failed;
 fed it the real, correct quote and it passed. Only then does the real run's **21/21 passed** mean
-what it appears to mean. Not wired into `npm run build` -- it needs the live backend reachable,
-and coupling the frontend build to the backend's uptime is a worse failure mode than running this
-as a separate, deliberate pre-deploy step.
+what it appears to mean.
+
+**Why this isn't gated in CI or `npm run build`, written down so it isn't rediscovered as an
+oversight**: `validate:guides` needs the live backend reachable -- it fetches every quoted
+section's real text over the network, by design, since that's the only way to catch a quote
+sourced from the wrong table. Wiring it into the frontend's build step would mean a Render outage,
+a slow cold start, or a network blip during a Vercel build fails the *frontend* deploy for a
+reason that has nothing to do with the frontend -- coupling two independently-deployed services'
+uptime together is a worse failure mode than the one this validator exists to catch. It's a
+deliberate, separate pre-deploy step (`npm run validate:guides`), run by hand before a deploy that
+touches `situationGuides.ts`, not an automatic gate. If this project ever gets real CI, the right
+place for it is a dedicated job with its own retry/timeout handling and a clear "backend
+unreachable, not validated" distinction from "validation ran and found a real mismatch" -- not a
+line item in the build that fails the same way for both.
+
+## A standalone women's-provisions surface was considered and rejected (2026-09-06)
+
+Checklist item 5 asked for women-specific provisions "as a standalone surface." Once the
+harassment/stalking and domestic-cruelty guides existed, this got a real second look rather than
+being built by default because it was on the original list -- and the answer was to not build it,
+for a reason worth recording precisely so it can be explained later rather than defended from
+memory.
+
+**The case against**: a standalone surface for this would necessarily take the shape of a
+browsable list of provisions -- BNS §§63-79 audited, the woman-officer and woman-Magistrate
+provisos, the after-sunset arrest restriction -- organised by legal category. But a woman looking
+for help here is not trying to browse a category of law; she is trying to find out what to do
+about a specific thing that is happening to her. The two situation guides already deliver the
+actual entitlements (§173's woman-officer proviso, §183's woman-Magistrate proviso, the full
+BNS §74/78/79/85/86 offence definitions) inside exactly that framing -- "here is what's happening,
+here is what you're entitled to, here is what to say" -- which is the format someone in this
+position actually needs. A section list next to it would duplicate the same legal content in a
+strictly worse format for this specific reader: browsable reference is what `RightsOnArrestPage`
+and `BrowseByActPage` are already for, and neither of those is what this checklist item was
+actually asking to fix.
+
+**What shipped instead, deliberately not a category**: the two guides cross-link to each other, in
+both directions, phrased by circumstance rather than by legal label -- "if the person doing this
+lives with you or is family, see Facing cruelty at home instead," not "related: domestic cruelty."
+A reader identifies her situation, not a statute's own taxonomy of which sections cover which
+relationship between the parties. On the situation-guides list page, the two safety-critical
+guides (domestic cruelty, harassment/stalking) were moved to the front of the list -- ordering,
+not a section header. A header would be organisation for someone browsing; a distressed person
+scanning five cards on a phone is served by position, not a label to read and categorise first.
+
+**Explicitly rejected: a "for women" category label on the list page.** It would have been the
+only demographic grouping among five guides, and the unstated implication of a single labelled
+category is that the other four are for someone else -- untrue on its face, since a woman is
+exactly as likely to need the fraud or FIR-refused guide as anyone else, and labelling would have
+quietly narrowed guides that aren't gender-specific at all.
+
+This is a product-judgment call, not a grounding finding like the rest of this document's
+situation-guide entries -- recorded anyway, because "the entitlements are already delivered in
+situational context, and a section list is the wrong format for someone who needs to know what to
+do" is the kind of reasoning that's easy to lose track of once the guides simply exist and look
+like the obvious way to have done it from the start.
