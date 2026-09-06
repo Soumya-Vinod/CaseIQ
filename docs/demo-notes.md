@@ -56,6 +56,31 @@ No, and worth saying plainly rather than overclaiming a clean win:
 > with real embeddings — down from fourteen such phrasings to nine, which is itself a measured
 > result, not a guess.
 
+## "Does it know when to say no?" — lead with this if asked, don't wait for it
+
+This is the strongest "we measure, not assume" moment available, and it's a real, uncomfortable
+number, not a reassuring one — say it plainly:
+
+> Recall@5 tells you retrieval finds the right answer when one exists. It says nothing about
+> whether the system knows when there isn't one. We tested that separately, on purpose: 10 real
+> questions from outside our five acts entirely — a trademark dispute, an unpaid salary, registering
+> a company, a tax notice, whether the government can restrict a newspaper. **It correctly declined
+> 5 of them. The other 5 it answered, citing a real section that has nothing to do with the
+> question.** Our proof that abstention works — a nonsense question about Titan's atmosphere — is
+> real, but it only proved we can tell gibberish from real legal English. It never proved we could
+> tell fluent-but-wrong-domain legal English from the real thing, and it turns out we can't,
+> reliably. Every correct "no" in that test of 10 came from a hand-built keyword list, not the
+> similarity score the whole abstention mechanism is supposed to run on — the similarity threshold
+> caught zero of the ten. We're not fixing this by moving the threshold: two of the five misses
+> score higher than the weakest real question we're supposed to answer, so a stricter cutoff would
+> just start refusing real questions too. This needs an actual domain classifier, and we're naming
+> it as the next real piece of work, not quietly patching around it with another keyword.
+
+If pushed on why this wasn't caught earlier: it wasn't hidden, it was never measured at this scale
+before now — one proof-of-concept query (Titan) stood in for the whole claim for months. Finding
+that out by deliberately building a harder test, rather than waiting for a demo to surface it, is
+the same discipline as the withdrawn-bill story above — the honest answer either way.
+
 ## One line each, in case asked directly
 
 - **What does "Part K" do?** Every statutory section is bitemporal — it carries its own in-force

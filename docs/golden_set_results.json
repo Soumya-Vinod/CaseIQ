@@ -1,8 +1,8 @@
 {
-  "n": 44,
+  "n_in_scope": 44,
   "recall_at_5": 0.9090909090909091,
   "mrr": 0.7297979797979799,
-  "per_query": [
+  "in_scope": [
     {
       "question": "What is the punishment for theft?",
       "rank": 1,
@@ -266,6 +266,70 @@
       "rank": 10,
       "recall_at_5": false,
       "reciprocal_rank": 0.1
+    }
+  ],
+  "n_out_of_scope": 10,
+  "out_of_scope_abstain_rate": 0.5,
+  "out_of_scope": [
+    {
+      "question": "My neighbor built a wall that blocks my right of way to the main road, what can I do?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.2617
+    },
+    {
+      "question": "I have adverse possession over a piece of land I've farmed for 15 years, is it mine now?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.3628
+    },
+    {
+      "question": "How do I get a succession certificate for my late father's bank accounts?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.294
+    },
+    {
+      "question": "My ex-husband refuses to pay alimony after our divorce, what can I do?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.2239
+    },
+    {
+      "question": "A builder is refusing to complete construction despite a signed agreement, can I ask for specific performance?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.3226
+    },
+    {
+      "question": "A company is using a logo that looks like my registered trademark, what can I do?",
+      "would_abstain": false,
+      "caught_by": null,
+      "top_similarity": 0.3124
+    },
+    {
+      "question": "My employer hasn't paid my salary for the last three months, what can I do?",
+      "would_abstain": false,
+      "caught_by": null,
+      "top_similarity": 0.2456
+    },
+    {
+      "question": "How do I register a private limited company in India?",
+      "would_abstain": false,
+      "caught_by": null,
+      "top_similarity": 0.4328
+    },
+    {
+      "question": "I received an income tax notice for undisclosed foreign assets, what should I do?",
+      "would_abstain": false,
+      "caught_by": null,
+      "top_similarity": 0.3982
+    },
+    {
+      "question": "Can the government stop me from publishing a newspaper article critical of a minister?",
+      "would_abstain": false,
+      "caught_by": null,
+      "top_similarity": 0.4986
     }
   ]
 }

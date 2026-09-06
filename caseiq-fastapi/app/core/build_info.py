@@ -29,6 +29,7 @@ Two independent signals, logged together:
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from functools import lru_cache
 from pathlib import Path
@@ -68,10 +69,23 @@ def get_build_info() -> dict[str, str | bool | None]:
     a value that's fixed for the life of ONE worker, so it's directly
     comparable against a fresh call to this same function (e.g. from a
     separate script, or after a real restart) to tell a genuinely-restarted
-    worker apart from one that's still running on old code."""
-    commit = _git("rev-parse", "--short", "HEAD")
+    worker apart from one that's still running on old code.
+
+    FIXED 2026-09-06: this module's own docstring always claimed Render's
+    env var was checked first -- it never actually was, `_git()` ran
+    unconditionally. On Render, `.git` isn't in the deployed image (the
+    Dockerfile COPYs the working tree, not the repo), so `git rev-parse`
+    always failed there and /health's git_commit was silently null in
+    production the whole time this went unnoticed. RENDER_GIT_COMMIT is
+    Render's own platform-injected env var (the commit SHA it built from,
+    set automatically, not something to configure on the dashboard) --
+    checked first since it's authoritative for exactly the case `_git`
+    can't handle. `_git` stays as the local-dev path, where a real `.git`
+    dir exists but no such env var is set.
+    """
+    commit = os.environ.get("RENDER_GIT_COMMIT") or _git("rev-parse", "--short", "HEAD")
     dirty: bool | None = None
-    if commit is not None:
+    if commit is not None and "RENDER_GIT_COMMIT" not in os.environ:
         status = _git("status", "--porcelain")
         dirty = bool(status) if status is not None else None
     return {

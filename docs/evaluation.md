@@ -79,6 +79,79 @@ time, and the confidence-calibration re-run is under "The embedding swap: LocalE
 LocalOnnxEmbedder" below — this section is the arc and the number that matters most, not the whole
 record.
 
+## HEADLINE RESULT 2: abstention detects non-language, not out-of-domain — measured, not assumed
+
+This sits next to Recall@5 0.909, not below it. Recall@5 measures whether the corpus contains the
+right section and retrieval finds it — it says nothing at all about whether the system knows when
+to decline. Those are different capabilities, and until this measurement, only the first one had
+been tested at any real scale. **Right now, the system answers 5 of 10 realistic wrong-domain
+questions with a confident citation to an irrelevant section.** That is not a corner case reached
+by contrivance — it's ordinary questions (a trademark dispute, an unpaid salary, registering a
+company, a tax notice, whether the government can restrict a newspaper) that any real user of an
+Indian legal-help tool would plausibly type.
+
+**What Titan actually proved, re-read correctly**: the canonical out-of-scope proof query
+("boiling point of methane on Titan") scores 0.1469 — comfortably below the 0.35 threshold — because
+it is gibberish relative to this corpus, sharing almost no vocabulary or syntactic shape with any
+statutory text. That is a real result, but it is a narrower one than it was treated as. It shows the
+embedding space separates *fluent legal English from noise*. It was never a test of whether the
+space separates *fluent legal English about the wrong domain* from the real thing — and those are
+not the same problem. A trademark question is not noise. It is a well-formed, grammatical legal
+question that happens to share vocabulary with this corpus's own procedural sections (arrest,
+search, cognizance) purely because both are "formal legal English about a dispute," not because
+either is actually about the other.
+
+**Measured, not assumed**: 10 real out-of-scope questions — spanning civil property, succession,
+alimony, contract performance, trademark, employment, company registration, tax, and constitutional
+free speech, none of them BNS/BNSS/BSA/IPC/CrPC matters — run against the live corpus through
+production's actual abstention logic (`is_abstention(sections) or is_civil_scope_mismatch(question)`,
+imported directly from `app.services.retrieval`, not reimplemented for this test — see
+`scripts/eval_golden_set.py`).
+
+| # | Question (domain) | Top similarity | Caught by | Abstains? |
+|---|---|---|---|---|
+| 1 | Blocked right of way (property) | 0.2617 | civil-phrase | Yes |
+| 2 | Adverse possession (property) | 0.3628 | civil-phrase | Yes |
+| 3 | Succession certificate (succession) | 0.2940 | civil-phrase | Yes |
+| 4 | Alimony after divorce (family/civil) | 0.2239 | civil-phrase | Yes |
+| 5 | Specific performance on a build contract (contract) | 0.3226 | civil-phrase | Yes |
+| 6 | Trademark infringement (IP) | 0.3124 | — | **No** |
+| 7 | Unpaid salary (employment) | 0.2456 | — | **No** |
+| 8 | Registering a company (company law) | 0.4328 | — | **No** — above the 0.35 threshold |
+| 9 | Income-tax notice (tax) | 0.3982 | — | **No** — above the 0.35 threshold |
+| 10 | Government restricting a newspaper (constitutional) | 0.4986 | — | **No** — above the 0.35 threshold |
+
+**The threshold caught 0 of 10.** Every one of the 5 correct abstentions came from
+`is_civil_scope_mismatch`'s keyword list (`_CIVIL_ONLY_PHRASES` in `app/services/retrieval.py`) —
+"right of way," "adverse possession," "succession certificate," "alimony," "specific performance."
+The similarity threshold, the mechanism this project spent five documented instances building and
+re-deriving, contributed nothing to any of the 5 correct answers here. And the keyword list has an
+**unmeasurable coverage ceiling**: it only catches a wrong-domain question that happens to use one
+of ~10 specific curated phrases. Three of the five misses (company registration, tax notice,
+government/press freedom) scored *above* 0.35 — not a near-miss, a confident-looking number that
+would let the LLM be called and answer using loosely-matched procedural sections as if they were
+grounding, the exact failure this project's whole GROUNDING prompt discipline exists to prevent,
+arriving through the one gate that discipline can't see past.
+
+**Why this isn't fixed by raising the threshold, and won't be fixed that way**: the in-scope
+minimum observed similarity across all 44 real golden-set queries is 0.4805. Two of the five misses
+here (company registration 0.4328, press freedom 0.4986) sit at or above that floor — there is no
+single threshold value that abstains on those two without also abstaining on real, legitimate
+questions this corpus should answer. Raising the cutoff trades false answers for false abstentions;
+Recall@5 would drop, not stay at 0.909, and the tradeoff isn't obviously worth it in either
+direction without knowing the real-world mix of in-scope vs. wrong-domain traffic this system will
+actually see. That number doesn't exist yet.
+
+**Named honestly as future work, not patched around**: this needs either (a) a real domain
+classifier ahead of retrieval — the thing `is_civil_scope_mismatch`'s keyword list has always been
+an admitted stand-in for — or (b) a second, independently-calibrated signal that catches
+"grammatically fluent but retrieved evidence doesn't actually support this domain," which similarity
+alone has now been shown, twice, not to be (Titan for gibberish specifically; this measurement for
+fluent wrong-domain questions generally). Neither is a threshold tweak. `docs/golden_set.json`'s 10
+out-of-scope entries and `docs/golden_set_results.json`'s full per-query breakdown are the baseline
+any future attempt at this gets measured against — the same discipline this file has applied to
+every other claim in it.
+
 ## Headline finding: similarity does not separate in-scope from out-of-scope queries
 
 **The sharpest result in this document.** A civil-law question this corpus has nothing to answer
@@ -2824,3 +2897,89 @@ was in the wrong direction of the same test, not a residual effect).
 across this fix-the-fix process — 1 failure caught and root-caused each of the first two times
 (the regressed Recall@5 catch, then the marital-abuse test), clean on the third — **106 passed, 0
 failed**, against a rebuilt (not stale) test database.
+
+## Concurrency load, measured for the first time (2026-09-06)
+
+Every measurement above the embedding swap section is single-request. The 512MB Render ceiling
+was the thing everyone watching this project was worried about; concurrent-request behavior was
+explicitly deferred through the entire embedding-swap and provider-mismatch debugging arc because
+production wasn't even computing the right answer yet, let alone something worth load-testing.
+Once the swap was confirmed correct in production, this was finally measurable — and the result
+inverts the worry:
+
+**Memory was never the constraint. The app degrades under concurrency starting at 5 simultaneous
+requests, not from RAM pressure.**
+
+| Concurrent requests | 200 OK | Failure rate | Failure latency |
+|---|---|---|---|
+| 5 | 3/5 | 40% | ~40-41s, both failures |
+| 20 | 3/20 | 85% | 40-68s, all 17 failures |
+
+Every failure returns the SAME well-formed body: `{"error":{"code":"internal_error","message":
+"Something went wrong."}}`, HTTP 500 — `app/core/exceptions.py`'s generic `except Exception`
+handler, which only runs when Python code actually raised and was caught, not when a worker is
+killed or a proxy times out. That single fact does real work ruling things out: an OOM-killed
+process drops the connection or returns Render's own 502/504, not a clean JSON body from the
+app's own handler; a DB pool exhaustion would fail fast (`pool_size=10, max_overflow=20` in
+`app/db/base.py` — 30 connections against 5-20 concurrent requests isn't tight, and a checkout
+timeout wouldn't take 40s to fire). The failures take as long as the successes (10-43s) before
+failing, meaning whatever goes wrong happens late in the pipeline, not at request entry.
+
+Two competing hypotheses were raised, both fitting the same timing:
+
+1. **Groq contention.** `LLMService._call()` (`app/services/llm.py`) constructs `AsyncGroq` with
+   no explicit `timeout=`/`max_retries=`; nothing in the call path caught Groq's own exception
+   family (`groq.APIError` and subclasses — rate limit, timeout, connection, 5xx), so any of them
+   fell straight through to the generic 500 handler.
+2. **CPU contention from concurrent ONNX inference**, raised as a competing hypothesis: checked
+   directly rather than assumed either way. `LocalOnnxEmbedder.embed_batch` (`app/services/
+   embeddings.py`) already runs inference via `anyio.to_thread.run_sync`, and `retrieval.py`'s one
+   query-embedding call site awaits it correctly — this is NOT a blocked event loop in the literal
+   sense (no sync call inline in an async function with no executor). It doesn't rule the
+   hypothesis out, though: Render's free-tier CPU allocation is an already-flagged unknown (see
+   this doc's deployment section / `docs/deployment.md`'s "untested" note on free-tier CPU
+   constraints), and correctly-threaded CPU-bound work still serializes in wall-clock time under a
+   single/fractional shared core — same observable shape, different mechanism.
+
+**Not resolved in this pass.** Distinguishing these requires the actual exception type from
+Render's log line (`logger.exception("unhandled_error", ...)` in `app/core/exceptions.py` logs it
+in full) — `RateLimitError`/`APITimeoutError` points at (1), a raw `TimeoutError`/`CancelledError`
+or worker-level timeout points at (2). Neither party had direct Render log access at the time of
+this entry. `timeout=`/`max_retries=` on the Groq client deliberately NOT changed pending that —
+tuning either without knowing which cause is real is tuning blind.
+
+**Fixed regardless of which hypothesis wins**, since a user-facing "Something went wrong" 500 for
+what is, under either explanation, a transient overload condition is wrong on its own terms:
+`LLMService._call()` now catches `groq.APIError` specifically and raises `AppError(status_code=
+503, code="llm_temporarily_unavailable", ...)` with a real "try again in a moment" message,
+logging the actual exception type/message via `logger.warning` for the next time this needs
+diagnosing. This narrows, but does not fully close, the opaque-500 gap: if the true cause is (2)
+and the failure surfaces as something other than a `groq.APIError` (e.g. a raw timeout somewhere
+else in the pipeline), it would still fall through to the generic handler. Left as-is pending the
+log read, rather than widening the catch blind.
+
+## Two smaller fixes, same session
+
+- **`git_commit: null` in production `/health`, closed.** `app/core/build_info.py`'s own
+  docstring always claimed Render's env var was checked first; the code never actually did that —
+  `_git("rev-parse", ...)` ran unconditionally, and always fails on Render (the Dockerfile `COPY`s
+  the working tree, not `.git`). Now checks `RENDER_GIT_COMMIT` (Render's own platform-injected
+  env var — the commit SHA it built from, set automatically, nothing to configure) first, falling
+  back to `_git` for local dev where a real `.git` exists but that env var doesn't.
+
+- **Out-of-scope abstention.** Promoted out of this list — see "HEADLINE RESULT 2: abstention
+  detects non-language, not out-of-domain" near the top of this file. Findings this significant
+  don't belong filed under "smaller fixes"; that section has the full measurement, the table, and
+  why raising the threshold is the wrong fix. `docs/golden_set_results.json` has the full
+  per-query breakdown.
+
+- **`_history()` ownership filter, closed (2026-09-06, same day as the finding above).** The gap
+  named at the top of this document's checklist-item-6 work — `app.api.v1.legal._history` fed a
+  session's full turn history to the LLM as conversational context with no ownership check at
+  all — is fixed. Same primitive as `app.api.v1.conversations._session_owner` (imported, not
+  reimplemented), applied differently since this function has no caller to reject with a 404: a
+  different real user's turns are now excluded outright regardless of who's asking now; anonymous
+  (NULL-user) turns remain fair game for anyone, since they belong to no one specifically; the
+  owner's own turns are included only when the CURRENT caller's user_id actually matches that
+  owner. Three new integration tests (`tests/integration/test_conversation_history.py`) cover the
+  cross-user case directly — full suite: **108 passed, 0 failed.**

@@ -553,34 +553,108 @@
   {
     "question": "What is the punishment for bigamy?",
     "sections": [
-      ["BNS", "82"],
-      ["IPC", "494"]
+      [
+        "BNS",
+        "82"
+      ],
+      [
+        "IPC",
+        "494"
+      ]
     ]
   },
   {
     "question": "What is anticipatory bail?",
     "sections": [
-      ["BNSS", "482"],
-      ["CrPC", "438"]
+      [
+        "BNSS",
+        "482"
+      ],
+      [
+        "CrPC",
+        "438"
+      ]
     ]
   },
   {
     "question": "What is plea bargaining?",
     "sections": [
-      ["BNSS", "289"],
-      ["CrPC", "265A"]
+      [
+        "BNSS",
+        "289"
+      ],
+      [
+        "CrPC",
+        "265A"
+      ]
     ]
   },
   {
     "question": "What is a dying declaration?",
     "sections": [
-      ["BSA", "26"]
+      [
+        "BSA",
+        "26"
+      ]
     ]
   },
   {
     "question": "What is a hostile witness?",
     "sections": [
-      ["BSA", "148"]
+      [
+        "BSA",
+        "148"
+      ]
     ]
+  },
+  {
+    "question": "My neighbor built a wall that blocks my right of way to the main road, what can I do?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "I have adverse possession over a piece of land I've farmed for 15 years, is it mine now?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "How do I get a succession certificate for my late father's bank accounts?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "My ex-husband refuses to pay alimony after our divorce, what can I do?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "A builder is refusing to complete construction despite a signed agreement, can I ask for specific performance?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "A company is using a logo that looks like my registered trademark, what can I do?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "My employer hasn't paid my salary for the last three months, what can I do?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "How do I register a private limited company in India?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "I received an income tax notice for undisclosed foreign assets, what should I do?",
+    "sections": [],
+    "out_of_scope": true
+  },
+  {
+    "question": "Can the government stop me from publishing a newspaper article critical of a minister?",
+    "sections": [],
+    "out_of_scope": true
   }
 ]

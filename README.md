@@ -49,6 +49,7 @@ decorated number. Full five-stage trace of that one query, with a measurement at
 | | |
 |---|---|
 | **Recall@5 / MRR**, 44-pair golden set, all 5 acts | **0.909 / 0.730** (was 0.705 / 0.387 under the original hash-based embedder — see below) |
+| **Out-of-scope abstain rate**, 10 real wrong-domain questions | **5/10 (50%)** — see below; this is not the same capability Recall@5 measures |
 | Corpus | 2,155 sections, BNS + BNSS + BSA + IPC + CrPC — criminal law and procedure only |
 | Judicial status | IPC §497 (adultery) excluded as struck down; IPC §377 flagged read-down, both with real citations |
 | Offence classification (cognizable/bailable/court), parsed from source, never LLM output | IPC (CrPC's First Schedule): **212/381 sections (56%)**. BNS (BNSS's First Schedule, currently in-force law): **398/434 sections (92%)** — same table, different source document, different result. Partial by measured coverage, not by omission; the rest are absent, not guessed |
@@ -70,6 +71,20 @@ actually was, rather than patched around again — replaced with `LocalOnnxEmbed
 free-tier ceiling). The canonical out-of-scope query used above now measures `0.1469`; the weakest
 of all 44 real, legitimate questions in the golden set measures `0.4805` — a gap of **0.3336**,
 roughly 280 times wider, and the actual reason Recall@5/MRR moved from 0.705/0.387 to 0.909/0.730.
+**A second, equally important finding, not a footnote to the first**: Recall@5 measures whether
+retrieval finds the right section when one exists — it says nothing about whether the system knows
+when to decline. Measured separately, on 10 real wrong-domain questions (trademark, unpaid salary,
+company registration, a tax notice, press freedom — none of them BNS/BNSS/BSA/IPC/CrPC matters):
+**the system answers 5 of 10 with a confident, irrelevant citation.** The similarity threshold that
+makes the canonical nonsense query (Titan, "boiling point of methane on Titan") abstain at 0.1469
+catches **zero** of these 10 — every correct abstention comes from a separate keyword heuristic with
+an unmeasurable coverage ceiling. Titan proved the system can tell fluent legal English from noise;
+it never proved the system can tell fluent legal English about the wrong domain from the real thing,
+and those turn out to be different problems. Raising the threshold isn't the fix — the weakest real
+in-scope question (0.4805) sits below two of the five misses, so a stricter cutoff would trade false
+answers for false abstentions and pull Recall@5 down with it. Full measurement, table, and why this
+is real future work rather than a quick patch: `docs/evaluation.md`'s "HEADLINE RESULT 2."
+
 Full arc — five documented instances, the baseline, the fix, the result, told honestly rather than
 as a clean win (the civil-easement case specifically is *still* not separable by similarity alone;
 a second, independent heuristic remains necessary) — in

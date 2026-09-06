@@ -3,7 +3,10 @@ from datetime import date
 
 from fastapi import APIRouter, Request, status
 
+from uuid import UUID
+
 from app.api.deps import DB, OptionalUser, client_ip
+from app.api.v1.conversations import _session_owner
 from app.core.exceptions import BlockedQueryError
 from app.core.logging import logger
 from app.core.security import hash_ip
@@ -30,7 +33,7 @@ from app.services.retrieval import (
     touches_violence_or_harm,
 )
 from app.services.safety import screen_query
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 # Fixed abstention response text -- deliberately not LLM-generated (see
@@ -90,7 +93,7 @@ _SKIPPED_DATE_NOTE = (
 router = APIRouter(prefix="/legal", tags=["Legal Query"])
 
 
-async def _history(db: DB, session_id: str) -> list[dict]:
+async def _history(db: DB, session_id: str, user_id: UUID | None = None) -> list[dict]:
     """FIXED 2026-09-06: found live, not by review -- this is the first time
     this function has EVER run past its own early-return with real matching
     rows. The frontend hardcoded session_id: "" until today (see
@@ -114,13 +117,47 @@ async def _history(db: DB, session_id: str) -> list[dict]:
     Fixed by eager-loading the relationship in the original query
     (`selectinload` -- a second, explicit, properly-awaited SELECT) instead
     of touching `.response` lazily at all.
+
+    FIXED 2026-09-06, second fix, same day: no ownership filter at all --
+    this function fed a session's FULL turn history to the LLM as
+    conversational context for whoever happened to be asking now, with no
+    check on who wrote those earlier turns. app.api.v1.conversations's own
+    docstring names the resulting gap explicitly: a stale shared session_id
+    (survives logout -- only auth tokens are cleared, not session_id; see
+    caseiq-web/src/utils/session.ts) would let a second real user's visible
+    ANSWER reflect a first user's conversation, not just their history page
+    -- a deeper leak than conversations.py's own (now-fixed) cross-user bug,
+    since this one never reaches an HTTP response a person reads directly,
+    it reaches the model as ground truth for what "continuing this
+    conversation" means.
+
+    Same ownership primitive as conversations.py (`_session_owner` -- the
+    user_id on this session's EARLIEST logged-in row, imported rather than
+    reimplemented so the two can't drift), but applied differently: that
+    router requires the CALLER to equal the owner before returning anything
+    at all (404 otherwise). This function has no caller to reject -- it's
+    always going to answer THIS turn -- so instead it degrades what
+    "history" means: anonymous (NULL-user) turns are always fair game (they
+    belong to no one specifically), and the owner's own real turns are
+    included ONLY when the CURRENT caller's user_id actually matches that
+    owner. A different real user_id's turns are never included, full stop,
+    regardless of who's asking now -- the same (NULL-user OR owner) shape
+    conversations.py's read path uses, just gated on user_id == owner_id
+    first rather than assumed by an earlier 404 check.
     """
     if not session_id:
         return []
+    owner_id = await _session_owner(db, session_id)
+    user_filter = LegalQuery.user_id.is_(None)
+    if owner_id is not None and user_id == owner_id:
+        user_filter = or_(user_filter, LegalQuery.user_id == owner_id)
     rows = (await db.execute(
         select(LegalQuery)
         .options(selectinload(LegalQuery.response))
-        .where(LegalQuery.session_id == session_id, LegalQuery.status == QueryStatus.PROCESSED)
+        .where(
+            LegalQuery.session_id == session_id, LegalQuery.status == QueryStatus.PROCESSED,
+            user_filter,
+        )
         .order_by(LegalQuery.created_at)
     )).scalars().all()
     history: list[dict] = []
@@ -181,7 +218,7 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     if language == "en":
         language = await llm_service.detect_language(payload.query)
 
-    history = await _history(db, payload.session_id)
+    history = await _history(db, payload.session_id, user.id if user else None)
     as_of = payload.as_of or date.today()
 
     # C8: ask BEFORE generating, not after -- a query that reads as

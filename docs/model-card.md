@@ -69,6 +69,7 @@ abstention path that refuses to answer rather than guess when retrieval evidence
 | Recall@5 | **0.909** (40/44) — was 0.705 (31/44) under the original hash-based embedder |
 | MRR | **0.730** — was 0.387 |
 | Citations verified in a named battery (theft, defamation, murder, culpable homicide, criminal breach of trust, marital abuse + 2 adversarial cases) | 13/13 kept, 0 stripped as fabricated or ungrounded |
+| **Out-of-scope abstain rate**, 10 real wrong-domain questions (not the same thing Recall@5 measures) | **5/10 (50%)** — all 5 catches from a keyword heuristic, 0 from the similarity threshold; see below |
 
 **2 of 44 golden-set queries (assault, plea bargaining) don't appear even in the top 10** — down
 from 11/44 before the embedding swap (2026-09-06, `LocalOnnxEmbedder` replacing the hash-based
@@ -98,14 +99,27 @@ correct two-year term (`docs/evaluation.md`'s case study).
   phrasings a 9-entry curated synonym list still patches (down from 14 originally, after 5 were
   re-verified redundant with real embeddings and removed — see `docs/evaluation.md`). Still
   explicitly a stopgap, not a general fix: a phrase not on this list gets no help.
-- Retrieval similarity separates in-scope from out-of-scope questions far better than before, but
-  not completely: the canonical out-of-scope query (a nonsense question about Titan's atmosphere)
-  now measures 0.1469 against a real 0.4805 floor across all 44 legitimate golden-set questions — a
-  gap of 0.3336, roughly 280 times wider than the original 0.0012. The civil-easement case
-  specifically (a civil-law question with nothing on point in this corpus) is the one case this
-  still doesn't resolve on its own — it measures 0.4609, still close to real, legitimate questions
-  — so abstention still uses a second, independent civil-domain phrase check alongside the
-  similarity threshold, and that second check is itself a heuristic phrase list, not a classifier.
+- Retrieval similarity separates fluent legal English from actual nonsense far better than before:
+  the canonical out-of-scope query (a nonsense question about Titan's atmosphere) now measures
+  0.1469 against a real 0.4805 floor across all 44 legitimate golden-set questions — a gap of
+  0.3336, roughly 280 times wider than the original 0.0012.
+- **That is a narrower result than it looks, and abstention on real wrong-domain questions is
+  measurably weaker than Recall@5 alone suggests.** Similarity separates gibberish from legal
+  English; it was never shown to separate fluent-but-wrong-domain legal English from the real
+  thing, and measurement confirms it doesn't: 10 real out-of-scope questions (civil property,
+  succession, alimony, contract performance, trademark, employment, company registration, tax,
+  constitutional free speech) run against production's actual abstention logic **abstain correctly
+  on only 5/10**. Every correct abstention comes from `is_civil_scope_mismatch`'s curated keyword
+  list, not the similarity threshold — the threshold alone catches **zero** of the 10, and three of
+  the five misses (company registration 0.4328, a tax notice 0.3982, press freedom 0.4986) score
+  *above* the 0.35 cutoff, meaning the LLM is called and answers using loosely-matched procedural
+  sections as if they were grounding. Not fixable by raising the threshold: two of those three
+  misses sit above the weakest real in-scope question's own similarity (0.4805 floor across all 44
+  golden-set queries — company-registration's 0.4328 is close enough that the margin either way is
+  thin), so a stricter cutoff trades false answers for false in-scope abstentions rather than
+  closing the gap. Needs a real domain classifier or an independently-calibrated second signal, not
+  a threshold tweak — named as future work, not patched around. Full measurement and table:
+  `docs/evaluation.md`'s "HEADLINE RESULT 2."
 
 **Offence classification (cognizable/bailable/triable-by)**:
 - Sourced as real structured data from CrPC's/BNSS's First Schedules, not LLM output — but

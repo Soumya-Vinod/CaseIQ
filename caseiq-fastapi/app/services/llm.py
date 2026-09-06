@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from groq import AsyncGroq
+from groq import AsyncGroq, APIError as GroqAPIError
 
 from app.core.config import settings
 from app.core.exceptions import AppError
@@ -176,12 +176,36 @@ class LLMService:
 
     async def _call(self, messages: list[dict], *, temperature: float | None = None,
                     max_tokens: int = 3000) -> str:
-        resp = await self.client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            messages=messages,
-            temperature=settings.GROQ_TEMPERATURE if temperature is None else temperature,
-            max_tokens=max_tokens,
-        )
+        # FIXED 2026-09-06, found under concurrency testing: any Groq-side
+        # failure (rate limit, timeout, connection, 5xx -- groq.APIError is
+        # the base of that whole family) was falling through uncaught into
+        # app.core.exceptions's generic `except Exception` handler, which
+        # returns a flat 500 "Something went wrong" -- true but useless: a
+        # user has no way to tell "retry in a moment" from "this is broken."
+        # This is a real, observed failure mode, not theoretical: 5 concurrent
+        # /legal/query requests against production measured 2/5 failing this
+        # way, each ~40s in (see docs/evaluation.md's concurrency-load entry).
+        # Deliberately NOT touching timeout=/max_retries= here -- whether the
+        # underlying cause is Groq's own concurrent rate limit or something
+        # upstream of Groq (e.g. CPU contention from concurrent ONNX
+        # inference delaying this call) is still open pending a real log read
+        # of the exception this now surfaces; changing retry/timeout
+        # parameters before that would be tuning blind. This only fixes the
+        # user-facing shape of the failure, which is correct regardless of
+        # which cause it turns out to be.
+        try:
+            resp = await self.client.chat.completions.create(
+                model=settings.GROQ_MODEL,
+                messages=messages,
+                temperature=settings.GROQ_TEMPERATURE if temperature is None else temperature,
+                max_tokens=max_tokens,
+            )
+        except GroqAPIError as exc:
+            logger.warning("groq_call_failed", error_type=type(exc).__name__, error=str(exc))
+            raise AppError(
+                "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
+                code="llm_temporarily_unavailable", status_code=503,
+            ) from exc
         return resp.choices[0].message.content.strip()
 
     @staticmethod
