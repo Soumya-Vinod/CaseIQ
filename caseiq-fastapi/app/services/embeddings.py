@@ -173,4 +173,66 @@ def get_embedder() -> Embedder:
     return LocalEmbedder()
 
 
+class EmbeddingDimensionMismatch(RuntimeError):
+    """Raised at startup -- see assert_embedding_dim_matches_corpus below."""
+
+
+async def assert_embedding_dim_matches_corpus(db) -> None:
+    """FIXED 2026-09-06, found live on Render, not in review: the corpus in
+    Neon and `EMBEDDING_PROVIDER`/`EMBEDDING_DIM` on Render are two
+    independently-changeable places that must agree, and nothing enforced
+    that. `scripts/reembed_corpus.py` re-embedded the whole corpus with
+    LocalOnnxEmbedder (384-dim) directly against the shared Neon database --
+    a step that has nothing to do with any deploy and leaves no trace on
+    Render at all. When Render's own `EMBEDDING_PROVIDER` env var hadn't
+    been updated to match yet, every live query kept computing a QUERY
+    embedding with the OLD provider while comparing it against the corpus's
+    NEW vectors -- confirmed live: theft, FIR, and dowry-harassment queries
+    all returned wrong sections at near-random, indistinguishable confidence
+    (0.10-0.12 across the board, garbage and real queries alike), while the
+    app logged nothing wrong at all, because cosine similarity between two
+    vectors from different embedding spaces is still a perfectly valid
+    float -- there is no exception to catch. Same principle as
+    `app.core.build_info`'s source_fingerprint check for a stale --reload
+    worker: a silent wrong-answer failure mode turned into a loud one that
+    fails at startup instead of in front of a user.
+
+    Samples ONE row with a non-null embedding (cheap, no need to check
+    all 2,155) and compares its actual stored dimension
+    (`vector_dims`, pgvector's own function -- reads the real stored
+    vector's length, not a schema-declared type) against
+    `settings.EMBEDDING_DIM`. Raises loudly, crashing startup, on a
+    mismatch -- this must never be caught and downgraded to a warning; a
+    running app with this mismatch is actively serving wrong answers, not
+    degraded ones. A corpus with no embedded rows yet (a fresh DB before
+    the first ingest run) is not a mismatch -- nothing to check yet, not an
+    error -- and is logged as skipped, not silently ignored.
+    """
+    from sqlalchemy import text
+
+    row = (await db.execute(text(
+        "SELECT vector_dims(embedding) AS dim FROM section_versions "
+        "WHERE embedding IS NOT NULL LIMIT 1"
+    ))).mappings().first()
+
+    if row is None:
+        logger.warning("embedding_dim_check_skipped_empty_corpus")
+        return
+
+    actual_dim = row["dim"]
+    if actual_dim != settings.EMBEDDING_DIM:
+        raise EmbeddingDimensionMismatch(
+            f"section_versions.embedding holds {actual_dim}-dim vectors, but "
+            f"EMBEDDING_DIM={settings.EMBEDDING_DIM} (EMBEDDING_PROVIDER="
+            f"{settings.EMBEDDING_PROVIDER!r}) -- query-time embeddings would be "
+            f"computed at the wrong dimension and compared against the wrong "
+            f"vector space. This produces silently wrong answers, not an error, "
+            f"if left running: fix EMBEDDING_PROVIDER/EMBEDDING_DIM to match the "
+            f"corpus's actual stored vectors, or re-run scripts/reembed_corpus.py "
+            f"against the corpus to match the configured provider -- don't just "
+            f"catch and ignore this."
+        )
+    logger.info("embedding_dim_check_ok", dim=actual_dim)
+
+
 embedder = get_embedder()

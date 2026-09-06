@@ -12,7 +12,9 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, logger
 from app.core.ratelimit import limiter
+from app.db.base import SessionLocal
 from app.middleware.request_context import RequestContextMiddleware
+from app.services.embeddings import assert_embedding_dim_matches_corpus
 
 
 @asynccontextmanager
@@ -26,6 +28,17 @@ async def lifespan(app: FastAPI):
     # is running old code no matter what its own logs claim.
     logger.info("app_starting", env=settings.ENV, project=settings.PROJECT_NAME,
                 db_host=settings.DATABASE_HOST_FOR_LOGGING, **get_build_info())
+    # FIXED 2026-09-06, found live on Render: the corpus (Neon) and the
+    # embedding provider (Render's own env vars) are two independently
+    # changeable places that must agree, and nothing enforced that -- a
+    # mismatch here produces silently wrong answers at normal-looking
+    # confidence, not an exception, because cosine similarity between two
+    # different embedding spaces is still a valid float. See that function's
+    # own docstring for the live incident this closes. Deliberately NOT
+    # wrapped in try/except: a mismatch must crash startup, not degrade to a
+    # logged warning nobody reads until a user notices wrong answers.
+    async with SessionLocal() as db:
+        await assert_embedding_dim_matches_corpus(db)
     yield
     logger.info("app_stopping")
 

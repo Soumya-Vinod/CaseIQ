@@ -300,6 +300,54 @@ will match what was verified locally.
    name) to the same value, so a fresh environment with no `GROQ_MODEL` env var doesn't silently
    inherit a 404.
 
+## Deployment-coupling hazard: the embedding model is split across two places that don't know about each other (2026-09-06)
+
+**This is exactly the failure the note above (§1) predicted, arriving from the opposite direction.**
+That entry warned that switching `EMBEDDING_PROVIDER` without a full re-ingestion would mix
+embedding providers within one corpus, making cosine similarity meaningless across the boundary.
+The embedding swap (`LocalOnnxEmbedder`, see `docs/evaluation.md`'s headline entry) hit the same
+hazard from the other side: **the corpus was re-embedded without changing any deploy at all.**
+
+`scripts/reembed_corpus.py` writes directly to the shared Neon database — the same database
+whether the request serving a query is running on this dev machine or on Render. Re-running it has
+nothing to do with a deploy, leaves no git commit, and Render has no way to know it happened.
+Meanwhile `EMBEDDING_PROVIDER`/`EMBEDDING_DIM` live in Render's own dashboard env vars, entirely
+separate from this repo's `.env` and from anything a `git push` touches. **The embedding model in
+force is really the answer to two independent questions that have to agree — "what vectors are
+actually stored in Neon" and "what does Render's running process compute a query embedding as" —
+and nothing connects them.** Change one without the other and every query still runs, still
+returns a plausible-looking answer at a normal-looking confidence number, and is silently wrong:
+cosine similarity between a query vector and a corpus vector from two different embedding spaces
+is still a perfectly ordinary float, not an error.
+
+**Confirmed live, not hypothetical.** After the corpus was re-embedded (384-dim,
+`LocalOnnxEmbedder`) but before Render's `EMBEDDING_PROVIDER`/`EMBEDDING_DIM` env vars were
+updated to match, the deployed backend was actively serving wrong answers: "what is the punishment
+for theft" returned IPC 12 (a definitions section) and CrPC 316/320 (unrelated procedure) instead
+of IPC 378/379/BNS 303, at confidence 0.102 — statistically indistinguishable from the canonical
+nonsense query ("boiling point of methane on Titan," 0.118) tested in the same batch. No exception,
+no error log, no failed health check. The health endpoint reported `{"status": "ok"}` throughout.
+
+**Fixed structurally, not just this once**: `app.services.embeddings.assert_embedding_dim_matches_corpus`,
+called from `app/main.py`'s startup lifespan, samples one stored embedding's actual dimension
+(`vector_dims`, pgvector's own function — the real stored vector's length, not the schema's
+declared type) and compares it against the running process's `EMBEDDING_DIM`. A mismatch now
+crashes startup with a message naming both sides of the disagreement, instead of degrading silently
+into wrong answers at normal-looking confidence. Same principle as `app.core.build_info`'s
+`source_fingerprint` check for a stale `--reload` worker (see `app/main.py`'s own comment): turn a
+failure mode that only shows up as *quietly wrong output* into one that fails loudly where an
+operator will actually see it.
+
+**What this check does NOT catch**: two providers at the SAME dimension (both 768, say) but
+genuinely different embedding spaces — `vector_dims` only sees a number, not which model produced
+it. That specific case is far less likely in practice (this project has one 384-dim provider and
+two 768-dim ones today, and switching between the two 768-dim providers already requires the full
+corpus re-ingestion §1 above describes), but it's a real gap, named here rather than implied fixed.
+A more complete guard would stamp which provider actually produced the stored vectors (e.g., a
+`corpus_versions`-level field, alongside the schema this project already has for exactly this kind
+of provenance) and check that Render's own env var matches by name, not just by dimension — not
+built here, since a dimension check already closes the failure mode that was actually observed.
+
    **Before deploying**: `GROQ_MODEL` was not listed among Render's env vars for the spike at
    all — meaning today it falls back to the code's default, which (until the fix above) was the
    dead model. Set `GROQ_MODEL=openai/gpt-oss-120b` on Render explicitly rather than relying on
