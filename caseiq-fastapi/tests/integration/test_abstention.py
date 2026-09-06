@@ -21,16 +21,30 @@ from datetime import date
 
 import pytest
 
+from app.core.config import settings
 from app.services.embeddings import embedder
 from app.services.retrieval import is_abstention, is_civil_scope_mismatch, semantic_search
 from tests.integration.test_corpus import _make_act, _make_version
 
 pytestmark = pytest.mark.integration
 
+# FIXED 2026-09-06: this used to be a synthetic paraphrase of theft's
+# definition alone -- a plausible-looking fixture that quietly never
+# mentioned punishment at all. That's exactly what made
+# test_on_topic_query_against_seeded_section_does_not_abstain fail for a
+# reason that had nothing to do with is_abstention: "what is the punishment
+# for theft of property" AND-searches punishment & theft & property, and no
+# paraphrase missing the word "punished" can ever satisfy that, no matter
+# how correct the retrieval/abstention logic is. Two verbatim excerpts of
+# real BNS 303 (definition + the punishment subsection), not a paraphrase --
+# verified directly against the live corpus, same discipline already used
+# for _CRUELTY_SECTION_TEXT below.
 _SECTION_TEXT = (
-    "Whoever dishonestly takes any movable property out of the possession of any person "
-    "without that person's consent, moves that property in order to such taking, is said "
-    "to commit theft of movable property belonging to another."
+    "Theft.--(1) Whoever, intending to take dishonestly any movable property out of the "
+    "possession of any person without that person's consent, moves that property in order "
+    "to such taking, is said to commit theft. ... (2) Whoever commits theft shall be "
+    "punished with imprisonment of either description for a term which may extend to three "
+    "years, or with fine, or with both."
 )
 
 # Real BNS s.85 text (Husband or relative of husband of a woman subjecting
@@ -65,8 +79,14 @@ class TestAbstention:
         # asserted here as the contract the endpoint relies on, not just the
         # boolean.
         if sections:
+            # FIXED 2026-09-06: was a hardcoded literal 0.40 that would have
+            # silently gone stale the moment the real setting changed (which
+            # it did, to 0.35, in the embedding swap -- see config.py's own
+            # comment) while still passing, since 0.35 < 0.40 too. Reads the
+            # live setting instead so this can never again assert against a
+            # number that isn't actually the threshold in force.
             assert max(s["similarity"] for s in sections if s["similarity"] is not None) \
-                < 0.40  # ABSTENTION_SIMILARITY_THRESHOLD, see config.py
+                < settings.ABSTENTION_SIMILARITY_THRESHOLD
 
     async def test_empty_corpus_abstains(self, db):
         # No section seeded at all -- nothing for either the vector or the

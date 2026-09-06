@@ -7,6 +7,7 @@ import { HelplineStrip } from "../components/HelplineStrip";
 import { IncidentDatePrompt } from "../components/IncidentDatePrompt";
 import { RelatedQuestions } from "../components/RelatedQuestions";
 import { SourcesPanel } from "../components/SourcesPanel";
+import { getSessionId } from "../utils/session";
 import styles from "./QueryPage.module.css";
 
 // Verified against live retrieval before being put here (2026-08-31): all
@@ -45,7 +46,12 @@ export function QueryPage() {
           body: {
             query: text.trim(),
             language: "en",
-            session_id: "",
+            // FIXED 2026-09-06: this was hardcoded "" -- and the backend's
+            // own follow-up mechanism (app.api.v1.legal._history) returns
+            // no history at all for an empty session_id, so no user of the
+            // deployed app has ever gotten real multi-turn continuity. One
+            // stable id per tab, independent of login. See utils/session.ts.
+            session_id: getSessionId(),
             incident_date: opts?.incidentDate ?? null,
             // FIXED 2026-09-04: this previously defaulted to
             // `!opts?.incidentDate`, which is true whenever opts is

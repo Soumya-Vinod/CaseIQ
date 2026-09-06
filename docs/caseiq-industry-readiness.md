@@ -356,6 +356,53 @@ Almost no student project does this, and for a legal-domain app it is exactly wh
 
 ---
 
+## BACKLOG — Corpus expansion (deferred until 80–85% done)
+
+Not for now. Recorded here so it isn't lost, and explicitly not started until the rest of this
+checklist is substantially through — adding acts before the correctness/measurement/product layers
+are solid multiplies the surface area of everything still being fixed.
+
+- [ ] **K-EXP1.** **Consumer Protection Act 2019 (Act 35 of 2019).** Rationale: the user survey
+  found consumer complaints the single top use case at 70% — ahead of every other category this
+  project currently serves. Two candidate India Code sources, not yet reconciled:
+  - `https://www.indiacode.nic.in/bitstream/123456789/18964/1/cpa.pdf`
+  - `https://www.indiacode.nic.in/bitstream/123456789/16939/1/a2019-35.pdf`
+
+  Note the domain itself: India Code has migrated from `indiacode.nic.in` to `indiacode.gov.in` --
+  check whether the `.nic.in` links above still resolve, or redirect, or are stale, before treating
+  either as a source at all. Of the two, one candidate's own landing page states the "Act is under
+  updation" (India Code's own language for "this consolidated text is being revised, don't treat it
+  as final"), and the other's filename carries the 2019 assent date rather than a later
+  consolidation date. The Act commenced in stages from July 2020 and has been amended since
+  assent, so filename/assent-date alone does not establish "this is the current text" -- this is
+  exactly the class of mistake `documents/provenance.json` and the withdrawn-BNS-Bill incident
+  (this project's own README headline) exist to prevent. Before ingesting either: determine which
+  file (if either) is the actual current consolidated text, record `content_as_on` and
+  `consolidation_source` per the bitemporal model (Part K, K1) the same as every other act, and do
+  not default to "the one that looks more official" without checking.
+
+- [ ] **K-EXP2.** **Protection of Women from Domestic Violence Act 2005 (Act 43 of 2005).**
+  `https://www.indiacode.nic.in/bitstream/123456789/2021/5/A2005-43.pdf` (same `.nic.in` vs
+  `.gov.in` caveat as above applies). Rationale: this Act's civil remedies -- protection orders,
+  residence orders, monetary relief -- are exactly what BNS §85/86 (the domestic-cruelty situation
+  guide's own grounding, see `docs/evaluation.md`) cannot provide, since §85/86 is criminal-only.
+  Direct complement to a guide that already exists, not a new category of feature.
+
+- [ ] **K-EXP3.** **Blocking consideration, must be resolved before either of the above ships, not
+  after**: this corpus is described as "five criminal statutes" in the frontend copy, the README,
+  every generation prompt (`_STRUCTURED_PROMPT`'s own first paragraph names BNS/BNSS/BSA/IPC/CrPC
+  as the *only* source of law), and -- most consequentially -- `is_civil_scope_mismatch`
+  (`app/services/retrieval.py`), which currently treats consumer-protection and domestic-violence
+  civil remedies as exactly the kind of out-of-scope question it exists to catch. Adding the CPA or
+  the DV Act without updating that check means the system would abstain on the very questions the
+  new act was added to answer -- the opposite of the intended effect, and a worse outcome than not
+  adding the act at all, since it would look like the corpus covers something it silently doesn't
+  answer. Every one of these surfaces (prompt text, scope-check phrase lists, UI copy, README,
+  model card) needs updating together, in the same change, not piecemeal -- a partial update
+  (ingest the act, forget the scope check) is the failure mode most worth naming in advance.
+
+---
+
 ## Sequencing
 
 **Tier 1 — nothing else matters first**

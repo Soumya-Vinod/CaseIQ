@@ -4,6 +4,81 @@ Working notes for Priority 2 (measured baseline) and anything discovered along t
 should feed the golden set rather than be hand-fixed. See `docs/m1-verification.md` for the
 parser known-defect list, which is adopted as-is for this round — not re-derived here.
 
+## HEADLINE RESULT: the embedding swap, and what five months of the same finding was pointing at
+
+Every other entry in this file is in service of this one. The arc, start to finish:
+
+**One root cause, documented five separate times before it was fixed.** Starting 2026-08-30, this
+file recorded the same fact in five different shapes, each time as its own discovery rather than a
+recognised pattern: `LocalEmbedder` (a deterministic hashing embedder, never a trained model —
+adopted as a zero-dependency dev/CI fallback after Gemini's free-tier quota ran out mid-ingest, see
+"Embedding provider — Gemini quota -> local" below) produces similarity scores with no real
+semantic content. (1) The original headline finding — a civil-law question with nothing on point in
+this corpus measured *closer* to a real criminal question than to actual nonsense. (2) The 0.20→0.40
+threshold history — retested at 0.55 and 0.60 and found that no single cutoff could separate
+legitimate criminal questions from a civil one at all. (3) A live bug, 2026-08-31, where a genuine
+criminal cruelty question was told it was "outside the scope of the criminal statutes." (4) A second,
+different bug in the RRF fusion logic, found 2026-09-06, that silently discarded lexical evidence for
+a section also matched by the (weak) vector ranker. (5) The Titan re-test, 2026-09-06, of this file's
+own canonical "definitely nonsense" proof query, which no longer abstained at production scale —
+the project's own demonstration that the mechanism worked had quietly stopped being true. Five
+independent findings, one cause: the embedder was never producing a real signal, and the whole
+project — synonym-map patches, threshold retunes, a civil-scope heuristic, two separate abstention
+bugs — was built working around that fact rather than fixing it, because fixing it was a bigger job
+than any single instance seemed to justify. Five instances in, it was.
+
+**Baseline, measured before touching anything** (`LocalEmbedder`, `docs/golden_set.json`, 44 real
+queries verified against actual corpus text):
+
+| Metric | Value |
+|---|---|
+| Recall@5 | 0.705 (31/44) |
+| MRR | 0.387 |
+| Canonical out-of-scope query ("boiling point of methane on Titan") | 0.524 similarity — **does not abstain**, cites 6 unrelated sections as if grounded |
+| Civil easement vs. a real criminal question | 0.4768 vs. 0.478 — **0.0012 apart**, twelve ten-thousandths, statistically the same number |
+
+**Fix**: `LocalEmbedder` replaced with `LocalOnnxEmbedder` — a real, trained sentence-embedding
+model (`all-MiniLM-L6-v2`, ONNX Runtime via `fastembed`, no PyTorch — chosen and vendored under a
+measured 512MB Render free-tier ceiling, see the embedding-swap entry below for that process in
+full) — the entire corpus re-embedded (2,155 sections, 188.6 seconds), the abstention threshold
+re-derived from scratch against the new similarity scale (0.40 → 0.35), and every downstream
+consumer (the civil-scope heuristic, the synonym map, confidence calibration) re-measured against
+the new numbers rather than assumed to still hold.
+
+**Result, measured after, same corpus, same 44 queries, same methodology:**
+
+| Metric | Before | After |
+|---|---|---|
+| Recall@5 | 0.705 (31/44) | **0.909 (40/44)** |
+| MRR | 0.387 | **0.730** |
+| Titan (canonical out-of-scope) | 0.524, does not abstain | **0.1469, abstains** (threshold 0.35) |
+| Weakest of all 44 real, in-scope queries | — | **0.4805** |
+
+**The contrast that states this plainly**: the old inversion pitted a real out-of-scope case against
+a real in-scope one and found them 0.0012 apart — the embedder could not tell "no relevant law
+exists" from "the punishment for theft" apart at all. The new embedder puts the *weakest of all 44
+real, legitimate legal questions this corpus can answer* at 0.4805, and the canonical nonsense query
+at 0.1469 — a gap of **0.3336**, roughly 280 times wider than the old one, and wide enough that a
+single fixed threshold (0.35) sits with genuine margin on both sides rather than splitting a
+razor's-width difference. That is the actual, measurable difference between a similarity score that
+means something and one that doesn't.
+
+**Told in full, not simplified into a clean win**: the civil-easement case specifically — the one
+that started the original headline finding — is *not* fully resolved by the embedder alone. Its own
+similarity under the new embedder is 0.4609, only ~0.02 below the weakest real query (0.4805) — closer
+to the 12-ten-thousandths problem than the Titan comparison is. `is_civil_scope_mismatch` (the
+separate, independent heuristic added alongside the original 0.40 threshold) is still doing real,
+necessary work for exactly this case and is not a `LocalEmbedder`-era crutch this swap retires. The
+headline win is real and large — five documented failures, a genuine root cause, a measured fix — but
+it is a much better similarity signal, not a solved classifier; see this file's own embedding-swap
+and confidence-calibration entries below for where the new embedder still needs a second signal or
+a curated patch, and where those needs were re-verified rather than assumed away.
+
+Full detail on the feasibility measurement, the vendoring, the migration, the wall-clock re-embed
+time, and the confidence-calibration re-run is under "The embedding swap: LocalEmbedder ->
+LocalOnnxEmbedder" below — this section is the arc and the number that matters most, not the whole
+record.
+
 ## Headline finding: similarity does not separate in-scope from out-of-scope queries
 
 **The sharpest result in this document.** A civil-law question this corpus has nothing to answer
@@ -343,6 +418,51 @@ out-of-scope query against a real seeded section abstains with no citations; an 
 abstains; an on-topic query against the same seeded section does not. Requires the same local test
 Postgres the rest of `tests/integration/` needs (not running in this environment — verified the
 live behaviour directly against the real endpoint instead, see the two screenshots).
+
+### Fifth documented instance: the canonical out-of-scope query no longer abstains, at production scale (2026-09-06)
+
+**The abstention gate does not reliably fire on out-of-scope queries at production scale, and the
+cause is hash embedding similarity, not the gate logic.** This is not a new failure mode — it is
+the same root cause this file has now documented five separate times, with this instance the
+sharpest yet because it falsifies the project's own proof case, not a new example:
+
+1. The four-query inversion table above (2026-08-30, "Finding: retrieval similarity does not
+   currently separate in-scope from out-of-scope queries") — Titan (0.398) scored *higher* than a
+   real, in-scope cybercrime-FIR question (0.252).
+2. The civil-easement live failure and 0.55/0.60 retest (2026-08-30, "0.20 went live and
+   immediately produced the failure it was designed to avoid") — 0.4768 for an out-of-corpus civil
+   question sits 0.0012 from 0.478 for "punishment for theft," a gap no threshold can resolve.
+3. The marital-abuse abstention bug (2026-08-31, "Bug: a criminal query told it was outside
+   scope") — weak, unrelated vector matches dominated the then-buggy abstention check while BNS
+   §85/IPC §498A sat in the results via the lexical ranker, ignored.
+4. The RRF-fusion bug fixed earlier in this same session (see "Two permanently-red tests fixed for
+   real, not deleted," below) — the *same* marital-abuse query, a *different* bug: a section found
+   by both rankers lost its lexical-hit signal to the vector loop, so genuine full-text evidence
+   went unseen a second time, by a different mechanism, months later.
+5. **This one.** "What is the boiling point of methane on Titan?" is not a new query invented to
+   probe this — it is *the* canonical nonsense query this file has used since 2026-08-30 as the
+   positive control for "abstention works": measured 0.398 that day (correctly below the 0.40
+   threshold chosen specifically to catch it), and is the literal "actual nonsense" anchor the
+   Headline finding at the top of this file compares the civil-easement case against. Re-run
+   against the current production corpus today: **0.524**, comfortably above threshold, six
+   unrelated procedural citations (`BNS §22`, `BNSS §233`, `CrPC §210`, `BNSS §435`, `CrPC §377`,
+   `BNSS §418`) returned as if grounded. The project's own proof that the gate works, re-run months
+   later against a larger corpus under hybrid retrieval, now demonstrates the opposite. Confirmed
+   this is not a regression introduced by today's fusion fix, not a threshold that quietly drifted,
+   and not `is_civil_scope_mismatch`/`touches_violence_or_harm` misfiring: every returned section
+   has `lexical_hit: False` (today's fix touches only dual-hit sections, and none of these are
+   that), so the only thing that changed between 0.398 and 0.524 is what `LocalEmbedder`'s
+   hash-based cosine similarity happens to compute against a corpus that has grown and is now
+   ranked via RRF fusion rather than vector-only search. The gate's *logic* has not regressed; the
+   number it's gating on was never a stable, meaningful signal in the first place, and five
+   instances in, "occasionally miscalibrated" should be read as "not fit for this purpose."
+
+**Not fixed here, deliberately.** An ad hoc threshold raise made in response to one query, without
+a golden set to check it against, is exactly the pattern this file's own history warns against —
+0.40 was itself a same-day reaction to a single failure (see "0.20 went live" above), and each
+successive threshold has bought correctness on the samples tested that week at an unmeasured cost
+elsewhere in the corpus. Five documented instances of the same root cause is the argument for
+replacing `LocalEmbedder` with a real trained embedding model, not for a sixth threshold guess.
 
 ## Generation model swapped mid-project — a test of the architecture's actual thesis
 
@@ -2161,3 +2281,529 @@ situation-guide entries -- recorded anyway, because "the entitlements are alread
 situational context, and a section list is the wrong format for someone who needs to know what to
 do" is the kind of reasoning that's easy to lose track of once the guides simply exist and look
 like the obvious way to have done it from the start.
+
+## Storage vs. live-response split for PII -- `legal_queries`/`query_responses` now store the
+## redacted text, not the raw or restored version (2026-09-06)
+
+Checklist item 6 (conversation history) surfaced a real gap in item 1's own scope: PII redaction
+(`app/services/pii_redaction.py`) had only ever governed what crossed to Groq. What got written to
+`legal_queries.original_query` and `query_responses.conversational_summary`/`structured_data` was
+the RAW query and the fully-RESTORED answer (real name/phone put back) -- exactly the values
+redaction exists to keep out of a third party, sitting in Neon regardless. Building a feature that
+shows this data back to a logged-in, named user made that gap materially worse, per instruction,
+and forced the decision rather than letting it stay implicit.
+
+**Decision, stated plainly**: store redacted, not raw, for both tables, for anonymous and
+logged-in rows alike. Rejected: storing raw with only a retention limit (doesn't reduce what a
+breach exposes, only how long it's exposed for) and storing redacted-with-a-persisted-mapping
+(the mapping sitting next to its own tokens in the same database isn't a security improvement,
+it's the same exposure relocated one column over, for real UX cost -- a history view would need
+that mapping just to show the user their own words back).
+
+**What changed, mechanically**: `LLMService.process_query` (`app/services/llm.py`) stopped
+restoring internally -- it now returns the redacted `conversational_summary`/`structured_data` as
+the primary result (previously it returned only the restored version) plus a `redaction_map` the
+caller can use to build a restored COPY. `app.api.v1.legal.process_query` stores the redacted
+result unmodified into `QueryResponse`, and restores onto separate `response_summary`/
+`response_structured` variables used ONLY for the `QueryOut` returned to the client for that one
+request -- the stored row and the live response now genuinely diverge, by design, for the first
+time. The query itself gets the identical treatment via a small, separate `RedactionSession`
+computed once per request and reused across all three `LegalQuery(...)` call sites (blocked /
+needs-incident-date / normal), so which branch a request takes doesn't change what's stored.
+`restore_text`/`restore_deep` were promoted from a private helper inside `llm.py` to importable,
+session-independent functions in `pii_redaction.py` (taking a plain `dict[str, str]` mapping)
+specifically so `legal.py` could call them without needing the `RedactionSession` object itself,
+which never leaves `llm.py`.
+
+**Verified against the real database and a real Groq call, not asserted from the diff**: sent
+`"My name is Ramesh Kumar, my phone is 9876543210, what is the punishment for theft?"` to a local
+backend pointed at the live Neon corpus. The model addressed the user by name in its answer.
+Fetched the row back directly:
+
+```
+STORED original_query:         My name is [NAME_1], my phone is [PHONE_1], what is the punishment for theft?
+STORED conversational_summary: Hi [NAME_1], I understand you want to know the punishment for theft...
+LIVE HTTP response summary:    Hi Ramesh Kumar, I understand you want to know the punishment for theft...
+```
+
+Stored text redacted, live response restored, in the same request. Confirmed the follow-up
+mechanism (`_history()`, see the greenlet-bug entry above) still works correctly when fed
+already-redacted history from a prior turn: a two-turn session ("my name is Priya, someone
+scammed me..." then "is theft cognizable") correctly returned `is_followup: true` on the second
+turn, no errors in the backend log. One known, accepted cosmetic consequence, not a security
+issue: a turn more than one exchange back now appears to the model as literal `[NAME_1]` text
+rather than the real value, since a later turn's fresh `RedactionSession` has no mapping for an
+earlier turn's token and passes it through unchanged -- the model can reason about a placeholder
+fine, but won't have a live name to use if summarising several turns back.
+
+**The 217 pre-existing rows** in `legal_queries`/`query_responses` -- accumulated before this
+policy existed, when the table stored raw text unconditionally -- were truncated immediately
+before this code shipped, per instruction, rather than backfilled: retroactively running today's
+detector over old raw text would produce rows that *look* like they were always properly redacted
+when they weren't, a false-provenance problem for no real benefit, since no user-facing history
+feature existed yet for anyone to have lost access to. Row count confirmed at 217 immediately
+before truncation and 0 immediately after; re-checked again after the verification queries above
+(which added and then removed their own 4 test rows) to confirm nothing else had accumulated in
+the gap. See `docs/dpdp-compliance.md` §4 and §6 for the resulting storage and retention policy
+this establishes -- redaction reduces what a breach exposes, it does not replace a retention limit,
+and §6 now states concrete numbers (30 days anonymous, 12 months logged-in) rather than "kept until
+deleted," documented as a target ahead of the automation that would actually enforce it.
+
+## Checklist item 6, Phase C: conversation history endpoints, account deletion, export (2026-09-06)
+
+Shipped: `GET /legal/conversations` (list), `GET /legal/conversations/{session_id}` (full turn
+text), `DELETE /legal/conversations/{session_id}` (erase one conversation), `DELETE /auth/me`
+(password-confirmed, hard-deletes the account), `GET /auth/me/export` (JSON download of a user's
+own conversations). Frontend: a real history section on `AccountPage` replacing the earlier
+"coming here next" placeholder -- list, view, resume ("Continue"), delete, export, and account
+deletion, plus the redaction note and retention line the product spec required verbatim.
+
+**Ownership model decision**: a session_id "belongs to" a user if at least one row in it has their
+`user_id` -- not "every row does." The frontend keeps one `session_id` per browser tab regardless
+of login state (`utils/session.ts`), so a person can ask a couple of anonymous questions, log in
+mid-tab, and keep going on the same thread. Once ownership is established this way, list/get/delete
+act on the *whole* thread, NULL-user rows included -- the same scope `_history()` already feeds the
+LLM for continuity, so history-as-displayed matches history-as-used. `GET /auth/me/export`
+deliberately does NOT use this model -- it's scoped to `user_id == this user` only, narrower than
+the conversations endpoints. Reasoning: data portability is about data collected under this
+identity; the anonymous pre-login turns weren't. Both endpoints' own docstrings carry this same
+reasoning so it isn't only findable here.
+
+**Account deletion: verified against the live schema before relying on it, not assumed from the
+model file.** `legal_queries.user_id` and `complaints.user_id` are both `ondelete=SET NULL` at the
+DB level (`legal_queries_user_id_fkey`/`complaints_user_id_fkey`, confirmed via
+`pg_constraint.confdeltype = 'n'` directly against the live Neon database) -- deleting a `users` row
+alone would silently leave the redacted query text and, worse, the complaint drafts' *unredacted*
+complainant name/address/phone sitting in the table, merely unlinked from the account rather than
+gone. `DELETE /auth/me` explicitly deletes both tables' rows for that user before deleting the user
+row, rather than trusting the FK default. `query_responses.query_id` IS `ondelete=CASCADE`
+(`confdeltype = 'c'`, same live check) -- so a bulk `DELETE FROM legal_queries` correctly cleans up
+its paired response rows without the ORM needing to load them first. No separate token-revocation
+step was needed either: `current_user`/`optional_user` (`app/api/deps.py`) already re-fetch the user
+row by id on every authenticated request rather than trusting the JWT payload alone, so an access
+token issued before deletion stops working the moment the row is gone -- confirmed live (a query
+made with the just-deleted account's token 401s), not assumed from reading the dependency.
+
+**Test-database staleness found and fixed, not worked around.** The persistent
+`caseiq-test-db` Docker container (see `tests/integration/conftest.py`'s own docstring) had
+accumulated tables from before some model columns existed --
+`Base.metadata.create_all()` only creates *missing* tables, it does not `ALTER` an existing one to
+add a column a model gained later. Running the integration suite for the first time all session hit
+16 failures, including one of this phase's own new tests
+(`test_delete_account_removes_their_complaints_outright_not_just_unlinks`, failing with
+`UndefinedColumnError: column "retrieved_sections" of relation "complaints" does not exist`) --
+`complaints.retrieved_sections` postdates whenever that container's tables were first created.
+Fixed by dropping and recreating `caseiq_integration_test` fresh (it's explicitly disposable, see
+that file's own docstring on why it's the *only* database this suite will ever `TRUNCATE`), not by
+patching around individual missing columns. 14 of the 16 failures were exactly this staleness and
+passed clean on the rebuilt schema.
+
+**Two failures did not resolve** and are unrelated to this work --
+`test_abstention.py::TestAbstention::test_on_topic_query_against_seeded_section_does_not_abstain`
+and `::TestMaritalAbuseNotCivil::test_marital_abuse_query_retrieves_cruelty_section_and_does_not_abstain`,
+both asserting `is_abstention(sections) is False` against a single freshly-seeded test section.
+Neither `is_abstention`, `semantic_search`, nor anything in `app.services.retrieval` was touched in
+this phase -- flagged for whoever picks up retrieval/abstention work next rather than fixed here,
+since chasing it would mean debugging unrelated, pre-existing code under a checklist item that
+isn't about retrieval. Worth checking whether `LocalEmbedder`'s hash-based fake embeddings are
+sensitive to how sparse the embedding space is when only one section has ever been seeded, which
+would make this a test-data artifact rather than a real `is_abstention` regression -- not confirmed
+either way.
+
+**Verified end-to-end against the real local backend and live Neon DB, not mocks**: registered a
+real account, asked two follow-up questions while logged in (same tab, same `session_id`),
+confirmed the history list showed one conversation with 2 turns and the correct preview text,
+opened it and confirmed all 4 turn texts (2 user + 2 assistant) rendered, exported and confirmed a
+real file download (`caseiq-my-data.json`), used "Continue" and confirmed it switched the active
+`session_id` and landed on the Ask tab, deleted the conversation and confirmed the empty-state
+message, attempted account deletion with the wrong password and confirmed the real 400 and its
+error message, then deleted with the correct password and confirmed the 204, the confirmation
+screen, and that the access token was cleared. All test accounts and their rows were removed from
+the live `users`/`legal_queries`/`query_responses` tables afterward (confirmed 0 remaining).
+
+**A real UI gap found by testing, not by review, fixed before shipping**: the first version of
+`handleDeleteAccount` called `onBack()` immediately on success, which -- since `user` becomes
+`null` the same tick -- silently dropped whoever just deleted their account back onto whatever
+sidebar tab happened to be showing underneath, with nothing on screen ever confirming the deletion
+worked. Added an explicit "Account deleted" confirmation state with its own "Continue" button
+instead of an immediate silent redirect.
+
+**One test-script false alarm, diagnosed rather than assumed**: the first full verification run
+showed several actions (viewing a conversation's detail, deleting a conversation, deleting the
+account) apparently hanging or failing. Checked the backend's own request-timing logs before
+suspecting the endpoints: every one of them had actually returned the correct status
+code (400 for a wrong password, 204 for a successful deletion, 200 for every `GET`) -- they were
+just slow, 2-3 seconds per request against this dev machine's real network round-trip to the Neon
+instance in `us-east-2`, some of it doubled by React StrictMode's dev-only double-invoked effects.
+The test script's short fixed waits, not the endpoints, were the problem; fixed by waiting on the
+actual network response instead of a guessed delay, the same lesson as Phase B's wrong-password
+timing issue. Local dev latency numbers here should not be read as representative of Render-to-Neon
+production latency, which was not separately measured.
+
+## SECURITY FINDING: cross-user conversation exposure on a shared device (2026-09-06)
+
+**Severity: high. Reachable in normal use, not a contrived attack.** CaseIQ's own target users —
+someone using a shared family computer, a library or cyber-cafe terminal, a borrowed phone — make a
+shared browser tab the *ordinary* case for this app, not an edge case requiring special conditions
+to reach. This was found during a review of the Phase C conversation-history feature, before it
+reached anyone outside this development process, but is written up here as a security finding in
+its own right rather than folded into that feature's changelog, because a permanently-red or
+softly-worded "note" is exactly the kind of framing that trains a reviewer to skim past something
+this serious.
+
+**Mechanism.** Two independent facts combined:
+1. `app.api.v1.conversations` (checklist item 6, Phase C) originally derived a `session_id`'s
+   *ownership* from "does at least one `LegalQuery` row in this session carry my `user_id`" — ANY
+   row, not the session's actual, single rightful owner.
+2. The frontend's `session_id` (one per browser tab, `caseiq-web/src/utils/session.ts`) is
+   independent of login state by design — intentionally, so a person can ask a couple of questions
+   anonymously and have them join their history once they log in. Logging out only ever cleared the
+   auth tokens (`utils/auth.ts`'s `clearTokens`); the tab's `session_id` was never touched and
+   survived the logout untouched.
+
+**Why a shared tab makes this reachable, concretely**: person A logs in, asks a question, logs out
+believing that ends their session on this device. Person B — the next person to use the same
+browser tab, on the same shared computer — logs into their own account and continues using the app.
+Their next question is written under the SAME `session_id` A's was. That session now contains rows
+from two different real accounts, and rule 1 above made it belong to *both* — B could open
+`GET /legal/conversations/{session_id}` and read A's prior question and CaseIQ's answer to it
+verbatim, or call `DELETE` on it and erase A's conversation, and the reverse was equally true for A
+against B. No credential theft, no exploit tooling, no unusual action by either party — logging out
+and someone else logging in on the same device is the entire "attack."
+
+**The more serious half, and the one that wouldn't have shown up from reading the affected
+endpoint**: `app.api.v1.legal._history` — the function that supplies prior conversation turns to
+the LLM for follow-up continuity — keys purely on `session_id` and performs no ownership check at
+all, by design, because it predates there being any concept of ownership to check. Fixing only the
+two `conversations.py` endpoints would have left this path wide open: without the frontend fix
+below, B's actual visible ANSWER on the Ask page — not just an entry on a history page B would have
+to think to go looking at — could have been shaped by A's prior conversation, invisibly, on B's very
+first question after logging in. A leaked history page is a passive information disclosure a victim
+might never notice; a contaminated answer is active and immediate, and looks like a CaseIQ mistake
+rather than what it actually is.
+
+**Fix required both a backend rule change and a frontend behavior change — neither alone would have
+closed it:**
+- **Backend** (`app/api/v1/conversations.py`): ownership is now the `user_id` on a session's
+  *earliest* logged-in row, computed once (`_session_owner`), not "any row." Every turn returned or
+  deleted is additionally filtered to (NULL-user OR the established owner) — a stray row carrying a
+  genuinely different real user's id is never shown or touched, even inside a session the requester
+  legitimately owns. This holds even if the frontend fix below is ever missing, bypassed, or not yet
+  deployed to a given client — the backend does not get to assume the frontend behaved.
+- **Frontend** (`utils/session.ts`'s new `resetSessionId`, called from `AuthContext`'s `logout()`
+  and `deleteAccount()`): crossing a logout boundary now mints a fresh `session_id`. A shared tab
+  can no longer carry one account's thread into the next person's login at all — this is the fix
+  that closes `_history()`'s exposure, since the backend ownership fix alone has no way to reach a
+  function with no ownership concept whatsoever. Deliberately NOT applied to `login()`/`register()`
+  — those are meant to preserve continuity with whatever was asked anonymously in the same tab just
+  before signing in; only leaving an account should end a thread, not joining one.
+
+**Verification, not assumption.** Traced the exploit path by hand against the pre-fix code before
+writing a regression test, to confirm it was real and not a hypothetical worst-case reading of the
+logic: constructed exactly the scenario above (A's row, then B's row, one `session_id`) and
+confirmed B's row alone satisfied the old "any row" check, so `get_conversation("shared-tab", user_b,
+db)` would NOT have raised `NotFoundError` under the pre-fix code. `test_shared_tab_cross_user_leak_is_closed`
+(`tests/integration/test_conversations.py`) now pins this: A (asked first) owns the session and
+sees only their own turn; B gets `NotFoundError` on both `GET` and `DELETE`; A deleting "their"
+conversation removes only A's row, leaving B's stray row (which the frontend fix should prevent
+from ever existing again, but the test doesn't get to assume that) untouched.
+
+**Related, confirmed sound rather than assumed**: a purely-anonymous session (never had a logged-in
+row at all) is not reachable via these endpoints by anyone, logged in or not — `_session_owner`
+returns `None` for it, and `None` can never equal a real, authenticated user's id. This was already
+true before this fix (the old "any row" check also failed to match on an all-NULL session), but
+wasn't stated as a deliberate property anywhere; now is, in `app.api.v1.conversations`' own
+docstring, plus `test_get_conversation_404s_for_a_session_that_was_never_logged_in`.
+
+**Also confirmed, not fixed — there was nothing to fix yet**: `GET /legal/conversations` applies no
+`LIMIT` at all today; an account with many conversations gets all of them in one response. Not a
+correctness bug, but a real scale gap, named rather than silently left. If pagination is added, the
+module's own docstring now states where it must apply: after `summaries` is built (post-grouping),
+never on the `rows` query — a limit there would truncate mid-conversation instead of dropping whole
+conversations.
+
+**Two documentation-only items, no code change**: `docs/dpdp-compliance.md` §7 now states plainly,
+with a concrete example, that a user's `GET /auth/me/export` can be narrower than what their own
+`GET /legal/conversations` shows them (anonymous pre-login turns in a continued session appear on
+the history page but not in the export) — previously only inferrable from reading both endpoints'
+docstrings side by side. Separately flagged, explicitly deferred as housekeeping rather than Phase
+C: `tests/integration/conftest.py`'s `_schema_ready` fixture uses `Base.metadata.create_all()`,
+which only creates missing tables and doesn't `ALTER` an existing one when a model gains a column —
+exactly what caused the test-database staleness earlier in this same phase (see below). Building
+the fixture by running the real Alembic migrations instead would make it drift-proof the same way
+production's own schema is kept honest; not done here since it's infrastructure, not this
+checklist item.
+
+**Storage redaction confirmed sound, not assumed**: read a real stored row directly from the DB
+after submitting "My name is Suresh Menon, my phone is 9998887776, what is the punishment for
+theft?" to a local backend against the live Neon corpus. `legal_queries.original_query` held
+`'My name is [NAME_1], my phone is [PHONE_1], what is the punishment for theft?'` — genuinely
+redacted, not raw — while the live HTTP response showed the real name, matching the storage-vs-
+live-response split documented earlier in this file. The column name predates the redaction
+feature and is misleading on its own; added an explicit comment on `LegalQuery.original_query`
+(`app/models/legal.py`) stating plainly what it actually holds, with this verification as the
+source. Test row deleted immediately after; table confirmed back to 0.
+
+## Two permanently-red tests fixed for real, not deleted (2026-09-06)
+
+Both `test_abstention.py` failures had been carried across three prior reports as "unrelated,
+retrieval-quality" — correctly out of scope for the checklist item at hand each time, but wrong to
+leave permanently red without running them down, for the reason named directly: a red test line
+everyone has learned to skim past is how a real regression stops getting noticed. Investigated
+properly this time. Both turned out to be real, distinct, fixable issues — not test flakiness, and
+not something to paper over by weakening or deleting the assertions.
+
+**`test_marital_abuse_query_retrieves_cruelty_section_and_does_not_abstain`: a real, previously
+undiscovered bug in the retrieval fusion, not a test problem.** `semantic_search`'s RRF fusion
+(`app/services/retrieval.py`) builds one `rows` dict from both rankers: the vector loop sets a row's
+similarity first, and the lexical loop's `rows.setdefault(...)` is a no-op for any key the vector
+loop already claimed. A section found by BOTH rankers therefore silently lost the fact it was ALSO a
+genuine lexical hit — `is_abstention`'s "any lexical hit is real evidence" check (`similarity is
+None`) never saw it, because that row's `similarity` was a real (if low) vector number, not `None`.
+Confirmed live, not assumed from reading the diff: constructed the exact tsquery
+`'marit' & 'abus' | 'cruelti'` this test produces and ran it directly against the seeded section
+text in Postgres — it genuinely matches — while `semantic_search` returned that same section with
+only `similarity: 0.0958` and no trace the lexical ranker had found it too. Fixed by tracking lexical
+hits in their own `lexical_hit` boolean (`_serialise`, `semantic_search`'s fusion loop,
+`keyword_search`'s fallback), checked by `is_abstention` alongside `similarity is None` rather than
+instead of it — a section can be a genuine full-text match AND carry a real cosine similarity at the
+same time, and the code was letting one fact silently overwrite the other. Whether this manifests in
+the full production corpus (many real sections, not this test's single seeded one) as a real,
+observed wrong abstention was not separately confirmed — but the mechanism is real and could
+recur on a genuinely narrow retrieval result, so it's fixed at the source rather than only in the
+test.
+
+**`test_on_topic_query_against_seeded_section_does_not_abstain`: a test-fixture problem, not a
+product bug.** Its seeded section text was a synthetic paraphrase of theft's *definition* that never
+mentioned punishment at all, while the query asks "what is the punishment for theft of property" —
+`websearch_to_tsquery` ANDs the significant words (`punishment & theft & property`), and no
+paraphrase missing the word "punished"/"punishment" can ever satisfy that AND, regardless of how
+correct `is_abstention` or the fusion logic is. Confirmed by testing this query against the fix
+above in isolation: it still failed, with `lexical_hit: False`, for this completely different
+reason. Fixed by replacing the paraphrase with two verbatim excerpts of real BNS 303 (the definition
+and the punishment subsection) — the same "real statutory text, not a paraphrase" discipline the
+same file already used for its cruelty-section fixture, just not yet applied here.
+
+**A separate observation surfaced while verifying the fix against the real production corpus, not
+against this session's own change**: re-ran "what is the boiling point of methane on Titan" as a
+sanity check that the fix hadn't broken anything at scale. It no longer abstains. Confirmed this
+wasn't caused by today's fusion fix (every returned section has `lexical_hit: False`) and is instead
+significant enough in its own right to be its own named finding, not a footnote here — see "Fifth
+documented instance: the canonical out-of-scope query no longer abstains, at production scale"
+under "0.20 went live and immediately produced the failure it was designed to avoid," above.
+
+**Verified, not assumed**: full backend suite — 106 passed, 0 failed, the first fully clean run this
+session — confirming the fusion/abstention fix has no ripple effect on any of the other retrieval,
+citation-verification, or corpus tests that also exercise `semantic_search`/`is_abstention`.
+
+### Lesson: merging two evidence signals into one field can silently destroy one of them
+
+Worth stating generally, separately from the specific fix above, because the shape of this bug is
+generic and could recur anywhere else in this codebase two independently-computed signals get
+folded into a single value. `semantic_search`'s fusion loop had two true facts about one section —
+"the vector ranker scored this 0.0958" and "the lexical ranker found a genuine full-text match on
+this" — and one field, `similarity`, that could only hold one of them at a time. `rows[key] = (...,
+similarity, ...)` from the vector loop claimed that field first; `rows.setdefault(key, (..., None,
+...))` from the lexical loop, arriving second, could only ever fail to overwrite it. The lexical
+fact wasn't wrong or lost in transit — it was computed correctly, and then structurally discarded by
+a data shape with no room to keep it. `is_abstention`'s "any lexical hit is real evidence" rule,
+written in good faith against that field, was checking a value that no longer reliably meant what
+its own name implied.
+
+The general shape to watch for: when a boolean or provenance fact ("was this independently confirmed
+by a second, different method") is represented by the mere *presence or absence* of a value in a
+field that also carries a *different*, always-present piece of information (a score, a count, a
+timestamp), a code path that legitimately produces both will only ever preserve one. The fix here
+was to stop overloading `similarity` as also meaning "no lexical hit" and give the second fact its
+own explicit field (`lexical_hit`) — the general version of that fix is: a fact worth checking on its
+own deserves a field of its own, not an inference from another field's absence.
+
+**It went undetected for as long as it did because the test that caught it was assumed to be
+noise.** `test_marital_abuse_query_retrieves_cruelty_section_and_does_not_abstain` had been failing
+since this session started exercising the real integration suite against a real test Postgres for
+the first time, and was reported as "unrelated, retrieval-quality" — a reasonable-sounding
+classification, since `LocalEmbedder`'s hash-based similarity genuinely is a separate, known,
+already-documented source of retrieval noise (see the four prior similarity-inversion instances
+above) — across three separate reports before it was actually run down. The classification wasn't
+dishonest, but it was never checked, and a permanently-red test that gets the same explanation every
+time is functionally identical to a passing test nobody has to think about — which is precisely how
+a real bug survives review after review. The fix wasn't just running this one down; it's the
+standing instruction this session was given after: a test failure gets root-caused or deleted, on
+this same pass, not carried forward with a label attached.
+
+## The embedding swap: LocalEmbedder -> LocalOnnxEmbedder (all-MiniLM-L6-v2) (2026-09-06)
+
+The fifth documented similarity-inversion instance above (Titan no longer abstaining at production
+scale) and the fusion bug both pointed at the same root cause named repeatedly in this file since
+2026-08-30: `LocalEmbedder`'s hash-based similarity is not a real semantic signal. This is that
+swap, planned before any code was written (per instruction), measured at every decision point
+rather than assumed, and re-measured against the golden set and every named failure afterward.
+
+**Feasibility, measured, not estimated.** Render's free tier — what this project actually deploys
+to — caps a container at 512MB total, shared with the whole app, not a dedicated embedder budget.
+Measured live in a Linux container matching Render's OS (this dev machine is Windows, so a Windows
+number would not have been representative):
+
+| Configuration | Combined RSS |
+|---|---|
+| App alone (current baseline) | 117MB |
+| App + `fastembed` (ONNX Runtime) + `all-MiniLM-L6-v2` (384-dim), repeated queries | **331MB** (~180MB headroom) |
+| App + `fastembed` + `bge-base-en-v1.5` (768-dim, int8-quantized) | 494MB (~18MB headroom — not survivable in practice once a live server's connection pool and concurrent requests are accounted for) |
+
+`sentence-transformers` (PyTorch-backed) was the obvious default choice and was not live-measured
+in this environment — two attempts (a Docker build, a direct `pip install --target`) both stalled
+on the same registry/network flakiness seen elsewhere this session and were abandoned rather than
+left hanging; `fastembed`'s own dependency footprint (79MB installed: `onnxruntime` 66M +
+`tokenizers` 12M + `fastembed` 1.2M) against PyTorch's well-documented ~800MB+ was treated as
+sufficient evidence without forcing a live number that would not have changed the decision.
+
+**Export path decided before writing code, per instruction.** Both `all-MiniLM-L6-v2` and
+`bge-base-en-v1.5` have pre-exported, pre-quantized ONNX builds hosted by `fastembed`'s own
+maintainers on HuggingFace (`qdrant/all-MiniLM-L6-v2-onnx`, `qdrant/bge-base-en-v1.5-onnx-q`) —
+confirmed via `fastembed.TextEmbedding.list_supported_models()`, not assumed. No PyTorch was ever
+installed, even temporarily, for export purposes on either candidate.
+
+**Dimension choice: memory decided it, not migration cost, per instruction not to over-weight
+avoiding a migration.** `bge-base-en-v1.5` avoids the dimension change (768, matching the existing
+column) but doesn't clear the memory ceiling with real margin; `all-MiniLM-L6-v2` (384-dim) does,
+and needs the migration. The measured numbers made this decision on their own once available.
+
+**Vendored, not downloaded at runtime — verified from inside a container, not assumed.** Render's
+free tier suspends and cold-starts this container on inactivity, which would mean a network
+dependency (and HuggingFace Hub rate limits — `fastembed` warns about unauthenticated request
+limits) on every cold start. The 5 files a real download actually produces (`model.onnx` 86MB,
+`tokenizer.json`, `tokenizer_config.json`, `special_tokens_map.json`, `config.json` — confirmed by
+inspecting `fastembed`'s populated cache directory directly, not from documentation) are vendored
+under `app/assets/embeddings/all-MiniLM-L6-v2-onnx/`, the same pattern this project already uses
+for the Devanagari/Tamil PDF fonts. `fastembed`'s `specific_model_path` parameter does a bare
+`return Path(specific_model_path)` before any network code runs (read directly in its source, not
+assumed from the parameter's docstring) — loading from it was verified end to end with
+`docker run --network none`, Docker's own hard network isolation, and succeeded.
+
+**Migration and re-embed, run against the real corpus.** `0009_embedding_dim_384`
+(`ALTER TABLE section_versions ALTER COLUMN embedding TYPE vector(384) USING NULL`) — validated
+against a disposable throwaway table first, not run against real data on faith. `legal_sections.embedding`
+(unused, see app/models/corpus.py's own comment) deliberately left untouched — changing a column
+nothing reads from would be churn. `scripts/reembed_corpus.py` then re-embedded all 2,155 rows
+using an ORM bulk `UPDATE` (one prepared statement, `executemany`'d, not `db.get()` + attribute-set
+per row, which would have added a network round trip per row on top of the update itself) —
+**188.6 seconds (3.14 minutes) wall-clock, 0 rows left NULL afterward.** This settles the
+operational question the timing was requested to answer: re-embedding this corpus is a routine,
+few-minutes operation, not a multi-hour one — safe to re-run whenever the model changes again, not
+something to avoid.
+
+**A second instance of the exact test-database staleness this file already flagged as a housekeeping
+risk, right on schedule.** Running the full suite after the migration failed with
+`asyncpg.exceptions.DataError: expected 768 dimensions, not 384` — the persistent
+`caseiq-test-db` container's `section_versions.embedding` column had been created (by
+`Base.metadata.create_all()`, the fixture's own known limitation — see the "Two permanently-red
+tests" entry above) back when `EMBEDDING_DIM` was 768, and a Python-side settings change doesn't
+retroactively `ALTER` an already-existing column. Fixed the same way as before: drop and recreate
+`caseiq_integration_test` fresh, not patch around the symptom. This is now the second time this
+exact fixture design has produced a real, confusing failure from a model/config change alone —
+the Alembic-migration-based fixture rebuild flagged as deferred housekeeping is looking less
+optional each time this recurs.
+
+**Golden set (`docs/golden_set.json`, 44 real queries, `scripts/eval_golden_set.py`), against the
+0.705/0.387 baseline (2026-08-31, `LocalEmbedder`):**
+
+| Metric | LocalEmbedder (baseline) | LocalOnnxEmbedder |
+|---|---|---|
+| Recall@5 | 0.705 (31/44) | **0.909 (40/44)** |
+| MRR | 0.387 | **0.730** |
+
+Two remaining misses (not in top 10): "What is the punishment for assault?", "What is plea
+bargaining?" — not investigated further here, out of this pass's scope, but named rather than
+left implicit. Two queries land just outside top 5 ("What is a dying declaration?", rank 9; "What
+is a hostile witness?", rank 10) — found, just not as highly ranked.
+
+**The five named failures, re-tested directly, before vs. after:**
+
+| Query | Before (`LocalEmbedder`) | After (`LocalOnnxEmbedder`) |
+|---|---|---|
+| "boiling point of methane on Titan" (canonical out-of-scope) | 0.524, **does not abstain**, cites 6 unrelated procedural sections | **0.1469, abstains** |
+| "right of way" / civil easement (out-of-scope) | 0.4768 | 0.4609 — still not separable from real queries by similarity alone; `is_civil_scope_mismatch` still fires and still catches this, unchanged |
+| "What can I do about marital abuse?" -> cruelty | BNS 85/IPC 498A present only via the (then-buggy, now-fixed) lexical ranker | 0.5889 similarity, 5 lexical hits, top 3 = IPC 498A, BNS 85, BNS 86 |
+| "What is the punishment for dowry harassment?" | weak, generic-vocabulary match (see "Running list" entry) | 0.6831, top 3 = IPC 498A, BNS 80, IPC 304B |
+| "how to kill someone" | neither IPC 302 nor BNS 103 in the top 5 at all; even the bare word "murder" alone failed to surface IPC 302 | 0.6586, **IPC 302 ranks #1**, BNS 103 present |
+
+Titan is the clearest single before/after signal, per instruction: the literal proof-of-concept
+query this file has used since 2026-08-30 to demonstrate the abstention gate working now
+demonstrates it working again, by a wide margin (0.1469 vs. a 0.35 threshold, not a
+razor-thin call).
+
+**Threshold re-derived from the golden set plus the out-of-scope cases, not carried over from
+0.40.** Old and new happen to share a similarity SCALE position by coincidence, not by the number
+being reusable — the actual derivation redone from scratch:
+- Out-of-scope: Titan 0.1469, civil easement 0.4609.
+- In-scope (44 golden-set queries, `scripts/calibrate_confidence.py`): **minimum observed 0.4805**,
+  spread 0.48-0.90.
+- **New threshold: 0.35** — ~0.20 above Titan, ~0.13 below the weakest of all 44 real queries. Not
+  a razor-thin gap the way 0.40-vs-0.398 was under the old embedder. The civil-easement case still
+  sits above this threshold — `is_civil_scope_mismatch` remains necessary, not a legacy crutch this
+  swap retires; see config.py's own comment for the full reasoning trail.
+- Still not validated against a dedicated out-of-scope golden set — `docs/golden_set.json`'s 44
+  entries are all in-scope (checked directly: zero have an empty `sections` list), a real,
+  named gap, not silently worked around by this pass.
+
+**Confidence calibration re-attempted — the monotonic curve a hash-based embedder structurally
+couldn't produce.** The 2026-09-04 finding was stark: 23 of 44 golden-set queries landed in ONE
+bucket (0.45-0.50) regardless of whether the answer was correct — confidence was not a probability
+in any usable sense. Re-run unchanged (the script calls `semantic_search` generically, no code
+changes needed) against the new embedder:
+
+| Bucket | n | Correct-present rate |
+|---|---|---|
+| 0.45-0.50 | 1 | 0.00 |
+| 0.50-0.55 | 2 | 1.00 |
+| 0.55-0.60 | 1 | 0.00 |
+| 0.60-0.65 | 5 | 1.00 |
+| 0.65-0.70 | 5 | 0.80 |
+| 0.70-0.75 | 9 | 0.89 |
+| 0.75-0.80 | 8 | 1.00 |
+| 0.80-0.85 | 10 | 1.00 |
+| 0.85-0.90 | 3 | 1.00 |
+
+Overall correct-present rate 0.91. Scores now genuinely spread across a 0.45-0.90 range instead of
+collapsing into one bucket, and the correctness rate trends upward with score — noisy in the two
+smallest buckets (n=1 each) but the overall shape is the real, usable relationship the 2026-09-04
+entry said a real embedding model might produce. Worth relabelling the confidence UI copy as an
+actual confidence signal now, rather than the "not currently a probability" framing that entry
+settled on — not done in this pass, named as a follow-up.
+
+**Curated synonym map (`_SYNONYM_EXPANSIONS`, `app/services/retrieval.py`): trimmed, not retired —
+9 of 14 entries are still doing real, necessary work even with real embeddings.** Tested "if
+semantic retrieval handles them, remove it entirely" directly, per instruction, rather than assumed
+either way — and got the test wrong twice before the result below was trustworthy, both mistakes
+worth recording since they're exactly the kind of shortcut this file's own discipline exists to
+catch:
+
+1. **First pass tested each entry's bare map key** ("dowry harassment") **instead of a realistic
+   full question.** The bare phrase ranked fine unaided; the actual question — "What is the
+   punishment for dowry harassment?", one of the 44 golden-set queries itself — still didn't.
+   Removing the entry on the bare-phrase result alone measurably regressed Recall@5 (0.909 → 0.886)
+   before the golden set was re-run and caught it.
+2. **First pass checked only whether the target section ranked in the top 5, not whether the query
+   actually abstained.** `is_abstention` doesn't know a correct section is sitting in its own
+   results — a query can rank the right answer at #2 and still abstain if overall similarity is
+   weak and there's no lexical hit. "in-laws harassment" is exactly this case.
+3. **The target used for the three dowry entries was itself wrong at first** — BNS 80/IPC 304B is
+   dowry *death*, a distinct provision from dowry *cruelty* (BNS 85/86, IPC 498A), which is what
+   "dowry harassment" actually means and what `docs/golden_set.json`'s own ground truth says.
+
+Re-tested properly — realistic full sentences, checked against both rank and `is_abstention`'s
+actual verdict, targets cross-checked against the golden set's own answers where an entry appears
+in it:
+
+| Kept (still fails unaided) | Removed (genuinely redundant) |
+|---|---|
+| "fir", "first information report" (BNSS 173's own text is parser-garbled), "dowry harassment", "dowry demand", "dowry demands" (dowry-cruelty vs. dowry-death is a real, specific confusion this embedder still makes), "molestation" (abstains entirely unaided), "domestic violence" (rank 6, just outside top 5), "in-laws harassment" (rank 2, but abstains anyway), "marital abuse" (redundant at full corpus scale — rank 3, doesn't abstain — but kept anyway: removing it broke an existing regression test that seeds a single isolated section with no lexical richness to draw on, a real sparse-retrieval scenario this corpus could hit again, not only a test artifact) | "eve teasing", "cheating", "husband beating wife", "kill someone", "hurt someone" |
+
+5 entries removed outright; 9 remain, each now for a specifically re-verified reason rather than
+by default. Recall@5/MRR confirmed unchanged at 0.909/0.730 after the trim (the earlier regression
+was in the wrong direction of the same test, not a residual effect).
+
+**Verified, not assumed, before deploying anything**: the full backend suite was run three times
+across this fix-the-fix process — 1 failure caught and root-caused each of the first two times
+(the regressed Recall@5 catch, then the marital-abuse test), clean on the third — **106 passed, 0
+failed**, against a rebuilt (not stale) test database.

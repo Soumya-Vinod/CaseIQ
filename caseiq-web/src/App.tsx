@@ -1,7 +1,9 @@
 import { useState } from "react";
 import styles from "./App.module.css";
+import { AccountPage } from "./pages/AccountPage";
 import { Footer } from "./components/Footer";
 import { Sidebar, type Tab } from "./components/Sidebar";
+import { AuthProvider } from "./contexts/AuthContext";
 import { BrowseByActPage } from "./pages/BrowseByActPage";
 import { CognizabilityPage } from "./pages/CognizabilityPage";
 import { ComplaintPage } from "./pages/ComplaintPage";
@@ -14,49 +16,65 @@ import { SectionLookupPage } from "./pages/SectionLookupPage";
 import { SituationGuidesPage } from "./pages/SituationGuidesPage";
 import { TermsPage } from "./pages/TermsPage";
 
-// Terms/Privacy are reachable only from the footer, not the primary eight-
-// tab nav (Sidebar.tsx's NAV_ITEMS is a deliberate, curated list -- see
-// docs/caseiq-industry-readiness.md). `null` means "show whichever tab is
-// selected"; switching tabs from the sidebar always clears this, so nav
-// never leaves a stale legal page showing under a newly-selected tab.
-type LegalPage = "privacy" | "terms" | null;
+// Terms/Privacy/Account are reachable only from the footer, not the primary
+// eight-tab nav (Sidebar.tsx's NAV_ITEMS is a deliberate, curated list --
+// see docs/caseiq-industry-readiness.md). `null` means "show whichever tab
+// is selected"; switching tabs from the sidebar always clears this, so nav
+// never leaves a stale footer page showing under a newly-selected tab.
+// Account joined this group in Phase B (checklist item 6) rather than
+// becoming a ninth sidebar tab -- worth revisiting once conversation
+// history (Phase C) makes being logged in a frequent action, not an
+// occasional one; see AccountPage's own docstring.
+type FooterPage = "privacy" | "terms" | "account" | null;
 
 function App() {
   const [tab, setTab] = useState<Tab>("ask");
-  const [legalPage, setLegalPage] = useState<LegalPage>(null);
+  const [footerPage, setFooterPage] = useState<FooterPage>(null);
 
   function handleTabChange(t: Tab) {
-    setLegalPage(null);
+    setFooterPage(null);
     setTab(t);
   }
 
   return (
-    <div className={styles.shell}>
-      <Sidebar tab={tab} onTabChange={handleTabChange} />
-      <main className={styles.content}>
-        {legalPage === "privacy" && <PrivacyPage onBack={() => setLegalPage(null)} />}
-        {legalPage === "terms" && <TermsPage onBack={() => setLegalPage(null)} />}
+    <AuthProvider>
+      <div className={styles.shell}>
+        <Sidebar tab={tab} onTabChange={handleTabChange} />
+        <main className={styles.content}>
+          {footerPage === "privacy" && <PrivacyPage onBack={() => setFooterPage(null)} />}
+          {footerPage === "terms" && <TermsPage onBack={() => setFooterPage(null)} />}
+          {footerPage === "account" && (
+            <AccountPage
+              onBack={() => setFooterPage(null)}
+              onGoToAsk={() => {
+                setFooterPage(null);
+                setTab("ask");
+              }}
+            />
+          )}
 
-        {legalPage === null && (
-          <>
-            {tab === "ask" && <QueryPage />}
-            {tab === "lookup" && <SectionLookupPage />}
-            {tab === "browse" && <BrowseByActPage />}
-            {tab === "arrest" && <CognizabilityPage />}
-            {tab === "rights" && <RightsOnArrestPage />}
-            {tab === "guides" && <SituationGuidesPage />}
-            {tab === "complaint" && <ComplaintPage />}
-            {tab === "news" && <NewsPage />}
-            {tab === "stations" && <PoliceStationsPage />}
-          </>
-        )}
+          {footerPage === null && (
+            <>
+              {tab === "ask" && <QueryPage />}
+              {tab === "lookup" && <SectionLookupPage />}
+              {tab === "browse" && <BrowseByActPage />}
+              {tab === "arrest" && <CognizabilityPage />}
+              {tab === "rights" && <RightsOnArrestPage />}
+              {tab === "guides" && <SituationGuidesPage />}
+              {tab === "complaint" && <ComplaintPage />}
+              {tab === "news" && <NewsPage />}
+              {tab === "stations" && <PoliceStationsPage />}
+            </>
+          )}
 
-        <Footer
-          onOpenPrivacy={() => setLegalPage("privacy")}
-          onOpenTerms={() => setLegalPage("terms")}
-        />
-      </main>
-    </div>
+          <Footer
+            onOpenPrivacy={() => setFooterPage("privacy")}
+            onOpenTerms={() => setFooterPage("terms")}
+            onOpenAccount={() => setFooterPage("account")}
+          />
+        </main>
+      </div>
+    </AuthProvider>
   );
 }
 

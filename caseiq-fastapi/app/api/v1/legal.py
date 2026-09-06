@@ -19,6 +19,7 @@ from app.services.citation_verification import (
 )
 from app.services.helplines import select_helplines
 from app.services.llm import llm_service
+from app.services.pii_redaction import RedactionSession, restore_deep, restore_text
 from app.services.retrieval import (
     build_rag_context,
     implies_past_incident,
@@ -30,6 +31,7 @@ from app.services.retrieval import (
 )
 from app.services.safety import screen_query
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 # Fixed abstention response text -- deliberately not LLM-generated (see
 # is_abstention's docstring: the whole point is to skip the LLM call, not
@@ -89,12 +91,37 @@ router = APIRouter(prefix="/legal", tags=["Legal Query"])
 
 
 async def _history(db: DB, session_id: str) -> list[dict]:
+    """FIXED 2026-09-06: found live, not by review -- this is the first time
+    this function has EVER run past its own early-return with real matching
+    rows. The frontend hardcoded session_id: "" until today (see
+    caseiq-web/src/utils/session.ts), so every call before now hit `if not
+    session_id: return []` and never reached the loop below at all -- the
+    lazy `q.response` access has been sitting here, structurally correct-
+    looking, completely unexercised.
+
+    The bug: `select(LegalQuery)` with no loader option leaves `.response`
+    (a `relationship()`) to lazy-load on first access. Accessing it via
+    plain attribute access (`if q.response:`) outside an explicit `await`
+    tries to run that lazy SELECT through SQLAlchemy's implicit greenlet
+    bridge, which -- confirmed directly against a real session_id with real
+    rows, not assumed -- fails here with `greenlet_spawn has not been
+    called; can't call await_only() here`. `RequestContextMiddleware`
+    (BaseHTTPMiddleware) runs the endpoint in a task-group task whose
+    context doesn't carry the greenlet the original session was opened
+    under, which is exactly the class of situation an implicit lazy-load
+    is unsafe in and an explicit, awaited query is not.
+
+    Fixed by eager-loading the relationship in the original query
+    (`selectinload` -- a second, explicit, properly-awaited SELECT) instead
+    of touching `.response` lazily at all.
+    """
     if not session_id:
         return []
     rows = (await db.execute(
-        select(LegalQuery).where(
-            LegalQuery.session_id == session_id, LegalQuery.status == QueryStatus.PROCESSED
-        ).order_by(LegalQuery.created_at)
+        select(LegalQuery)
+        .options(selectinload(LegalQuery.response))
+        .where(LegalQuery.session_id == session_id, LegalQuery.status == QueryStatus.PROCESSED)
+        .order_by(LegalQuery.created_at)
     )).scalars().all()
     history: list[dict] = []
     for q in rows:
@@ -106,15 +133,41 @@ async def _history(db: DB, session_id: str) -> list[dict]:
 
 @router.post("/query", response_model=QueryOut)
 async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: Request):
+    # FIXED 2026-09-06 (checklist item 6, Phase A): every LegalQuery row
+    # below used to store payload.query RAW. Storage now gets the same
+    # redaction applied before this ever left the process for Groq (see
+    # app.services.pii_redaction) -- for every row, logged-in or anonymous,
+    # per instruction: "there's no reason to store raw text for users who
+    # never log in either." Computed once, up front, and reused across all
+    # three LegalQuery(...) constructions below (blocked / needs-incident-
+    # date / normal) so which branch returns doesn't change what's stored.
+    # A SEPARATE session from the one llm_service.process_query builds for
+    # its own Groq call -- redundant computation, not redundant correctness:
+    # this one exists purely to decide what's written to the database, and
+    # doesn't need to match token numbering with the LLM-facing session.
+    # screen_query below still runs on the RAW payload.query, deliberately:
+    # harm-intent phrasing ("how to kill") isn't personal data and isn't
+    # what this redaction pass targets.
+    _query_redaction = RedactionSession()
+    stored_query = _query_redaction.redact(payload.query)
+    if _query_redaction.had_redactions:
+        logger.info("pii_redacted", endpoint="legal_query_storage", counts=_query_redaction.counts)
+
     blocked, pattern = screen_query(payload.query)
     if blocked:
+        # NOTE: this AuditLog.details still stores the RAW query, not
+        # stored_query -- out of this pass's scope (Phase A targets
+        # LegalQuery/QueryResponse specifically; audit_logs is a different
+        # table with its own 90-day retention for a different purpose,
+        # abuse investigation). Flagged rather than silently left
+        # inconsistent -- same treatment as the ip_address note just below.
         db.add(AuditLog(user_id=user.id if user else None, action="dark_query_blocked",
                         details={"query": payload.query, "pattern": pattern},
                         ip_hash=hash_ip(client_ip(request))))
         # NOTE: LegalQuery.ip_address below still stores the raw IP -- a separate
         # model from AuditLog, out of M2's explicit scope ("hash IPs" was scoped
         # to audit logging). Flagged, not fixed here: same DPDP concern applies.
-        db.add(LegalQuery(user_id=user.id if user else None, original_query=payload.query,
+        db.add(LegalQuery(user_id=user.id if user else None, original_query=stored_query,
                           status=QueryStatus.BLOCKED, is_flagged=True,
                           flag_reason=f"pattern:{pattern}", session_id=payload.session_id,
                           ip_address=client_ip(request)))
@@ -140,7 +193,7 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     if payload.incident_date is None and not payload.skip_incident_date \
             and implies_past_incident(payload.query):
         took_ms = int((time.perf_counter() - started) * 1000)
-        q = LegalQuery(user_id=user.id if user else None, original_query=payload.query,
+        q = LegalQuery(user_id=user.id if user else None, original_query=stored_query,
                        detected_language=language, status=QueryStatus.PROCESSED,
                        session_id=payload.session_id, ip_address=client_ip(request))
         db.add(q)
@@ -192,7 +245,7 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         sections = []
     rag_context = build_rag_context(sections)
 
-    q = LegalQuery(user_id=user.id if user else None, original_query=payload.query,
+    q = LegalQuery(user_id=user.id if user else None, original_query=stored_query,
                    detected_language=language, status=QueryStatus.PROCESSING,
                    session_id=payload.session_id, ip_address=client_ip(request))
     db.add(q)
@@ -204,6 +257,8 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         # confidence + 6 citations alongside "I can only help with legal
         # questions" for an out-of-scope query (2026-08-30). See config.py's
         # ABSTENTION_SIMILARITY_THRESHOLD for where the cutoff came from.
+        # Fixed, non-user-supplied text -- no PII possible, so no redaction
+        # map needed; restore_text/restore_deep are no-ops against {} anyway.
         result = {
             "conversational_summary": _CIVIL_SCOPE_MESSAGE if civil_scope_mismatch else _ABSTENTION_MESSAGE,
             "structured_data": {},
@@ -212,6 +267,7 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
             "confidence_score": round(max(0.0, min(retrieval_strength, 1.0)), 3),
             "language": language,
             "is_followup": False,
+            "redaction_map": {},
         }
     else:
         try:
@@ -273,6 +329,9 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
         select(CorpusVersion.id).order_by(CorpusVersion.created_at.desc()).limit(1)
     )).scalar_one_or_none()
 
+    # result["conversational_summary"]/["structured_data"] are REDACTED at
+    # this point (llm_service.process_query stopped restoring internally --
+    # see its own comment) -- this is what gets stored, below, unmodified.
     db.add(QueryResponse(
         query_id=q.id, conversational_summary=result["conversational_summary"],
         structured_data=result["structured_data"], retrieved_sections=sections,
@@ -284,10 +343,18 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     q.status = QueryStatus.PROCESSED
     q.is_followup = result["is_followup"]
 
+    # FIXED 2026-09-06 (checklist item 6, Phase A): restored HERE, on copies,
+    # for this one live HTTP response only -- the row just stored above
+    # already has the redacted text and is never touched again. See
+    # docs/evaluation.md for why this moved out of llm.py.
+    redaction_map = result.get("redaction_map", {})
+    response_summary = restore_text(result["conversational_summary"], redaction_map)
+    response_structured = restore_deep(result["structured_data"], redaction_map)
+
     return QueryOut(
         query_id=q.id, original_query=payload.query,
-        conversational_summary=result["conversational_summary"],
-        structured_data=result["structured_data"], confidence_score=result["confidence_score"],
+        conversational_summary=response_summary,
+        structured_data=response_structured, confidence_score=result["confidence_score"],
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,

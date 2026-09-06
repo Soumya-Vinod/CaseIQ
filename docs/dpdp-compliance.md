@@ -53,28 +53,53 @@ user viewed or agreed to them. Worth closing before this handles real registered
 | Account registration fields | Authenticating the user, personalising `preferred_language`/`state`/`district` | No secondary use. `state`/`district` are stored fields with no consumer yet (`app/models/user.py`) — collected ahead of a feature (state-specific amendment surfacing, checklist item C9) that doesn't exist yet. Named here as a live gap: these fields shouldn't be collected until the feature that uses them ships, per purpose limitation. |
 | Client IP address | Abuse/rate-limiting investigation | `AuditLog.ip_hash` is a keyed HMAC, never the raw address (`app/core/security.py:hash_ip`) — not reversible, but still correlatable across rows for the same visitor. **`LegalQuery.ip_address` is a separate column that DOES store the raw IP** (`app/models/legal.py`) — flagged directly in the code (`app/api/v1/legal.py`'s own comment) as a known, unresolved DPDP gap, not discovered fresh here. IP address is personal data under the Act; this should be hashed the same way audit logs are, or dropped. |
 
-## 4. What's stored, concretely (verified against the schema, 2026-09-05)
+## 4. What's stored, concretely (verified against the schema; storage behaviour updated 2026-09-06)
 
 | Table | Personal data it holds | Linked to a user? |
 |---|---|---|
 | `users` | email, full name, phone, hashed password (argon2, never plaintext), state, district, role, preferred language | Is the user record itself |
-| `legal_queries` | the raw query text, detected language, **raw IP address** (see §3), session ID | `user_id` nullable — anonymous queries store no user link at all |
-| `query_responses` | the generated answer, structured data, which sections were retrieved, confidence score | Via `legal_queries.query_id` |
-| `complaints` | complainant name/address/phone, police station, incident narrative, accused details, witnesses, evidence description, the generated draft letter, the rendered PDF | `user_id` nullable — anonymous complaint drafts are stored with full personal detail and no user link |
+| `legal_queries` | the query text **as redacted before it was sent to Groq** — common identifiers tokenised, not the raw value (see below) — detected language, **raw IP address** (see §3), session ID | `user_id` nullable — anonymous queries store no user link at all |
+| `query_responses` | the generated answer and structured data, **also redacted** — the tokens intact, not restored — which sections were retrieved, confidence score | Via `legal_queries.query_id` |
+| `complaints` | complainant name/address/phone, police station, incident narrative, accused details, witnesses, evidence description, the generated draft letter, the rendered PDF — **raw, deliberately, not redacted** (see below) | `user_id` nullable — anonymous complaint drafts are stored with full personal detail and no user link |
 | `audit_logs` | action name, request path/status/timing, **hashed** IP, request ID | `user_id` nullable |
 
-**Anonymous use stores just as much personal data as logged-in use**, for `/legal/query` and
-`/complaints` — the only difference is the missing `user_id`. A name and address typed into the
-complaint form by someone who never registered is stored in full, indefinitely (see §6), exactly
-as it would be for a registered user. This is worth being explicit about in the Privacy Policy
-rather than letting "anonymous" imply "not stored."
+**Storage is redacted, not raw, for `legal_queries`/`query_responses` — for anonymous and
+logged-in rows alike.** Until 2026-09-06 this table stored the raw query and the fully-restored
+answer (real name/phone put back in); it now stores exactly what Groq saw — the same tokenised
+text described in §5 — and restoration happens only once, in memory, to build the one live HTTP
+response for that request. Nothing persisted ever contains a restored value. This is the honest
+record of the interaction: the redacted text is what the model actually reasoned over, and what
+the answer was actually built from. The same cue-phrase limitation from §5 applies here without
+change — a name or address with no recognisable cue phrase in front of it isn't caught by the
+detector at all, and is stored as typed. See `docs/evaluation.md` for the implementation and how it
+was verified against a live query.
 
-**Conversation history is not currently a working feature.** The frontend always sends
-`session_id: ""` (`QueryPage.tsx`), and `app/api/v1/legal.py`'s `_history()` returns nothing for an
-empty session ID — so although every query is stored in the database as described above, nothing
-in the deployed product currently lets a user list, resume, or delete a past conversation. That's
-scoped as its own item (checklist item 6, gated on this document and on PII redaction landing
-first) rather than silently implied by the schema already existing.
+**`complaints` is the deliberate exception, not an inconsistency.** A complaint's entire purpose is
+to be a real, filable document — `GET /complaints/{id}/download` regenerates the PDF from these
+exact stored fields if Render's ephemeral disk has lost the original file, and a redacted
+complainant name would produce a document nobody could actually file. The narrative fields are
+still redacted *in transit* to Groq for drafting (§5); what's stored afterward is the real,
+restored draft, because that's the artifact the feature exists to produce.
+
+**Conversation history is a shipped feature as of 2026-09-06** (checklist item 6, gated on this
+document and on PII redaction landing first — both preconditions were met before this shipped).
+Self-service list/resume/delete for a logged-in user's own conversations, and account-level
+deletion/export, are live — see §7 for the full list of what's self-service today versus what
+still isn't.
+
+**Session tokens (access + refresh JWTs) are stored in the browser's `sessionStorage`, not an
+httpOnly cookie.** This is a considered trade-off, not an oversight, but it carries a real exposure
+this document states plainly rather than glossing over: `sessionStorage` is readable by any
+JavaScript running on the page, so a successful XSS injection could exfiltrate a logged-in user's
+tokens and, with them, everything §7 makes self-service for that account (their conversation
+history, export, even account deletion) until the token naturally expires. `sessionStorage` was
+chosen over plain `localStorage` (which would persist the same exposure across browser restarts,
+not just the one tab session) and over memory-only storage (which loses the session on every page
+refresh); an httpOnly-cookie-based session, immune to this specific exposure, is documented future
+work, not yet built. There is also currently no server-side refresh-token revocation — a refresh
+token stays valid for its full lifetime (`REFRESH_TOKEN_EXPIRE_DAYS`) even after the access token
+that came with it is discarded client-side; token rotation with server-side revocation on refresh
+is the other piece of that same future work, not yet built.
 
 ## 5. Data shared with processors
 
@@ -102,20 +127,46 @@ No data is sold, and none is used for advertising — there is no advertising in
 
 **Automated retention currently exists for exactly one table.** `app.tasks.worker.cleanup_audit_logs`
 deletes `audit_logs` rows older than `AUDIT_LOG_RETENTION_DAYS` (90 days) on a daily cron. Nothing
-else — `legal_queries`, `query_responses`, or `complaints` — has an automated deletion job. A query
-or a complaint draft, once created, persists indefinitely until manually deleted.
+else — `legal_queries`, `query_responses`, or `complaints` — has an automated deletion job.
 
-**Stated policy, pending automation** (the honest gap, not hidden behind aspirational wording):
+**Stated policy, pending automation** — concrete numbers, not "kept until deleted." An indefinite
+retention period is exactly what this document warns against elsewhere, and "until the user acts"
+describes a policy that depends on the user remembering to act, not one CaseIQ enforces:
 
-| Data | Intended retention | Automated today? |
+| Data | Retention | Automated today? |
 |---|---|---|
 | Audit logs | 90 days | Yes |
-| Anonymous `/legal/query` history | 12 months from creation | No — manual only |
-| Registered users' query history | Until account deletion or 24 months of inactivity | No — manual only, and account deletion itself isn't self-service yet (§7) |
+| Anonymous `/legal/query` history (`legal_queries`/`query_responses`, no `user_id`) | **30 days** from creation | **No — documented target, not enforced.** No arq job exists yet; see below. |
+| Registered users' conversation history (same tables, `user_id` set) | **12 months** from creation, or immediately on account deletion (self-service, §7) | **No — documented target, not enforced**, same as above. |
 | Complaint drafts (`complaints` table, including the rendered PDF) | 24 months from creation — a person may need to re-download a draft well after filing | No — manual only |
 
-Closing this gap (a scheduled deletion job matching the table above, mirroring
-`cleanup_audit_logs`'s existing shape) is tracked as follow-up work, not claimed as already done.
+**Why the asymmetry (30 days vs. 12 months) is deliberate, not arbitrary**: an anonymous row has no
+account attached to it — nobody can log in and ask CaseIQ to delete a specific one, because there is
+no "theirs" to point at. The short default is the only privacy lever available for that data at
+all. A logged-in user's row has an owner who can delete it at any time via the self-service
+`DELETE /legal/conversations/{session_id}` and `DELETE /auth/me` endpoints (§7, shipped 2026-09-06)
+— the longer default before *automatic* cleanup is reasonable exactly because the person has their
+own, faster lever the whole time, not because the data matters less.
+
+This retention line is also shown directly on the history page itself (`AccountPage`, checklist
+item 6 Phase C) — worded the same "documented target, not automated" way as here, not softened for
+a UI audience.
+
+**Said plainly, not implied**: nothing in this codebase currently deletes a `legal_queries` row for
+being old. The numbers above are the target this project is committing to, mirroring
+`cleanup_audit_logs`'s existing shape (a daily arq cron, `DELETE ... WHERE created_at < cutoff`) --
+but until that job is written and deployed, a row past its stated retention window still exists in
+Neon. Do not read this table as "and therefore old rows are already gone" — closing that gap is
+tracked as follow-up work, not claimed as already done.
+
+**What's retained, revised**: as of the fix described in `docs/evaluation.md` ("storage vs.
+live-response split"), `legal_queries.original_query` and `query_responses.conversational_summary`/
+`structured_data` store the same **redacted** text sent to Groq — common identifiers tokenised,
+never the raw value — for anonymous and logged-in rows alike. This reduces what a breach of these
+tables would expose, but does not replace the retention numbers above: redaction lowers the
+sensitivity of what's kept, it doesn't justify keeping it indefinitely, and it has the same
+cue-phrase limitation already disclosed in §5 — a name or address with no recognisable cue phrase
+may still be stored as typed.
 
 ## 7. User rights (access, correction, erasure, grievance)
 
@@ -123,29 +174,50 @@ The Act grants a Data Principal the right to access a summary of their personal 
 corrected or completed, to have it erased once no longer necessary for the stated purpose, and to
 a grievance-redressal mechanism.
 
-**What's self-service today**:
+**What's self-service today** (checklist item 6, Phase C shipped 2026-09-06 added the erasure/
+access/portability rows below; everything else predates it):
 - `GET /auth/me` returns a registered user's own profile fields.
 - `GET /complaints/history` returns a registered user's own past complaints (last 20).
 - `POST /auth/change-password`.
+- `GET /legal/conversations` lists a registered user's own conversations (session_id, a preview,
+  turn count, last activity); `GET /legal/conversations/{session_id}` returns the full turn-by-turn
+  text of one. Ownership is per-session, not per-row, and is the user_id on that session's
+  *earliest* logged-in turn specifically (fixed 2026-09-06, found in review — see
+  `app.api.v1.conversations`' own docstring for the cross-user leak "any row" would have allowed on
+  a shared browser tab) — a session's pre-login, anonymous turns are included once that first
+  logged-in turn establishes ownership of it.
+- `DELETE /legal/conversations/{session_id}` erases one conversation outright (right to erasure,
+  applied at the granularity of a single conversation rather than only the whole account).
+- `GET /auth/me/export` returns a JSON download of a user's own conversations (right to data
+  portability/access) — deliberately scoped to rows carrying that user's own `user_id`, narrower
+  than the listing above. **Concretely, not just in principle: if a person asked a couple of
+  questions anonymously in a tab and then logged in and continued, the history page (`GET
+  /legal/conversations`) shows that whole thread, but the export omits the anonymous turns from
+  it** — a user's downloaded export is not guaranteed to contain everything their own history page
+  shows them. Said here explicitly rather than left for someone to notice the discrepancy
+  themselves; see that endpoint's own docstring for the portability reasoning behind the narrower
+  scope. Complaint drafts are not included in this export today — a gap, not a design decision.
+- `DELETE /auth/me` (password-confirmed) erases the account, its conversations, and its complaint
+  drafts outright — a genuine hard delete, not merely unlinking the rows from the account (verified
+  directly against the live schema's foreign-key behaviour before relying on it; see that
+  endpoint's own docstring). No soft-delete, no grace period, no recovery.
 
 **What is NOT self-service today, stated plainly rather than glossed over**:
-- **No account deletion endpoint exists.** There is no `DELETE /auth/me` or equivalent — closing
-  an account and erasing its data currently requires a manual request (see the contact point
-  below) actioned directly against the database by the operator.
-- **No consolidated data-export endpoint exists.** `/auth/me` and `/complaints/history` give
-  partial self-access, but there's no single "export everything CaseIQ has about me" action,
-  and `legal_queries`/`query_responses` have no user-facing listing endpoint at all yet (tracked
-  under checklist item 6).
 - **Anonymous data has no account to attach an access/erasure request to.** A query or complaint
   submitted without logging in can only be identified by the requester describing what they
   submitted and roughly when — CaseIQ has no other way to locate it, since no user link exists for
   anonymous rows by design.
+- **A single complaint draft can't be deleted or exported on its own.** `DELETE /auth/me` removes
+  all of a user's complaints as part of closing the account, but there's no endpoint to erase or
+  export one complaint in isolation the way there is for a single conversation.
+- **No profile correction endpoint** beyond password change — a user cannot self-service edit
+  their name, phone, or other profile fields yet.
 
-**What to actually do in the meantime, since that's the operative question**: open an issue on
-this project's public GitHub repository (github.com/Soumya-Vinod/CaseIQ) describing what you
-submitted and roughly when, and the operator will locate and action it manually against the
-database. This is a real, monitored channel, not a placeholder — but it is manual, and it is not
-the DPDP §13 Grievance Officer mechanism described below.
+**What to actually do about the remaining gaps**: open an issue on this project's public GitHub
+repository (github.com/Soumya-Vinod/CaseIQ) describing what you submitted and roughly when, and the
+operator will locate and action it manually against the database. This is a real, monitored
+channel, not a placeholder — but it is manual, and it is not the DPDP §13 Grievance Officer
+mechanism described below.
 
 **No Grievance Officer contact is published, and none is designated, because the obligation to
 designate one hasn't attached yet.** CaseIQ is an academic project, not currently operated as a

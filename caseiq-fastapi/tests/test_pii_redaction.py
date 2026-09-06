@@ -1,6 +1,6 @@
 import pytest
 
-from app.services.pii_redaction import PIIType, RedactionSession
+from app.services.pii_redaction import PIIType, RedactionSession, restore_deep, restore_text
 
 
 @pytest.mark.parametrize(
@@ -87,3 +87,56 @@ def test_multiple_entity_types_get_independent_counters():
     session.redact("My name is Suresh Patil")
     session.redact("Call 9876543210")
     assert session.counts == {"name": 2, "phone": 1}
+
+
+# --- mapping property + standalone restore_text/restore_deep --------------
+# FIXED 2026-09-06 (checklist item 6, Phase A): these exist so a caller
+# across a function boundary (app.api.v1.legal storing a REDACTED response
+# while needing to show a RESTORED one in the live HTTP reply) can restore
+# without the session object itself -- see docs/evaluation.md.
+
+def test_mapping_property_returns_the_token_to_value_map():
+    session = RedactionSession()
+    session.redact("Call 9876543210")
+    assert session.mapping == {"[PHONE_1]": "9876543210"}
+
+
+def test_mapping_is_empty_when_nothing_redacted():
+    session = RedactionSession()
+    session.redact("What is the punishment for theft?")
+    assert session.mapping == {}
+
+
+def test_mapping_is_a_copy_not_a_live_reference():
+    session = RedactionSession()
+    session.redact("Call 9876543210")
+    m = session.mapping
+    m["[PHONE_1]"] = "tampered"
+    assert session.mapping["[PHONE_1]"] == "9876543210"
+
+
+def test_restore_text_standalone_matches_session_restore():
+    session = RedactionSession()
+    redacted = session.redact("Call 9876543210 about my case")
+    assert restore_text(redacted, session.mapping) == "Call 9876543210 about my case"
+
+
+def test_restore_text_with_empty_mapping_is_a_noop():
+    assert restore_text("[PHONE_1] called", {}) == "[PHONE_1] called"
+
+
+def test_restore_text_with_none_is_safe():
+    assert restore_text(None, {"[PHONE_1]": "123"}) == ""
+
+
+def test_restore_deep_walks_nested_structures():
+    mapping = {"[NAME_1]": "Ramesh", "[PHONE_1]": "9876543210"}
+    structured = {
+        "your_rights": [{"right": "...", "explanation": "Contact [NAME_1] at [PHONE_1]."}],
+        "dos_and_donts": {"dos": ["Call [PHONE_1] immediately."], "donts": []},
+        "severity": "medium",
+    }
+    restored = restore_deep(structured, mapping)
+    assert restored["your_rights"][0]["explanation"] == "Contact Ramesh at 9876543210."
+    assert restored["dos_and_donts"]["dos"] == ["Call 9876543210 immediately."]
+    assert restored["severity"] == "medium"  # non-string values pass through untouched

@@ -3,297 +3,305 @@
   "per_query": [
     {
       "question": "What is the punishment for theft?",
-      "confidence": 0.478,
+      "confidence": 0.7646,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is the punishment for defamation?",
-      "confidence": 0.478,
+      "confidence": 0.8288,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for murder?",
-      "confidence": 0.478,
+      "confidence": 0.7719,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is culpable homicide not amounting to murder?",
-      "confidence": 0.4479,
+      "confidence": 0.7636,
       "correct_present": true,
-      "bucket": "0.40-0.45"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is cheating and dishonestly inducing delivery of property?",
-      "confidence": 0.4867,
+      "confidence": 0.7728,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is criminal breach of trust?",
-      "confidence": 0.4886,
+      "confidence": 0.8442,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for dowry harassment?",
-      "confidence": 0.4709,
+      "confidence": 0.6831,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.65-0.70"
     },
     {
       "question": "What is the punishment for dowry death?",
-      "confidence": 0.489,
+      "confidence": 0.7789,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is the punishment for rape?",
-      "confidence": 0.478,
+      "confidence": 0.7468,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.70-0.75"
     },
     {
       "question": "What is the punishment for kidnapping?",
-      "confidence": 0.478,
+      "confidence": 0.8056,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for robbery?",
-      "confidence": 0.478,
+      "confidence": 0.8307,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for dacoity?",
-      "confidence": 0.478,
+      "confidence": 0.8832,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.85-0.90"
     },
     {
       "question": "What is the punishment for extortion?",
-      "confidence": 0.478,
+      "confidence": 0.8735,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.85-0.90"
     },
     {
       "question": "What is the punishment for forgery?",
-      "confidence": 0.4929,
+      "confidence": 0.8422,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for criminal intimidation?",
-      "confidence": 0.4425,
+      "confidence": 0.8604,
       "correct_present": true,
-      "bucket": "0.40-0.45"
+      "bucket": "0.85-0.90"
     },
     {
       "question": "What is the punishment for rioting?",
-      "confidence": 0.4805,
+      "confidence": 0.8202,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is an unlawful assembly?",
-      "confidence": 0.3411,
+      "confidence": 0.8324,
       "correct_present": true,
-      "bucket": "0.30-0.35"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for an acid attack?",
-      "confidence": 0.4457,
-      "correct_present": false,
-      "bucket": "0.40-0.45"
+      "confidence": 0.6709,
+      "correct_present": true,
+      "bucket": "0.65-0.70"
     },
     {
       "question": "What is the punishment for stalking?",
-      "confidence": 0.478,
+      "confidence": 0.6344,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.60-0.65"
     },
     {
       "question": "What is the punishment for voyeurism?",
-      "confidence": 0.478,
+      "confidence": 0.7647,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is the punishment for mischief?",
-      "confidence": 0.478,
+      "confidence": 0.8299,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.80-0.85"
     },
     {
       "question": "What is the punishment for counterfeiting currency?",
-      "confidence": 0.4425,
+      "confidence": 0.7423,
       "correct_present": true,
-      "bucket": "0.40-0.45"
+      "bucket": "0.70-0.75"
     },
     {
       "question": "What is the punishment for attempt to murder?",
-      "confidence": 0.5304,
+      "confidence": 0.7277,
       "correct_present": true,
-      "bucket": "0.50-0.55"
+      "bucket": "0.70-0.75"
     },
     {
       "question": "What is wrongful confinement?",
-      "confidence": 0.3307,
+      "confidence": 0.7964,
       "correct_present": true,
-      "bucket": "0.30-0.35"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is wrongful restraint?",
-      "confidence": 0.3296,
+      "confidence": 0.7285,
       "correct_present": true,
-      "bucket": "0.30-0.35"
+      "bucket": "0.70-0.75"
     },
     {
       "question": "What is the punishment for assault?",
-      "confidence": 0.478,
+      "confidence": 0.6762,
       "correct_present": false,
-      "bucket": "0.45-0.50"
+      "bucket": "0.65-0.70"
     },
     {
       "question": "What is the punishment for sexual harassment?",
-      "confidence": 0.4564,
+      "confidence": 0.7019,
       "correct_present": true,
-      "bucket": "0.45-0.50"
+      "bucket": "0.70-0.75"
     },
     {
       "question": "What is abetment of suicide?",
-      "confidence": 0.6605,
+      "confidence": 0.7525,
       "correct_present": true,
-      "bucket": "0.65-0.70"
+      "bucket": "0.75-0.80"
     },
     {
       "question": "What is the procedure to file an FIR?",
-      "confidence": 0.476,
-      "correct_present": false,
-      "bucket": "0.45-0.50"
+      "confidence": 0.6437,
+      "correct_present": true,
+      "bucket": "0.60-0.65"
     },
     {
       "question": "What is the procedure for arrest without a warrant?",
-      "confidence": 0.4805,
-      "correct_present": false,
-      "bucket": "0.45-0.50"
+      "confidence": 0.7076,
+      "correct_present": true,
+      "bucket": "0.70-0.75"
     },
     {
       "question": "What is the procedure for issuing a search warrant?",
+      "confidence": 0.6527,
+      "correct_present": true,
+      "bucket": "0.65-0.70"
+    },
+    {
+      "question": "What is the police report or charge sheet after investigation?",
+      "confidence": 0.6498,
+      "correct_present": true,
+      "bucket": "0.60-0.65"
+    },
+    {
+      "question": "How does a magistrate take cognizance of an offence?",
+      "confidence": 0.809,
+      "correct_present": true,
+      "bucket": "0.80-0.85"
+    },
+    {
+      "question": "What is the order for maintenance of wives and children?",
+      "confidence": 0.8374,
+      "correct_present": true,
+      "bucket": "0.80-0.85"
+    },
+    {
+      "question": "What is compounding of offences?",
+      "confidence": 0.7406,
+      "correct_present": true,
+      "bucket": "0.70-0.75"
+    },
+    {
+      "question": "What is relevant under the law of evidence?",
+      "confidence": 0.6925,
+      "correct_present": true,
+      "bucket": "0.65-0.70"
+    },
+    {
+      "question": "What is expert opinion as evidence?",
+      "confidence": 0.6254,
+      "correct_present": true,
+      "bucket": "0.60-0.65"
+    },
+    {
+      "question": "On whom does the burden of proof lie?",
+      "confidence": 0.7374,
+      "correct_present": true,
+      "bucket": "0.70-0.75"
+    },
+    {
+      "question": "What is the presumption of legitimacy of a child?",
+      "confidence": 0.5282,
+      "correct_present": true,
+      "bucket": "0.50-0.55"
+    },
+    {
+      "question": "What is the punishment for bigamy?",
+      "confidence": 0.5196,
+      "correct_present": true,
+      "bucket": "0.50-0.55"
+    },
+    {
+      "question": "What is anticipatory bail?",
+      "confidence": 0.6144,
+      "correct_present": true,
+      "bucket": "0.60-0.65"
+    },
+    {
+      "question": "What is plea bargaining?",
+      "confidence": 0.7358,
+      "correct_present": false,
+      "bucket": "0.70-0.75"
+    },
+    {
+      "question": "What is a dying declaration?",
       "confidence": 0.4805,
       "correct_present": false,
       "bucket": "0.45-0.50"
     },
     {
-      "question": "What is the police report or charge sheet after investigation?",
-      "confidence": 0.5022,
-      "correct_present": false,
-      "bucket": "0.50-0.55"
-    },
-    {
-      "question": "How does a magistrate take cognizance of an offence?",
-      "confidence": 0.4284,
-      "correct_present": true,
-      "bucket": "0.40-0.45"
-    },
-    {
-      "question": "What is the order for maintenance of wives and children?",
-      "confidence": 0.5551,
-      "correct_present": true,
-      "bucket": "0.55-0.60"
-    },
-    {
-      "question": "What is compounding of offences?",
-      "confidence": 0.508,
-      "correct_present": true,
-      "bucket": "0.50-0.55"
-    },
-    {
-      "question": "What is relevant under the law of evidence?",
-      "confidence": 0.5162,
-      "correct_present": true,
-      "bucket": "0.50-0.55"
-    },
-    {
-      "question": "What is expert opinion as evidence?",
-      "confidence": 0.2691,
-      "correct_present": true,
-      "bucket": "0.25-0.30"
-    },
-    {
-      "question": "On whom does the burden of proof lie?",
-      "confidence": 0.5792,
-      "correct_present": true,
-      "bucket": "0.55-0.60"
-    },
-    {
-      "question": "What is the presumption of legitimacy of a child?",
-      "confidence": 0.6586,
-      "correct_present": false,
-      "bucket": "0.65-0.70"
-    },
-    {
-      "question": "What is the punishment for bigamy?",
-      "confidence": 0.478,
-      "correct_present": false,
-      "bucket": "0.45-0.50"
-    },
-    {
-      "question": "What is anticipatory bail?",
-      "confidence": 0.2957,
-      "correct_present": false,
-      "bucket": "0.25-0.30"
-    },
-    {
-      "question": "What is plea bargaining?",
-      "confidence": 0.3198,
-      "correct_present": false,
-      "bucket": "0.30-0.35"
-    },
-    {
-      "question": "What is a dying declaration?",
-      "confidence": 0.4179,
-      "correct_present": false,
-      "bucket": "0.40-0.45"
-    },
-    {
       "question": "What is a hostile witness?",
-      "confidence": 0.4179,
+      "confidence": 0.5733,
       "correct_present": false,
-      "bucket": "0.40-0.45"
+      "bucket": "0.55-0.60"
     }
   ],
   "buckets": {
-    "0.45-0.50": {
-      "n": 23,
-      "rate": 0.782608695652174
+    "0.75-0.80": {
+      "n": 8,
+      "rate": 1.0
     },
-    "0.40-0.45": {
-      "n": 7,
-      "rate": 0.5714285714285714
-    },
-    "0.30-0.35": {
-      "n": 4,
-      "rate": 0.75
-    },
-    "0.50-0.55": {
-      "n": 4,
-      "rate": 0.75
+    "0.80-0.85": {
+      "n": 10,
+      "rate": 1.0
     },
     "0.65-0.70": {
-      "n": 2,
-      "rate": 0.5
+      "n": 5,
+      "rate": 0.8
     },
-    "0.55-0.60": {
+    "0.70-0.75": {
+      "n": 9,
+      "rate": 0.8888888888888888
+    },
+    "0.85-0.90": {
+      "n": 3,
+      "rate": 1.0
+    },
+    "0.60-0.65": {
+      "n": 5,
+      "rate": 1.0
+    },
+    "0.50-0.55": {
       "n": 2,
       "rate": 1.0
     },
-    "0.25-0.30": {
-      "n": 2,
-      "rate": 0.5
+    "0.45-0.50": {
+      "n": 1,
+      "rate": 0.0
+    },
+    "0.55-0.60": {
+      "n": 1,
+      "rate": 0.0
     }
   }
 }

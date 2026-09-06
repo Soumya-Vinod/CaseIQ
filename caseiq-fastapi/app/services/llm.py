@@ -14,7 +14,7 @@ from groq import AsyncGroq
 from app.core.config import settings
 from app.core.exceptions import AppError
 from app.core.logging import logger
-from app.services.pii_redaction import PIIType, RedactionSession, TOKEN_PRESERVE_NOTE
+from app.services.pii_redaction import PIIType, RedactionSession, TOKEN_PRESERVE_NOTE, restore_deep
 
 # FIXED 2026-09-02: this schema used to ask for three fields with no possible
 # grounding, shipping as fact in every live answer: `ipc_equivalent` (a
@@ -162,20 +162,6 @@ _COMPLAINT_FIELD_TYPES: dict[str, PIIType] = {
 }
 
 
-def _restore_deep(obj: Any, session: RedactionSession) -> Any:
-    """Recursively swaps redaction tokens back to their real value across an
-    arbitrary JSON-shaped structure (structured_data's dicts/lists of
-    strings) -- a redacted detail could plausibly get echoed back inside any
-    string field, not just conversational_summary."""
-    if isinstance(obj, str):
-        return session.restore(obj)
-    if isinstance(obj, list):
-        return [_restore_deep(x, session) for x in obj]
-    if isinstance(obj, dict):
-        return {k: _restore_deep(v, session) for k, v in obj.items()}
-    return obj
-
-
 class LLMService:
     def __init__(self) -> None:
         self._client: AsyncGroq | None = None
@@ -273,14 +259,17 @@ class LLMService:
             logger.warning("llm_json_parse_failed", error=str(exc))
             summary, structured = raw[:800], {}
 
-        # Restore: the user should still see their own name/phone/address in
-        # the answer, not a bracketed token -- see this module's docstring.
-        # Walks every string in structured_data too (immediate_steps'
-        # `details`, your_rights' `explanation`, etc. could plausibly echo a
-        # redacted detail back), not just the top-level summary.
-        if session.had_redactions:
-            summary = session.restore(summary)
-            structured = _restore_deep(structured, session)
+        # FIXED 2026-09-06 (checklist item 6, Phase A): this used to restore
+        # here and return the RESTORED (real name/phone back in) text as the
+        # one and only result -- which is exactly what app.api.v1.legal then
+        # persisted into QueryResponse, meaning every stored answer carried
+        # whatever PII the model happened to echo back. Restoring belongs at
+        # the live-HTTP-response boundary, not here: this now returns the
+        # REDACTED summary/structured_data (what's honest to store) plus the
+        # token->value map, so the caller can build a restored COPY for the
+        # response it sends back this one time, without that copy ever
+        # touching the database. See docs/evaluation.md for the storage-vs-
+        # live-response split this establishes.
 
         # Stripped, not fixed by hardcoding a number: `helplines` is LLM-generated
         # free text, not backed by a verified table (checklist item C4 was never
@@ -313,6 +302,10 @@ class LLMService:
             "confidence_score": confidence,
             "language": language,
             "is_followup": not new_topic,
+            # Empty dict when nothing was redacted -- restore_text/restore_deep
+            # are no-ops against an empty mapping, so a caller doesn't need to
+            # branch on had_redactions before using this.
+            "redaction_map": session.mapping,
         }
 
     async def detect_language(self, text: str) -> str:

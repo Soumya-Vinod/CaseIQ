@@ -173,8 +173,16 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str | None = None
     GEMINI_EMBED_MODEL: str = "models/gemini-embedding-001"
-    EMBEDDING_PROVIDER: Literal["gemini", "local"] = "local"
-    EMBEDDING_DIM: int = 768
+    # "onnx": app.services.embeddings.LocalOnnxEmbedder -- a real, self-hosted
+    # sentence embedding model (all-MiniLM-L6-v2, ONNX Runtime via fastembed,
+    # no PyTorch), vendored under app/assets/embeddings/ so it never depends
+    # on a runtime download. See docs/evaluation.md's embedding-swap entry
+    # for the measured Render-512MB feasibility check this choice is based
+    # on. EMBEDDING_DIM changes to 384 when this is selected -- see the
+    # 0007_embedding_dim_384 migration; "local" (LocalEmbedder, hash-based)
+    # and "gemini" both keep their original 768-dim behaviour unchanged.
+    EMBEDDING_PROVIDER: Literal["gemini", "local", "onnx"] = "onnx"
+    EMBEDDING_DIM: int = 384
 
     NEWS_API_KEY: str | None = None
 
@@ -228,7 +236,42 @@ class Settings(BaseSettings):
     # embedding model remains the actual fix -- a concrete argument for the
     # Gemini/hybrid retrieval work in Priority 4. Still not tuned or
     # validated against a golden set -- none exists yet.
-    ABSTENTION_SIMILARITY_THRESHOLD: float = 0.40
+    #
+    # RE-DERIVED 2026-09-06 for the embedding swap (LocalOnnxEmbedder,
+    # all-MiniLM-L6-v2 -- see app/services/embeddings.py), against the
+    # golden set (44 real queries, docs/golden_set.json) plus the same
+    # out-of-scope cases above, exactly as instructed -- NOT carried over
+    # from the old value on the assumption a "real" embedder needs the same
+    # number. The similarity scale is fundamentally different now, and the
+    # separation is no longer razor-thin:
+    #   garbage ("boiling point of methane on Titan"):  max similarity 0.1469
+    #     (down from 0.398 under LocalEmbedder -- the canonical false-
+    #     positive this whole mechanism exists to catch now scores far
+    #     BELOW threshold instead of drifting above it)
+    #   civil   ("right of way" / easement, OUT of scope): max similarity 0.4609
+    #     (still NOT separable from real queries by similarity alone -- see
+    #     below; is_civil_scope_mismatch still does real work here)
+    #   golden set (44 real, in-scope queries): minimum observed 0.4805,
+    #     spread 0.48-0.90, mean well above 0.70 -- measured via
+    #     scripts/calibrate_confidence.py, which also confirms this
+    #     embedder produces the monotonic confidence/correctness
+    #     relationship LocalEmbedder structurally couldn't (23 of 44 queries
+    #     landing in ONE bucket regardless of correctness, previously --
+    #     see docs/evaluation.md's confidence-calibration entry). Now
+    #     correctness rate climbs from 0.00 (0.45-0.50 bucket, n=1, one real
+    #     miss) to 1.00 (0.75+ buckets), with only small-N noise below 0.65.
+    # 0.35 sits with real margin on both sides: ~0.20 above Titan, ~0.13
+    # below the weakest of all 44 real golden-set queries -- not a
+    # razor-thin gap the way 0.40-vs-0.398 was under the old embedder. The
+    # civil-easement case (0.4609) still sits ABOVE this threshold, same as
+    # before: pure similarity was never going to catch that specific
+    # failure mode, real embeddings or not -- is_civil_scope_mismatch
+    # remains a necessary second signal, not a legacy crutch this swap
+    # retires. Still not validated against a dedicated out-of-scope golden
+    # set (docs/golden_set.json's 44 entries are all in-scope, zero
+    # negative examples -- a real gap, named in docs/evaluation.md, not
+    # silently worked around here).
+    ABSTENTION_SIMILARITY_THRESHOLD: float = 0.35
 
     # --- Audit log retention (M2 hygiene) ---
     # Unbounded audit-log growth was flagged as a defect (D6); rows older than

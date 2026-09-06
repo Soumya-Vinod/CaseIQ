@@ -9,10 +9,11 @@ import json
 import pytest
 
 from app.services.llm import LLMService
+from app.services.pii_redaction import restore_deep, restore_text
 
 
 @pytest.mark.asyncio
-async def test_process_query_redacts_before_egress_and_restores_after(monkeypatch):
+async def test_process_query_redacts_before_egress(monkeypatch):
     svc = LLMService()
     sent_messages = []
 
@@ -35,9 +36,62 @@ async def test_process_query_redacts_before_egress_and_restores_after(monkeypatc
     assert "9876543210" not in sent_text
     assert "[PHONE_1]" in sent_text
 
-    # The user-facing result must have the real number restored.
-    assert "9876543210" in result["conversational_summary"]
-    assert "[PHONE_1]" not in result["conversational_summary"]
+
+@pytest.mark.asyncio
+async def test_process_query_returns_redacted_result_and_a_separate_restore_map(monkeypatch):
+    """FIXED 2026-09-06 (checklist item 6, Phase A): process_query used to
+    restore internally and return only the restored text -- which is
+    exactly what app.api.v1.legal then persisted, meaning every stored
+    answer carried whatever PII the model echoed back. It now returns the
+    REDACTED text as the primary result (what's honest to store) plus a
+    separate `redaction_map` the CALLER uses to build a restored copy for
+    the one live HTTP response, without that copy ever being stored. See
+    docs/evaluation.md for the storage-vs-live-response split this tests.
+    """
+    svc = LLMService()
+
+    async def fake_call(messages, *, temperature=None, max_tokens=3000):
+        return json.dumps({
+            "conversational_summary": "Contact [PHONE_1] for next steps.",
+            "structured_data": {"laws_applicable": [], "your_rights": [{"explanation": "Call [PHONE_1]."}]},
+        })
+
+    monkeypatch.setattr(svc, "_call", fake_call)
+
+    result = await svc.process_query(
+        "My phone is 9876543210, what is the punishment for theft?",
+        language="en", history=[], rag_context="", retrieval_strength=0.5,
+    )
+
+    # What's returned as the primary result -- and therefore what
+    # app.api.v1.legal stores -- is REDACTED, tokens intact.
+    assert "[PHONE_1]" in result["conversational_summary"]
+    assert "9876543210" not in result["conversational_summary"]
+    assert "9876543210" not in json.dumps(result["structured_data"])
+
+    # The caller restores separately, from the returned map, for the live
+    # response only -- exactly what app.api.v1.legal now does.
+    assert result["redaction_map"] == {"[PHONE_1]": "9876543210"}
+    restored_summary = restore_text(result["conversational_summary"], result["redaction_map"])
+    restored_structured = restore_deep(result["structured_data"], result["redaction_map"])
+    assert restored_summary == "Contact 9876543210 for next steps."
+    assert restored_structured["your_rights"][0]["explanation"] == "Call 9876543210."
+
+
+@pytest.mark.asyncio
+async def test_process_query_redaction_map_is_empty_when_nothing_redacted(monkeypatch):
+    svc = LLMService()
+
+    async def fake_call(messages, *, temperature=None, max_tokens=3000):
+        return json.dumps({"conversational_summary": "ok", "structured_data": {}})
+
+    monkeypatch.setattr(svc, "_call", fake_call)
+
+    result = await svc.process_query(
+        "What is the punishment for theft?",
+        language="en", history=[], rag_context="", retrieval_strength=0.5,
+    )
+    assert result["redaction_map"] == {}
 
 
 @pytest.mark.asyncio

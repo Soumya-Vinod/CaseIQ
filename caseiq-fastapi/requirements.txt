@@ -19,6 +19,10 @@ passlib[argon2]==1.7.4
 # --- LLM / embeddings / news ---
 groq==0.13.1
 google-generativeai==0.8.3
+# ONNX Runtime-backed, no PyTorch -- see app/services/embeddings.py's LocalOnnxEmbedder
+# and docs/evaluation.md's embedding-swap entry for why (Render free tier's 512MB
+# ruled out sentence-transformers' torch dependency; measured, not assumed).
+fastembed==0.8.0
 httpx==0.28.1
 
 # --- Infra ---

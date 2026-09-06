@@ -32,60 +32,79 @@ from app.services.embeddings import embedder
 
 # Hand-curated stopgap for a semantic-embedding gap, added 2026-08-30 after
 # "how do I file an FIR" / "dowry harassment" missed their correct section on
-# EVERY phrasing tried, hybrid retrieval included (see docs/evaluation.md).
-# The statute uses a different word for the same concept than a citizen would
-# ("cruelty" for what a citizen calls dowry harassment; "information in
-# cognizable cases" for what everyone calls an FIR) -- lexical search can only
-# find a literal word, and this corpus's LocalEmbedder has no real notion of
-# synonymy either. This is NOT a classifier and does NOT generalise beyond the
-# phrases listed: it is a fixed lookup table, nothing is learned or inferred.
-# A real embedding model would make this unnecessary -- see docs/evaluation.md
-# for why it isn't a fix, just a documented patch over a known, narrow gap.
+# EVERY phrasing tried under LocalEmbedder (hash-based), hybrid retrieval
+# included (see docs/evaluation.md). This is NOT a classifier and does NOT
+# generalise beyond the phrases listed: a fixed lookup table, nothing learned
+# or inferred.
+#
+# TRIMMED 2026-09-06, after the embedding swap to LocalOnnxEmbedder
+# (all-MiniLM-L6-v2 -- a real trained model, not hashing): re-tested every
+# entry with expansion disabled, to check whether a real embedding model made
+# the whole map unnecessary rather than assume either way. It didn't -- but
+# it made some of it unnecessary. Two real mistakes made and caught while
+# doing this, both worth naming so the same shortcuts aren't retaken later:
+#   1. First pass tested the bare map KEY ("dowry harassment") rather than a
+#      realistic full question. The bare phrase scored fine unaided; the
+#      actual question ("What is the punishment for dowry harassment?")
+#      still doesn't, and this exact query is one of the 44 golden-set
+#      entries -- removing the entry on the bare-phrase result alone
+#      measurably regressed Recall@5 (0.909 -> 0.886) before this was
+#      caught and reverted. Every entry below was re-tested with a
+#      realistic full sentence, not its bare key.
+#   2. First pass checked only rank-in-top-5, not actual abstention. A
+#      correct section can sit at rank 2 and the query still abstain
+#      anyway if overall similarity is weak and there's no lexical hit
+#      (is_abstention doesn't know a good candidate is sitting in its own
+#      results -- see that function's docstring) -- "in-laws harassment"
+#      is exactly this case. Re-checked against both rank AND
+#      is_abstention's actual verdict.
+#   3. The very first target used for the three dowry entries was wrong --
+#      BNS 80/IPC 304B is dowry DEATH, a distinct provision from dowry
+#      CRUELTY (BNS 85/86, IPC 498A), which is what "dowry harassment"
+#      actually means and what docs/golden_set.json's own ground truth
+#      confirms. Every target below is cross-checked against the golden
+#      set's own answer where that entry appears in it, not recalled from
+#      memory alone.
+# Kept (still measurably necessary, correct section absent from top 5, or
+# present but the query still abstains, on a realistic full sentence,
+# unaided): "fir", "first information report" (BNSS 173's own text is
+# parser-garbled -- "Information 173. (1) Every information relating to the
+# commission of a cognizable offence, in cognizable irrespective of..." --
+# see docs/evaluation.md's parser-defect notes; may be a text-quality
+# problem independent of the embedding model), "dowry harassment", "dowry
+# demand", "dowry demands" (all three -- dowry-cruelty vs. dowry-death is a
+# real, specific confusion this embedder still makes), "molestation"
+# (abstains entirely without the expansion), "domestic violence" (rank 6,
+# just outside top 5), "in-laws harassment" (rank 2, but abstains anyway).
+#
+# "marital abuse" also kept, despite testing genuinely redundant at full
+# corpus scale (rank 3, does not abstain, on the realistic sentence "What
+# can I do about marital abuse?") -- removing it broke
+# tests/integration/test_abstention.py::TestMaritalAbuseNotCivil, which
+# seeds a single isolated section with no other candidates and no lexical
+# richness to draw on, and abstains without the expansion in that narrow
+# setting even though the full corpus doesn't need it. That test exists to
+# guard the exact historical bug this entry was added for (2026-08-31, "a
+# criminal query told it was outside scope") -- sparse retrieval context is
+# a real scenario this corpus could hit again (a newly-added act with few
+# sections yet, a narrow query no other section competes for), not only a
+# test artifact, so the entry stays rather than the test being loosened to
+# match its removal.
+#
+# Removed as genuinely redundant (found in top 5, does NOT abstain, on a
+# realistic full sentence, unaided, AND no existing test depends on the
+# unaided path): "eve teasing", "cheating", "husband beating wife", "kill
+# someone", "hurt someone".
 _SYNONYM_EXPANSIONS: dict[str, str] = {
     "fir": "information in cognizable cases",
     "first information report": "information in cognizable cases",
     "dowry harassment": "cruelty",
-    # Added 2026-09-01: found auditing the complaint-drafting path (a real
-    # dowry-cruelty incident narrative, not a short direct question like
-    # "dowry harassment"), free-form prose phrases it differently enough
-    # that the existing "dowry harassment" entry's exact phrase match never
-    # fires. "dowry demand" and "dowry demands" both needed as separate keys
-    # -- expand_query_synonyms word-boundary-matches (`\bphrase\b`), and `s`
-    # is a word character, so "dowry demand\b" does not match inside
-    # "demands". Verified this actually surfaces BNS 86 (cruelty by husband
-    # or relatives) for the failing narrative before adding it, not guessed.
     "dowry demand": "cruelty",
     "dowry demands": "cruelty",
-    "eve teasing": "outraging modesty",
     "molestation": "assault with intent to outrage modesty",
-    "cheating": "cheating and dishonestly inducing delivery of property",
-    # Added 2026-08-31: a marital-abuse query returned "outside the scope of
-    # the criminal statutes" when BNS s.85 / IPC s.498A (cruelty by husband or
-    # relatives) is squarely on point and in the corpus -- same word-choice
-    # gap as dowry harassment above, not a new failure mode.
     "marital abuse": "cruelty",
     "domestic violence": "cruelty",
-    "husband beating wife": "cruelty",
     "in-laws harassment": "cruelty",
-    # Added 2026-09-03: the intent-aware-response work's own test queries
-    # ("what happens if I kill someone", "how do I hurt someone without
-    # getting caught") were ABSTAINING before ever reaching the LLM --
-    # is_abstention fires on retrieval weakness alone, with no idea the
-    # query is about violence, and a bare verb like "kill" or "hurt" has
-    # near-zero lexical or vector overlap with this corpus's own heading
-    # style ("302. Punishment for murder.--Whoever commits murder...").
-    # Confirmed directly: querying "murder" alone (bare word) ALSO fails to
-    # surface IPC 302/BNS 103 -- it's not these two phrases specifically,
-    # it's that natural-language paraphrase doesn't anchor to statutory
-    # heading phrasing at all (same gap this map already exists to patch;
-    # see "dowry harassment" above). The expansion target is the corpus's
-    # own literal heading text, not a guessed synonym -- verified against
-    # section_versions.section_text directly before adding: "kill someone"
-    # -> IPC 302/303 now rank #1/#2 (was: neither in the top 5, both weak);
-    # "hurt someone" -> IPC 321/323/337/334 now rank in the top 6 (was: no
-    # hurt/assault provision anywhere in the results at all).
-    "kill someone": "punishment for murder",
-    "hurt someone": "punishment for voluntarily causing hurt",
 }
 
 
@@ -492,6 +511,22 @@ async def semantic_search(
 
     scores: dict[tuple, float] = {}
     rows: dict[tuple, tuple[SectionVersion, str, float | None, dict | None]] = {}
+    # FIXED 2026-09-06 (real bug, not test staleness -- see _serialise's own
+    # comment on the `lexical_hit` field this populates): tracked SEPARATELY
+    # from `rows`' similarity value. Before this, a section found by BOTH
+    # rankers kept only its vector similarity (the `rows.setdefault` below
+    # is a no-op once the vector loop above already set that key) -- so
+    # is_abstention's "any lexical hit is real evidence" check
+    # (similarity is None) never saw it, even though Postgres genuinely
+    # matched it on full text. Confirmed live, not assumed: a marital-abuse
+    # query's tsquery ('marit' & 'abus' | 'cruelti') matches BNS 85's own
+    # text directly in Postgres, but the fused result carried only a low
+    # vector similarity (0.0958, LocalEmbedder) with no trace the lexical
+    # ranker had found it too -- is_abstention then wrongly abstained on a
+    # squarely-on-point, real full-text match. A section can be a genuine
+    # lexical hit AND carry a real cosine number at the same time; the two
+    # facts must not be allowed to overwrite each other.
+    lexical_hit_keys: set = set()
 
     for rank, (key, sv, act_code, similarity, js) in enumerate(vector_hits, start=1):
         scores[key] = scores.get(key, 0.0) + 1.0 / (_RRF_K + rank)
@@ -500,10 +535,12 @@ async def semantic_search(
     for rank, (key, sv, act_code, js) in enumerate(lexical_hits, start=1):
         scores[key] = scores.get(key, 0.0) + 1.0 / (_RRF_K + rank)
         rows.setdefault(key, (sv, act_code, None, js))  # lexical-only: no cosine number
+        lexical_hit_keys.add(key)
 
     ordered_keys = sorted(scores, key=lambda k: scores[k], reverse=True)[:top_k]
     results = [
-        _serialise(*rows[key][:2], rows[key][2], as_of, rows[key][3])
+        _serialise(*rows[key][:2], rows[key][2], as_of, rows[key][3],
+                   lexical_hit=key in lexical_hit_keys)
         for key in ordered_keys
     ]
 
@@ -544,14 +581,15 @@ async def keyword_search(
     rows = (await db.execute(stmt)).all()
     results = [
         _serialise(sv, act_code, None, as_of,
-                   judicial_status_dict(j_status, j_case, j_citation, j_court, j_decided, j_scope))
+                   judicial_status_dict(j_status, j_case, j_citation, j_court, j_decided, j_scope),
+                   lexical_hit=True)  # an ILIKE substring match is lexical by definition
         for sv, act_code, j_status, j_case, j_citation, j_court, j_decided, j_scope in rows
     ]
     return await attach_offence_attributes(db, results)
 
 
 def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_of: date,
-               judicial_status: dict | None) -> dict:
+               judicial_status: dict | None, *, lexical_hit: bool = False) -> dict:
     return {
         "act": act_code,
         "section": sv.section_number,
@@ -564,6 +602,18 @@ def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_o
         "valid_to": sv.valid_to.isoformat() if sv.valid_to else None,
         "recently_amended": _is_recently_amended(sv, as_of),
         "judicial_status": judicial_status,
+        # FIXED 2026-09-06 (real bug, found by two integration tests that
+        # were wrongly written off across several reports as "unrelated,
+        # retrieval-quality" before someone insisted they be run down
+        # instead of carried as permanently red): whether Postgres full-text
+        # search matched this section, tracked SEPARATELY from `similarity`
+        # -- see is_abstention's own comment for why the two must not be
+        # conflated. Internal to this module's own evidence check, not part
+        # of the public RetrievedSection schema (silently dropped on
+        # validation into it, same as it's silently accepted into the
+        # `retrieved_sections` JSONB column -- neither cares about an extra
+        # key).
+        "lexical_hit": lexical_hit,
     }
 
 
@@ -630,10 +680,29 @@ def is_abstention(sections: list[dict]) -> bool:
     real evidence (a literal word/phrase match, not a guess) and skips the
     vector-threshold check entirely, regardless of how weak the vector
     scores in the same result set are.
+
+    FIXED 2026-09-06 (a second, distinct real bug -- found by two
+    integration tests that were wrongly written off as "unrelated,
+    retrieval-quality" across several reports before someone insisted they
+    be run down rather than left permanently red): `similarity is None` is
+    NOT the same question as "was this a lexical hit", and the fix above
+    conflated them. A section found by BOTH rankers keeps its real vector
+    similarity in `rows` (see semantic_search's fusion loop) -- so when a
+    corpus has few enough sections that the SAME section dominates both
+    rankers (verified live: a single seeded section, one marital-abuse
+    query, real tsquery match confirmed directly in Postgres), this check
+    saw only a low similarity number and no `None` anywhere, and abstained
+    despite a genuine full-text match sitting right there. `similarity`
+    answers "does this have a cosine number" (a display/provenance fact);
+    `lexical_hit` (set in semantic_search's fusion loop and keyword_search's
+    fallback, see _serialise) answers "did Postgres full-text search
+    actually match this" -- a section can be true on both at once, and
+    needs to be checked as such, not have one fact silently overwrite the
+    other.
     """
     if not sections:
         return True
-    if any(s["similarity"] is None for s in sections):
+    if any(s["similarity"] is None or s.get("lexical_hit") for s in sections):
         return False  # a lexical/full-text hit is real evidence on its own
     vector_sims = [s["similarity"] for s in sections if s["similarity"] is not None]
     return max(vector_sims) < settings.ABSTENTION_SIMILARITY_THRESHOLD

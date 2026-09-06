@@ -27,6 +27,14 @@ class ChangePasswordIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class DeleteAccountIn(BaseModel):
+    # Re-entering the password, not just requiring a valid access token, so
+    # a session left signed in on a shared/borrowed device can't be used to
+    # erase the account without the person present. No soft-delete, no
+    # grace period, no admin recovery flow -- see docs/dpdp-compliance.md.
+    password: str
+
+
 class Tokens(BaseModel):
     access: str
     refresh: str

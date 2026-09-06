@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -157,6 +157,36 @@ class QueryOut(BaseModel):
     # docs/evaluation.md for the incident this whole field replaces
     # ("1516" / "1800-111-222", both fabricated, both wrong).
     helplines: list[HelplineOut] = []
+
+
+class ConversationTurnOut(BaseModel):
+    """One turn of a conversation, as app.api.v1.conversations returns it.
+
+    original_query/conversational_summary here are the STORED text -- the
+    same redacted-before-write values Phase A put in the database, never the
+    live-restored version (that restoration only ever happens once, for the
+    single HTTP response a query was answered in; the redaction map itself
+    is never persisted -- see app.services.pii_redaction and legal.py's own
+    comment on why restore moved out of llm.py). There is structurally no
+    way to show the original wording back here later. The frontend's history
+    view carries an explicit note saying so, reason first.
+    """
+    query_id: UUID
+    original_query: str
+    conversational_summary: str | None = None
+    created_at: datetime
+
+
+class ConversationSummaryOut(BaseModel):
+    session_id: str
+    preview: str
+    turn_count: int
+    last_activity: datetime
+
+
+class ConversationDetailOut(BaseModel):
+    session_id: str
+    turns: list[ConversationTurnOut]
 
 
 class SituationIn(BaseModel):

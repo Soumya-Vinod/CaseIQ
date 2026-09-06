@@ -44,6 +44,17 @@ class LegalQuery(UUIDPk, Timestamped, Base):
     user_id: Mapped[PgUUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
+    # NAME IS A LEGACY HOLDOVER, NOT A DESCRIPTION OF WHAT'S IN IT: despite the
+    # name, this has held the REDACTED query text (common identifiers replaced
+    # with tokens like [NAME_1]) since checklist item 6 Phase A shipped
+    # 2026-09-06 -- see app.services.pii_redaction and app.api.v1.legal's own
+    # comment on process_query. Verified directly against a live stored row,
+    # not assumed from reading the code: querying the DB row for a submitted
+    # "My name is Suresh Menon..." shows `[NAME_1]` here, while the live HTTP
+    # response (built from a separate, request-scoped restore step) shows the
+    # real name. Kept as `original_query` rather than renamed to avoid an
+    # unrelated migration churning this column for a naming preference alone;
+    # this comment is the actual source of truth on its contents.
     original_query: Mapped[str] = mapped_column(Text)
     detected_language: Mapped[str] = mapped_column(String(10), default="en")
     status: Mapped[QueryStatus] = mapped_column(String(20), default=QueryStatus.PENDING)

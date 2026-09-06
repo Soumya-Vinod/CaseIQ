@@ -66,7 +66,28 @@ export interface paths {
         get: operations["me_api_v1_auth_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Account
+         * @description Checklist item 6, Phase C: hard delete, no soft-delete, no grace
+         *     period, no admin recovery -- per instruction. Deletes this user's own
+         *     legal_queries (query_responses cascade via their own FK -- verified
+         *     against the live schema, ondelete=CASCADE) and complaints explicitly,
+         *     rather than leaving them merely orphaned: both legal_queries.user_id and
+         *     complaints.user_id are ondelete=SET NULL at the DB level, which would
+         *     disconnect the rows from this account but leave their content (redacted
+         *     query text; UN-redacted complainant name/address/phone -- complaint
+         *     drafting was never in scope for Phase A's redaction) sitting in the
+         *     table. A request to delete an account is a request to erase personal
+         *     data, not just to unlink it, so both are deleted outright here rather
+         *     than relying on the FK's default behaviour.
+         *
+         *     No separate token-revocation step needed: current_user/optional_user
+         *     (app.api.deps) re-fetch the user row by id on every authenticated
+         *     request rather than trusting the JWT payload alone, so an access token
+         *     issued before this call stops working the moment the user row is gone
+         *     -- verified live, not assumed from reading the dependency.
+         */
+        delete: operations["delete_account_api_v1_auth_me_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -89,6 +110,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export My Data
+         * @description Checklist item 6, Phase C: a JSON export of a user's own conversation
+         *     history -- scoped to rows where user_id == this user, deliberately
+         *     narrower than the conversations router's ownership model (which also
+         *     surfaces a session's pre-login, NULL-user turns for continuity). Data
+         *     portability is about data collected under this identity; the anonymous
+         *     turns before login weren't. See app.api.v1.conversations' own docstring
+         *     and docs/evaluation.md for this as a considered call.
+         *
+         *     Text below is the REDACTED, as-stored version, same as everywhere else
+         *     in this feature -- the original wording was never persisted anywhere to
+         *     export. Said plainly in the payload itself, not just in a doc someone
+         *     exporting their data may never have read.
+         */
+        get: operations["export_my_data_api_v1_auth_me_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/legal/query": {
         parameters: {
             query?: never;
@@ -101,6 +153,41 @@ export interface paths {
         /** Process Query */
         post: operations["process_query_api_v1_legal_query_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legal/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conversations */
+        get: operations["list_conversations_api_v1_legal_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legal/conversations/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation */
+        get: operations["get_conversation_api_v1_legal_conversations__session_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Conversation */
+        delete: operations["delete_conversation_api_v1_legal_conversations__session_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -562,6 +649,56 @@ export interface components {
          * @enum {string}
          */
         ComplaintType: "fir" | "written_complaint" | "magistrate_complaint" | "consumer_complaint" | "cyber_complaint";
+        /** ConversationDetailOut */
+        ConversationDetailOut: {
+            /** Session Id */
+            session_id: string;
+            /** Turns */
+            turns: components["schemas"]["ConversationTurnOut"][];
+        };
+        /** ConversationSummaryOut */
+        ConversationSummaryOut: {
+            /** Session Id */
+            session_id: string;
+            /** Preview */
+            preview: string;
+            /** Turn Count */
+            turn_count: number;
+            /**
+             * Last Activity
+             * Format: date-time
+             */
+            last_activity: string;
+        };
+        /**
+         * ConversationTurnOut
+         * @description One turn of a conversation, as app.api.v1.conversations returns it.
+         *
+         *     original_query/conversational_summary here are the STORED text -- the
+         *     same redacted-before-write values Phase A put in the database, never the
+         *     live-restored version (that restoration only ever happens once, for the
+         *     single HTTP response a query was answered in; the redaction map itself
+         *     is never persisted -- see app.services.pii_redaction and legal.py's own
+         *     comment on why restore moved out of llm.py). There is structurally no
+         *     way to show the original wording back here later. The frontend's history
+         *     view carries an explicit note saying so, reason first.
+         */
+        ConversationTurnOut: {
+            /**
+             * Query Id
+             * Format: uuid
+             */
+            query_id: string;
+            /** Original Query */
+            original_query: string;
+            /** Conversational Summary */
+            conversational_summary?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** CorpusVersionOut */
         CorpusVersionOut: {
             /**
@@ -582,6 +719,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DeleteAccountIn */
+        DeleteAccountIn: {
+            /** Password */
+            password: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1132,6 +1274,37 @@ export interface operations {
             };
         };
     };
+    delete_account_api_v1_auth_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccountIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     change_password_api_v1_auth_change_password_post: {
         parameters: {
             query?: never;
@@ -1165,6 +1338,26 @@ export interface operations {
             };
         };
     };
+    export_my_data_api_v1_auth_me_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     process_query_api_v1_legal_query_post: {
         parameters: {
             query?: never;
@@ -1186,6 +1379,86 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["QueryOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_conversations_api_v1_legal_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummaryOut"][];
+                };
+            };
+        };
+    };
+    get_conversation_api_v1_legal_conversations__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_conversation_api_v1_legal_conversations__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

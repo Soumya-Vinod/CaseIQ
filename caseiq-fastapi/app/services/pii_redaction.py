@@ -173,11 +173,7 @@ class RedactionSession:
     def restore(self, text: str | None) -> str:
         """Swaps every token this session created back to its original
         value. Safe to call on text that contains none of them (a no-op)."""
-        if not text:
-            return text or ""
-        for token, original in self._mapping.items():
-            text = text.replace(token, original)
-        return text
+        return restore_text(text, self._mapping)
 
     @property
     def counts(self) -> dict[str, int]:
@@ -188,6 +184,46 @@ class RedactionSession:
     @property
     def had_redactions(self) -> bool:
         return bool(self._mapping)
+
+    @property
+    def mapping(self) -> dict[str, str]:
+        """A copy of this session's token->original-value map. Exists so a
+        caller across a process boundary (app.api.v1.legal storing a
+        REDACTED response while still needing to show the RESTORED one in
+        the live HTTP reply -- see docs/evaluation.md's "storage vs.
+        live-response split") can restore independently, after the session
+        that built the map has already returned. Restoring from a plain
+        dict rather than requiring the session object itself keeps that
+        caller from needing to import RedactionSession just to call one
+        method on it."""
+        return dict(self._mapping)
+
+
+def restore_text(text: str | None, mapping: dict[str, str]) -> str:
+    """Standalone form of RedactionSession.restore -- takes a plain
+    token->value map instead of a session, for a caller that only has the
+    map (e.g. a dict returned across a function boundary), not the session
+    object itself. `RedactionSession.restore` delegates to this rather than
+    duplicating the loop, so there is exactly one implementation."""
+    if not text or not mapping:
+        return text or ""
+    for token, original in mapping.items():
+        text = text.replace(token, original)
+    return text
+
+
+def restore_deep(obj: object, mapping: dict[str, str]) -> object:
+    """Recursively applies restore_text across an arbitrary JSON-shaped
+    structure (a dict/list of strings, e.g. structured_data) -- a redacted
+    detail could plausibly get echoed back inside any string field, not
+    just a top-level summary."""
+    if isinstance(obj, str):
+        return restore_text(obj, mapping)
+    if isinstance(obj, list):
+        return [restore_deep(x, mapping) for x in obj]
+    if isinstance(obj, dict):
+        return {k: restore_deep(v, mapping) for k, v in obj.items()}
+    return obj
 
 
 # Appended to a prompt only when a session actually redacted something --

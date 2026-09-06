@@ -1,25 +1,25 @@
 {
   "n": 44,
-  "recall_at_5": 0.7045454545454546,
-  "mrr": 0.38712121212121214,
+  "recall_at_5": 0.9090909090909091,
+  "mrr": 0.7297979797979799,
   "per_query": [
     {
       "question": "What is the punishment for theft?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for defamation?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for murder?",
-      "rank": 4,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is culpable homicide not amounting to murder?",
@@ -41,93 +41,93 @@
     },
     {
       "question": "What is the punishment for dowry harassment?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for dowry death?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for rape?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for kidnapping?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for robbery?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for dacoity?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for extortion?",
-      "rank": 3,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.3333333333333333
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for forgery?",
-      "rank": 6,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.16666666666666666
+      "rank": 1,
+      "recall_at_5": true,
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for criminal intimidation?",
+      "rank": 1,
+      "recall_at_5": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "question": "What is the punishment for rioting?",
+      "rank": 1,
+      "recall_at_5": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "question": "What is an unlawful assembly?",
+      "rank": 1,
+      "recall_at_5": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "question": "What is the punishment for an acid attack?",
       "rank": 3,
       "recall_at_5": true,
       "reciprocal_rank": 0.3333333333333333
     },
     {
-      "question": "What is the punishment for rioting?",
-      "rank": 2,
-      "recall_at_5": true,
-      "reciprocal_rank": 0.5
-    },
-    {
-      "question": "What is an unlawful assembly?",
-      "rank": 5,
-      "recall_at_5": true,
-      "reciprocal_rank": 0.2
-    },
-    {
-      "question": "What is the punishment for an acid attack?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
-    },
-    {
       "question": "What is the punishment for stalking?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for voyeurism?",
-      "rank": 4,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the punishment for mischief?",
-      "rank": 6,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.16666666666666666
+      "rank": 3,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.3333333333333333
     },
     {
       "question": "What is the punishment for counterfeiting currency?",
@@ -137,9 +137,9 @@
     },
     {
       "question": "What is the punishment for attempt to murder?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is wrongful confinement?",
@@ -149,9 +149,9 @@
     },
     {
       "question": "What is wrongful restraint?",
-      "rank": 1,
+      "rank": 2,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 0.5
     },
     {
       "question": "What is the punishment for assault?",
@@ -161,9 +161,9 @@
     },
     {
       "question": "What is the punishment for sexual harassment?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is abetment of suicide?",
@@ -173,45 +173,45 @@
     },
     {
       "question": "What is the procedure to file an FIR?",
-      "rank": 3,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.3333333333333333
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the procedure for arrest without a warrant?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "rank": 4,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.25
     },
     {
       "question": "What is the procedure for issuing a search warrant?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "rank": 5,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.2
     },
     {
       "question": "What is the police report or charge sheet after investigation?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "rank": 5,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.2
     },
     {
       "question": "How does a magistrate take cognizance of an offence?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is the order for maintenance of wives and children?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is compounding of offences?",
-      "rank": 2,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 1.0
     },
     {
       "question": "What is relevant under the law of evidence?",
@@ -221,9 +221,9 @@
     },
     {
       "question": "What is expert opinion as evidence?",
-      "rank": 4,
+      "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 1.0
     },
     {
       "question": "On whom does the burden of proof lie?",
@@ -233,21 +233,21 @@
     },
     {
       "question": "What is the presumption of legitimacy of a child?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "rank": 3,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.3333333333333333
     },
     {
       "question": "What is the punishment for bigamy?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "rank": 4,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.25
     },
     {
       "question": "What is anticipatory bail?",
-      "rank": null,
-      "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "rank": 4,
+      "recall_at_5": true,
+      "reciprocal_rank": 0.25
     },
     {
       "question": "What is plea bargaining?",
@@ -257,15 +257,15 @@
     },
     {
       "question": "What is a dying declaration?",
-      "rank": null,
+      "rank": 9,
       "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "reciprocal_rank": 0.1111111111111111
     },
     {
       "question": "What is a hostile witness?",
-      "rank": null,
+      "rank": 10,
       "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "reciprocal_rank": 0.1
     }
   ]
 }
