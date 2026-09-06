@@ -66,14 +66,16 @@ abstention path that refuses to answer rather than guess when retrieval evidence
 
 | Metric | Value |
 |---|---|
-| Recall@5 | **0.705** (31/44) |
-| MRR | **0.387** |
+| Recall@5 | **0.909** (40/44) — was 0.705 (31/44) under the original hash-based embedder |
+| MRR | **0.730** — was 0.387 |
 | Citations verified in a named battery (theft, defamation, murder, culpable homicide, criminal breach of trust, marital abuse + 2 adversarial cases) | 13/13 kept, 0 stripped as fabricated or ungrounded |
 
-**11 of 44 golden-set queries (25%) don't appear even in the top 10** — mostly cases where
-colloquial legal language ("anticipatory bail," "hostile witness," "dying declaration," "search
-warrant") doesn't match the statute's own phrasing, and neither the hash-based embedding nor
-lexical full-text search bridges a synonym they were never given (`docs/evaluation.md`).
+**2 of 44 golden-set queries (assault, plea bargaining) don't appear even in the top 10** — down
+from 11/44 before the embedding swap (2026-09-06, `LocalOnnxEmbedder` replacing the hash-based
+`LocalEmbedder`; see `docs/evaluation.md`'s headline entry for the full before/after). Most of the
+original eleven — including "anticipatory bail," "hostile witness," and "dying declaration" —
+are now found; colloquial-vs-statutory phrasing gaps are measurably smaller with a real embedding
+model, though not eliminated.
 
 **Head-to-head vs raw ChatGPT/Gemini (checklist item D8)**: not yet run. The one directly
 comparable data point is CaseIQ's own founding incident — the original prototype (Groq, no
@@ -87,19 +89,23 @@ correct two-year term (`docs/evaluation.md`'s case study).
 ## Known failure modes and limitations
 
 **Retrieval / embeddings**:
-- The production embedder (`LocalEmbedder`) is a deterministic hashing bag-of-words model, not a
-  trained semantic one — it finds literal word overlap, not meaning. This is a deliberate, stated
-  tradeoff (a complete corpus on weak embeddings over a partial one on strong embeddings), and it
-  is the single highest-leverage lever on retrieval quality if ever revisited
-  (`docs/evaluation.md`).
-- Confirmed misses: "dowry harassment" (statute says "cruelty," not "dowry" or "harassment"),
-  several FIR-filing phrasings, and the 11 golden-set queries above. A six-entry curated synonym
-  list patches the specific phrasings discovered so far — explicitly not a general fix.
-- Retrieval similarity does not reliably separate in-scope from out-of-scope questions on this
-  embedder: a civil easement question measured *closer* to "punishment for theft" than to a
-  nonsense query about Titan's atmosphere. Abstention uses a second, independent civil-domain
-  phrase check alongside the similarity threshold for exactly this reason, and that second check
-  is itself a heuristic phrase list, not a classifier.
+- The production embedder is `LocalOnnxEmbedder` (`all-MiniLM-L6-v2`, a real trained sentence
+  model, ONNX Runtime, no PyTorch — replaced the original `LocalEmbedder`, a deterministic hashing
+  bag-of-words model, on 2026-09-06 after that hashing embedder's lack of real semantic content was
+  independently documented five separate times; see `docs/evaluation.md`'s headline entry). Chosen
+  and vendored under a measured, not estimated, Render free-tier 512MB memory ceiling.
+- Confirmed remaining misses: 2 of 44 golden-set queries (assault, plea bargaining), and several
+  phrasings a 9-entry curated synonym list still patches (down from 14 originally, after 5 were
+  re-verified redundant with real embeddings and removed — see `docs/evaluation.md`). Still
+  explicitly a stopgap, not a general fix: a phrase not on this list gets no help.
+- Retrieval similarity separates in-scope from out-of-scope questions far better than before, but
+  not completely: the canonical out-of-scope query (a nonsense question about Titan's atmosphere)
+  now measures 0.1469 against a real 0.4805 floor across all 44 legitimate golden-set questions — a
+  gap of 0.3336, roughly 280 times wider than the original 0.0012. The civil-easement case
+  specifically (a civil-law question with nothing on point in this corpus) is the one case this
+  still doesn't resolve on its own — it measures 0.4609, still close to real, legitimate questions
+  — so abstention still uses a second, independent civil-domain phrase check alongside the
+  similarity threshold, and that second check is itself a heuristic phrase list, not a classifier.
 
 **Offence classification (cognizable/bailable/triable-by)**:
 - Sourced as real structured data from CrPC's/BNSS's First Schedules, not LLM output — but

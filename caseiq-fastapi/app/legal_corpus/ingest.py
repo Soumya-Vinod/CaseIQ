@@ -102,6 +102,7 @@ async def ingest_act(db: AsyncSession, act_code: str, pdf_path: str, parser, res
                 current.parser_name = parser.name
                 current.parser_version = parser.version
                 current.embedding = await embedder.embed(f"{current.marginal_note}. {s.section_text[:2000]}")
+                current.embedding_model = embedder.model_id
                 await asyncio.sleep(0.7)
                 outcome.updated_in_place += 1
         else:
@@ -141,5 +142,6 @@ async def _insert_new(db, act_id, s: RawSection, *, version_no: int, valid_from,
         is_repealed=s.is_repealed, valid_from=valid_from, valid_to=None,
         source_url=source_url, source_sha256=source_sha256, content_as_on=content_as_on,
         parser_name=parser.name, parser_version=parser.version, embedding=vector,
+        embedding_model=embedder.model_id,
     ))
     outcome.inserted += 1

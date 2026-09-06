@@ -10,14 +10,23 @@ import { SourcesPanel } from "../components/SourcesPanel";
 import { getSessionId } from "../utils/session";
 import styles from "./QueryPage.module.css";
 
-// Verified against live retrieval before being put here (2026-08-31): all
-// three return their correct section in the top 6. Deliberately NOT "how do
-// I file an FIR" or anything dowry-related -- both are known misses
-// documented in docs/evaluation.md, and a landing-page example has to work.
+// Verified against live retrieval before being put here. The original three
+// (2026-08-31) were chosen specifically to EXCLUDE "how do I file an FIR"
+// and anything dowry-related -- both were known misses under LocalEmbedder
+// at the time (see docs/evaluation.md). The embedding swap to
+// LocalOnnxEmbedder (2026-09-06) fixed exactly that gap -- re-verified
+// end-to-end against a local backend with the corrected corpus before
+// adding them here, not assumed from the retrieval-only numbers alone:
+// "file an FIR" now cites CrPC 154/BNSS 173 (the actual FIR sections, old
+// and new regime) at confidence 0.49; "dowry harassment" cites IPC 498A at
+// rank 1, confidence 0.67. Two of the system's better demonstrations now,
+// not queries to avoid.
 const EXAMPLE_QUESTIONS = [
   "What is the punishment for theft?",
   "What is the punishment for defamation?",
   "What is the punishment for murder?",
+  "How do I file an FIR for a stolen phone?",
+  "What is the punishment for dowry harassment?",
 ];
 
 export function QueryPage() {

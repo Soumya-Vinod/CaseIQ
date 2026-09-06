@@ -625,6 +625,13 @@ patch over a known, narrow, manually-discovered gap, not a general solution to t
 lexical/semantic mismatch this whole document keeps documenting from different angles. The fix is
 still a real embedding model.
 
+**SUPERSEDED 2026-09-06**: that embedding model was built (`LocalOnnxEmbedder`, see the
+embedding-swap entry below). The list grew well past six entries in the meantime (14, covering
+several more discovered gaps) before being re-tested with real embeddings and trimmed to 9 —
+"domestic violence" among them, still needed; "wife beating"-style phrasing was never explicitly
+tested but "husband beating wife" was, and turned out redundant. Don't read "six entries" or "the
+fix is still a real embedding model" as current.
+
 ## Baseline (Recall@5, MRR) — measured (2026-08-31)
 
 **44 question → correct-section pairs**, `docs/golden_set.json`, spanning all five acts. Every
@@ -661,6 +668,16 @@ number (0.705 / 0.387) behind the argument instead of an anecdote.
 **2 of 44 rank 6th** (forgery, mischief) — found, but just outside the standard top-5 cutoff;
 worth noting since RAG_TOP_K/top_k tuning is a much smaller lever than the embedding-model
 question above, but a real one if this number is revisited.
+
+**SUPERSEDED 2026-09-06 — the "real embedding model" this whole section calls for was built. Kept
+below as the honest historical record, not rewritten, but do not read the 11/44 miss list above as
+current.** Re-run against `LocalOnnxEmbedder`: **Recall@5 = 0.909 (40/44), MRR = 0.730**, only 2 of
+44 missing entirely (assault, plea bargaining — a different, smaller pair than the 11 above; most
+of the original eleven, including "anticipatory bail" and "hostile witness," are now found). See
+"HEADLINE RESULT" at the top of this file for the full before/after arc, and the embedding-swap
+entry below for the complete measurement (feasibility, migration, re-embed timing, threshold
+re-derivation, confidence calibration, and which of the six synonym-list entries mentioned above
+turned out to still be necessary even with real embeddings).
 
 This is the last unmeasured claim this document made. 0.705/0.387 is the honest number to cite
 for this project, not the earlier six-query anecdote (4/6 → 6/6) — that stays in this document as

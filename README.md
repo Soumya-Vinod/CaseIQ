@@ -48,27 +48,32 @@ decorated number. Full five-stage trace of that one query, with a measurement at
 
 | | |
 |---|---|
-| **Recall@5 / MRR**, 44-pair golden set, all 5 acts | **0.705 / 0.387** |
-| Retrieval hit rate on 6 illustrative queries (correct section in top 6) | 4/6 → 6/6 after adding hybrid retrieval |
+| **Recall@5 / MRR**, 44-pair golden set, all 5 acts | **0.909 / 0.730** (was 0.705 / 0.387 under the original hash-based embedder — see below) |
 | Corpus | 2,155 sections, BNS + BNSS + BSA + IPC + CrPC — criminal law and procedure only |
 | Judicial status | IPC §497 (adultery) excluded as struck down; IPC §377 flagged read-down, both with real citations |
 | Offence classification (cognizable/bailable/court), parsed from source, never LLM output | IPC (CrPC's First Schedule): **212/381 sections (56%)**. BNS (BNSS's First Schedule, currently in-force law): **398/434 sections (92%)** — same table, different source document, different result. Partial by measured coverage, not by omission; the rest are absent, not guessed |
-| Test suite | 22 passed, 1 skipped (needs a local test DB) |
+| Test suite | 106 passed, 0 failed |
 
-**The sharpest single finding**: a civil-law question this corpus has nothing to answer (a
-neighbour's right-of-way dispute) measured `0.4768` maximum retrieval similarity. *"What is the
-punishment for theft?"* — a question the corpus exists to answer — measured `0.478`. **A gap of
-0.0012.** No similarity threshold separates a real question from an irrelevant one when they score
-this close; the system needed a second, independent signal (a small curated phrase list) on top of
-the similarity gate, not a better-tuned number.
+**The sharpest single finding, and its resolution.** A civil-law question this corpus has nothing
+to answer (a neighbour's right-of-way dispute) originally measured `0.4768` maximum retrieval
+similarity against `0.478` for *"What is the punishment for theft?"* — a question the corpus exists
+to answer. **A gap of 0.0012.** No similarity threshold could separate a real question from an
+irrelevant one at that resolution; a real out-of-scope query and a real in-scope one were, to the
+embedder, statistically the same number.
 
-**The golden set confirmed this at scale, not just as an anecdote**: 11 of 44 questions (25%)
-don't retrieve their correct section even in the top 10 — almost all of them because the question
-uses ordinary language ("anticipatory bail," "search warrant," "hostile witness") and the statute
-uses different words for the same thing ("direction for grant of bail to a person apprehending
-arrest," "issue of summons or warrant," "cross-examined as to previous statements"). Full
-methodology, every ground-truth pair checked against the actual corpus text before being trusted,
-and the full miss list, in `docs/evaluation.md`.
+**Root cause, not worked around**: the embedder computing that number (`LocalEmbedder`, a
+deterministic hashing function, never a trained model — adopted after Gemini's free-tier embedding
+quota ran out mid-ingest) had no real notion of meaning, only incidental word-hash overlap. This
+was documented five separate times across this project's history before being fixed as what it
+actually was, rather than patched around again — replaced with `LocalOnnxEmbedder`
+(`all-MiniLM-L6-v2`, ONNX Runtime, no PyTorch — chosen and vendored under a measured 512MB Render
+free-tier ceiling). The canonical out-of-scope query used above now measures `0.1469`; the weakest
+of all 44 real, legitimate questions in the golden set measures `0.4805` — a gap of **0.3336**,
+roughly 280 times wider, and the actual reason Recall@5/MRR moved from 0.705/0.387 to 0.909/0.730.
+Full arc — five documented instances, the baseline, the fix, the result, told honestly rather than
+as a clean win (the civil-easement case specifically is *still* not separable by similarity alone;
+a second, independent heuristic remains necessary) — in
+[`docs/evaluation.md`](docs/evaluation.md#headline-result-the-embedding-swap-and-what-five-months-of-the-same-finding-was-pointing-at).
 
 ## Architecture
 
@@ -123,20 +128,21 @@ Also in the app, all real, all measured working end to end — not just built:
 Stated here because a claimed capability with a silent asterisk is worse than a limitation stated
 plainly:
 
-- **Retrieval misses a quarter of the golden set (11/44)** — see above. A small hand-curated
-  synonym list patches two of these known phrases (dowry-harassment → "cruelty," FIR →
-  "information in cognizable cases"); it is explicitly a stopgap, documented as such in code and
-  in `docs/evaluation.md`, does not generalise to the other nine, and extending it further is
-  the wrong direction to keep pushing.
-- **Embeddings are a deterministic hashing function, not a trained semantic model** (`LocalEmbedder`
-  in `app/services/embeddings.py`) — chosen after Gemini's free-tier embedding quota was
-  exhausted mid-ingest, twice. It finds literal word overlap, not meaning; this is the root cause
-  behind both limitations above, and a real embedding model (with quota headroom, or the
-  Postgres-tsvector-plus-vector hybrid taken further) is the actual fix, not more threshold
-  tuning.
-- **The abstention threshold (0.40) and the civil-scope phrase list are heuristics**, chosen from
-  a handful of real samples, not calibrated against the golden set above — that calibration is
-  the natural next use of it, not yet done.
+- **Retrieval still misses 2 of 44 golden-set questions** ("What is the punishment for assault?",
+  "What is plea bargaining?" — not investigated further yet, named rather than left implicit), down
+  from 11/44 before the embedding swap. A small hand-curated synonym list still patches 9 remaining
+  phrases the new embedder still doesn't anchor to statutory wording on its own (down from all 14
+  it originally patched — 5 were re-verified redundant with real embeddings and removed); it
+  remains explicitly a stopgap, not a generalising fix, documented in code and in
+  `docs/evaluation.md`.
+- **The abstention threshold (0.35) and the civil-scope phrase list are still heuristics** — the
+  threshold has now been derived from the golden set plus real out-of-scope cases (not just a
+  handful of samples, as before), but the civil-scope phrase list remains necessary: a real
+  embedding model narrowed the specific civil-easement-vs-real-question gap but did not close it
+  (0.4609 vs. 0.4805 — still not separable by similarity alone). Confidence calibration, re-checked
+  against the golden set after the swap, now shows a genuinely usable, roughly monotonic
+  relationship between score and correctness for the first time — the hash-based embedder
+  structurally couldn't produce this; see `docs/evaluation.md`.
 - Out of scope for this round, by design: the arq background worker (news refresh runs via a
   manual/admin-triggered script instead), a verified legal-aid helplines table (helplines are
   currently stripped from LLM output rather than shown unverified), and Part H/I compliance and

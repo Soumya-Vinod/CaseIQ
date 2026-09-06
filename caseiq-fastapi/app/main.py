@@ -14,7 +14,7 @@ from app.core.logging import configure_logging, logger
 from app.core.ratelimit import limiter
 from app.db.base import SessionLocal
 from app.middleware.request_context import RequestContextMiddleware
-from app.services.embeddings import assert_embedding_dim_matches_corpus
+from app.services.embeddings import assert_embedding_config_matches_corpus, embedder
 
 
 @asynccontextmanager
@@ -33,12 +33,16 @@ async def lifespan(app: FastAPI):
     # changeable places that must agree, and nothing enforced that -- a
     # mismatch here produces silently wrong answers at normal-looking
     # confidence, not an exception, because cosine similarity between two
-    # different embedding spaces is still a valid float. See that function's
-    # own docstring for the live incident this closes. Deliberately NOT
-    # wrapped in try/except: a mismatch must crash startup, not degrade to a
-    # logged warning nobody reads until a user notices wrong answers.
+    # different embedding spaces is still a valid float. Checks the ACTUAL
+    # running `embedder` object's identity, not just the EMBEDDING_PROVIDER
+    # string -- get_embedder() no longer has a silent fallback (see its own
+    # docstring), so these should always agree, but this check doesn't get
+    # to assume that held. See that function's own docstring for the live
+    # incident this closes. Deliberately NOT wrapped in try/except: a
+    # mismatch must crash startup, not degrade to a logged warning nobody
+    # reads until a user notices wrong answers.
     async with SessionLocal() as db:
-        await assert_embedding_dim_matches_corpus(db)
+        await assert_embedding_config_matches_corpus(db, embedder)
     yield
     logger.info("app_stopping")
 
@@ -71,7 +75,29 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["Health"])
     async def health():
-        return {"status": "ok", "env": settings.ENV}
+        # FIXED 2026-09-06: added after several rounds of being unable to
+        # confirm, from outside, what a deployed instance was actually
+        # running -- neither Render's dashboard env vars nor a git push are
+        # visible from here, and the only prior signal was inferring from
+        # query behaviour, which is exactly how a real embedding-provider/
+        # corpus mismatch went unnoticed. embedding_model is the ACTUAL
+        # running embedder's identity (app.services.embeddings.embedder
+        # .model_id), not just the EMBEDDING_PROVIDER setting -- the two
+        # should always agree now that get_embedder() has no silent
+        # fallback, but this endpoint doesn't get to assume that either;
+        # if they ever diverge, that divergence is itself the finding.
+        # Deliberately no request-body echo, no secrets -- config shape
+        # only, safe to leave public on a project with no user data at
+        # stake in an env var name.
+        build = get_build_info()
+        return {
+            "status": "ok",
+            "env": settings.ENV,
+            "embedding_provider": settings.EMBEDDING_PROVIDER,
+            "embedding_dim": settings.EMBEDDING_DIM,
+            "embedding_model": embedder.model_id,
+            "git_commit": build.get("git_commit"),
+        }
 
     return app
 

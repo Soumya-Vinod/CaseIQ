@@ -65,7 +65,10 @@ async def main(batch_size: int) -> None:
             # this dev machine's round-trip latency to a remote Neon instance.
             await db.execute(
                 update(SectionVersion),
-                [{"id": row_id, "embedding": vector} for (row_id, _, _), vector in zip(batch, vectors)],
+                [
+                    {"id": row_id, "embedding": vector, "embedding_model": embedder.model_id}
+                    for (row_id, _, _), vector in zip(batch, vectors)
+                ],
             )
             await db.commit()
             done += len(batch)

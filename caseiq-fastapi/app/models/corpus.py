@@ -91,6 +91,20 @@ class SectionVersion(UUIDPk, Timestamped, Base):
     parser_version: Mapped[str | None] = mapped_column(String(20))
 
     embedding: Mapped[list[float] | None] = mapped_column(Vector(settings.EMBEDDING_DIM))
+    # FIXED 2026-09-06, found live on Render: dimension alone does not
+    # identify a vector space. Two providers can share EMBEDDING_DIM (both
+    # LocalEmbedder and LocalOnnxEmbedder are 384-configurable) while
+    # producing vectors nothing alike -- a dimension-only check compares
+    # 384 to 384, passes, and the app serves wrong answers from a corpus
+    # embedded by one model against queries embedded by another. Stamped
+    # from app.services.embeddings.Embedder.model_id at embed time
+    # (reembed_corpus.py, ingest.py), compared at startup against the
+    # running process's actual embedder
+    # (assert_embedding_config_matches_corpus) -- same provenance-stamping
+    # idea as parser_name/parser_version above, same
+    # verify-identity-not-just-shape idea as app.core.build_info's
+    # source_fingerprint for the worker.
+    embedding_model: Mapped[str | None] = mapped_column(String(100))
 
     # Hybrid retrieval (2026-08-30, migration 0005): Postgres full-text search
     # alongside the vector embedding above, fused with RRF -- see

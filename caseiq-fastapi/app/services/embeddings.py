@@ -46,6 +46,17 @@ def _l2_normalise(vec: list[float]) -> list[float]:
 
 class Embedder(ABC):
     dim: int = settings.EMBEDDING_DIM
+    # A stable string identifying WHICH model actually produces this
+    # embedder's vectors -- stamped onto section_versions.embedding_model
+    # at embed time (see reembed_corpus.py / ingest.py) and compared at
+    # startup (assert_embedding_config_matches_corpus, below) against
+    # whatever's actually stored. Two providers can share a dimension
+    # (LocalEmbedder and LocalOnnxEmbedder are both configurable to 384)
+    # while producing totally incompatible vector spaces -- dimension
+    # alone can't catch that, this is the fact that can. Subclasses set
+    # their own; matching the fixed model_id below is what makes it
+    # meaningful, not just a label.
+    model_id: str = "unknown"
 
     @abstractmethod
     async def embed(self, text: str) -> list[float]: ...
@@ -56,6 +67,8 @@ class Embedder(ABC):
 
 class LocalEmbedder(Embedder):
     """Deterministic bag-of-hashed-tokens embedder. Offline, dependency-free."""
+
+    model_id = "local-hash"
 
     async def embed(self, text: str) -> list[float]:
         vec = [0.0] * self.dim
@@ -106,6 +119,8 @@ class LocalOnnxEmbedder(Embedder):
     already exists.
     """
 
+    model_id = "onnx:sentence-transformers/all-MiniLM-L6-v2"
+
     def __init__(self) -> None:
         from fastembed import TextEmbedding
 
@@ -139,6 +154,11 @@ class GeminiEmbedder(Embedder):
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self._genai = genai
         self._model = settings.GEMINI_EMBED_MODEL
+        # Includes the dimension deliberately, not just the model name:
+        # Gemini's output_dimensionality (below) truncates via Matryoshka
+        # representation learning -- the same model at 384 vs. 768 dims is
+        # a genuinely different vector space, not the same one resized.
+        self.model_id = f"gemini:{self._model}:{settings.EMBEDDING_DIM}d"
 
     async def embed(self, text: str) -> list[float]:
         # google-generativeai is sync; run in a thread to stay non-blocking.
@@ -158,81 +178,113 @@ class GeminiEmbedder(Embedder):
 
 
 def get_embedder() -> Embedder:
+    """FIXED 2026-09-06, found live on Render: this used to catch ANY
+    exception from the configured provider's own constructor and silently
+    fall back to LocalEmbedder with just a `logger.warning` -- invisible
+    without direct log access, and exactly the wrong direction for this
+    specific failure mode. A missing vendored model file, a bad API key, or
+    any other provider-init failure would silently swap in a hash-based
+    embedder against a corpus embedded by something else entirely, at the
+    same dimension, producing plausible-looking wrong answers with nothing
+    in the response to say so -- the identical shape of bug
+    assert_embedding_dim_matches_corpus (in this module) exists to catch,
+    reintroduced one layer up, in a place that check can't see because it
+    runs on WHATEVER get_embedder() already returned, silent fallback
+    included. Now: the configured provider either constructs or the
+    process doesn't start. No fallback provider, for either branch --
+    "onnx configured but unavailable" must not quietly become "local was
+    used instead," it must be a startup failure someone sees.
+    """
     if settings.EMBEDDING_PROVIDER == "gemini" and settings.GEMINI_API_KEY:
-        try:
-            return GeminiEmbedder()
-        except Exception as exc:  # pragma: no cover
-            logger.warning("gemini_embedder_init_failed_falling_back", error=str(exc))
-        return LocalEmbedder()
+        return GeminiEmbedder()
     if settings.EMBEDDING_PROVIDER == "onnx":
-        try:
-            return LocalOnnxEmbedder()
-        except Exception as exc:  # pragma: no cover
-            logger.warning("onnx_embedder_init_failed_falling_back", error=str(exc))
-        return LocalEmbedder()
+        return LocalOnnxEmbedder()
     return LocalEmbedder()
 
 
-class EmbeddingDimensionMismatch(RuntimeError):
-    """Raised at startup -- see assert_embedding_dim_matches_corpus below."""
+class EmbeddingConfigMismatch(RuntimeError):
+    """Raised at startup -- see assert_embedding_config_matches_corpus below."""
 
 
-async def assert_embedding_dim_matches_corpus(db) -> None:
+async def assert_embedding_config_matches_corpus(db, running_embedder: Embedder) -> None:
     """FIXED 2026-09-06, found live on Render, not in review: the corpus in
-    Neon and `EMBEDDING_PROVIDER`/`EMBEDDING_DIM` on Render are two
-    independently-changeable places that must agree, and nothing enforced
-    that. `scripts/reembed_corpus.py` re-embedded the whole corpus with
-    LocalOnnxEmbedder (384-dim) directly against the shared Neon database --
-    a step that has nothing to do with any deploy and leaves no trace on
-    Render at all. When Render's own `EMBEDDING_PROVIDER` env var hadn't
-    been updated to match yet, every live query kept computing a QUERY
-    embedding with the OLD provider while comparing it against the corpus's
-    NEW vectors -- confirmed live: theft, FIR, and dowry-harassment queries
-    all returned wrong sections at near-random, indistinguishable confidence
-    (0.10-0.12 across the board, garbage and real queries alike), while the
+    Neon and the embedding provider on Render are two independently-
+    changeable places that must agree, and nothing enforced that.
+    `scripts/reembed_corpus.py` re-embeds the whole corpus directly against
+    the shared Neon database -- a step that has nothing to do with any
+    deploy and leaves no trace on Render at all. When Render's own env
+    vars hadn't been updated to match, every live query kept computing a
+    QUERY embedding with the OLD provider while comparing it against the
+    corpus's NEW vectors -- confirmed live: theft, FIR, and
+    dowry-harassment queries all returned wrong sections at near-random,
+    indistinguishable confidence (0.10-0.12 across the board), while the
     app logged nothing wrong at all, because cosine similarity between two
     vectors from different embedding spaces is still a perfectly valid
-    float -- there is no exception to catch. Same principle as
-    `app.core.build_info`'s source_fingerprint check for a stale --reload
-    worker: a silent wrong-answer failure mode turned into a loud one that
-    fails at startup instead of in front of a user.
+    float.
 
-    Samples ONE row with a non-null embedding (cheap, no need to check
-    all 2,155) and compares its actual stored dimension
-    (`vector_dims`, pgvector's own function -- reads the real stored
-    vector's length, not a schema-declared type) against
-    `settings.EMBEDDING_DIM`. Raises loudly, crashing startup, on a
-    mismatch -- this must never be caught and downgraded to a warning; a
-    running app with this mismatch is actively serving wrong answers, not
-    degraded ones. A corpus with no embedded rows yet (a fresh DB before
-    the first ingest run) is not a mismatch -- nothing to check yet, not an
-    error -- and is logged as skipped, not silently ignored.
+    EXTENDED the same day, same incident, before it was even fully
+    resolved: the first version of this check compared dimension only
+    (`vector_dims(embedding) == EMBEDDING_DIM`). That is not enough --
+    `LocalEmbedder` and `LocalOnnxEmbedder` are BOTH configurable to
+    384-dim, and a silent provider-init fallback (see get_embedder's own
+    fix, same file) could swap one for the other while this check kept
+    comparing 384 to 384 and passing, the exact silent-wrong-answer shape
+    it exists to catch, one layer too shallow. Same principle as
+    `app.core.build_info`'s `source_fingerprint` for a stale `--reload`
+    worker: verify IDENTITY, not just shape.
+
+    Samples ONE row with a non-null embedding (cheap, no need to check all
+    2,155) and checks both its actual stored dimension (`vector_dims`,
+    pgvector's own function -- the real stored vector's length, not a
+    schema-declared type) AND its stamped `embedding_model` against the
+    process's ACTUAL running embedder (`running_embedder.model_id` -- the
+    object `get_embedder()` really returned, not just the `EMBEDDING_
+    PROVIDER` string, so a silent fallback elsewhere still gets caught
+    here). Raises loudly, crashing startup, on either mismatch -- never
+    caught and downgraded to a warning; a running app with this mismatch
+    is actively serving wrong answers, not degraded ones.
+
+    A corpus with no embedded rows yet (fresh DB, first ingest not run) is
+    not a mismatch -- logged as skipped. A corpus embedded before this
+    column existed (`embedding_model IS NULL`) is ALSO not silently
+    passed -- migration 0010 backfills every currently-known-good row, so
+    a NULL here means a row this migration didn't know about, and is
+    treated as a mismatch, not assumed fine.
     """
     from sqlalchemy import text
 
     row = (await db.execute(text(
-        "SELECT vector_dims(embedding) AS dim FROM section_versions "
+        "SELECT vector_dims(embedding) AS dim, embedding_model FROM section_versions "
         "WHERE embedding IS NOT NULL LIMIT 1"
     ))).mappings().first()
 
     if row is None:
-        logger.warning("embedding_dim_check_skipped_empty_corpus")
+        logger.warning("embedding_config_check_skipped_empty_corpus")
         return
 
     actual_dim = row["dim"]
+    actual_model = row["embedding_model"]
+    expected_model = running_embedder.model_id
+
     if actual_dim != settings.EMBEDDING_DIM:
-        raise EmbeddingDimensionMismatch(
+        raise EmbeddingConfigMismatch(
             f"section_versions.embedding holds {actual_dim}-dim vectors, but "
             f"EMBEDDING_DIM={settings.EMBEDDING_DIM} (EMBEDDING_PROVIDER="
             f"{settings.EMBEDDING_PROVIDER!r}) -- query-time embeddings would be "
             f"computed at the wrong dimension and compared against the wrong "
-            f"vector space. This produces silently wrong answers, not an error, "
-            f"if left running: fix EMBEDDING_PROVIDER/EMBEDDING_DIM to match the "
-            f"corpus's actual stored vectors, or re-run scripts/reembed_corpus.py "
-            f"against the corpus to match the configured provider -- don't just "
-            f"catch and ignore this."
+            f"vector space. Fix EMBEDDING_PROVIDER/EMBEDDING_DIM to match the "
+            f"corpus's actual stored vectors, or re-run scripts/reembed_corpus.py."
         )
-    logger.info("embedding_dim_check_ok", dim=actual_dim)
+    if actual_model != expected_model:
+        raise EmbeddingConfigMismatch(
+            f"section_versions.embedding_model is {actual_model!r}, but this "
+            f"process's actual running embedder is {expected_model!r} "
+            f"(EMBEDDING_PROVIDER={settings.EMBEDDING_PROVIDER!r}). Same dimension, "
+            f"different model -- comparing vectors across these is a valid float, "
+            f"not a valid answer. Fix EMBEDDING_PROVIDER to match the corpus, or "
+            f"re-run scripts/reembed_corpus.py to match this process's embedder."
+        )
+    logger.info("embedding_config_check_ok", dim=actual_dim, model_id=actual_model)
 
 
 embedder = get_embedder()

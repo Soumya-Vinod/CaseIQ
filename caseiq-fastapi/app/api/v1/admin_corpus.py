@@ -80,6 +80,7 @@ async def approve(staging_id: str, payload: ApproveIn, db: DB, user: CurrentUser
         valid_from=effective_from, valid_to=None, source_url=change.source_url,
         source_sha256=change.source_sha256, content_as_on=effective_from,
         amended_by_amendment_id=amendment_id, embedding=vector,
+        embedding_model=embedder.model_id,
     )
     db.add(new_version)
     await db.flush()
