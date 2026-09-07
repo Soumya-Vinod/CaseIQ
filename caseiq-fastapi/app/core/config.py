@@ -163,6 +163,15 @@ class Settings(BaseSettings):
 
     # --- LLM / Embeddings / News ---
     GROQ_API_KEY: str | None = None
+    # FIXED 2026-09-07: found live, measured, not guessed -- the concurrency
+    # ceiling this key sits behind is arithmetic (8000 TPM / ~3151
+    # tokens/request ~= 2 concurrent requests), not an implementation bug --
+    # see docs/evaluation.md's concurrency-ceiling entry. A second key on a
+    # second Groq account gives real extra headroom under the SAME
+    # arithmetic, not a fix for the arithmetic itself. Optional and
+    # additive: absent, `LLMService` behaves exactly as it did with one key
+    # (see its own docstring) -- no crash, no behaviour change.
+    GROQ_API_KEY_2: str | None = None
     # llama-3.3-70b-versatile was retired from Groq's catalog (404 model_not_found,
     # discovered 2026-08-30 -- see docs/deployment.md). This default is a fallback for
     # environments with no GROQ_MODEL env var set; re-check Groq's /models list before

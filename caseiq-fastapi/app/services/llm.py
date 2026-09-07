@@ -7,9 +7,11 @@ conversational + structured JSON) but:
 from __future__ import annotations
 
 import json
+import re
+import time
 from typing import Any
 
-from groq import AsyncGroq, APIError as GroqAPIError
+from groq import AsyncGroq, APIError as GroqAPIError, RateLimitError as GroqRateLimitError
 
 from app.core.config import settings
 from app.core.exceptions import AppError
@@ -148,17 +150,81 @@ _COMPLAINT_FIELD_TYPES: dict[str, PIIType] = {
 }
 
 
-class LLMService:
-    def __init__(self) -> None:
-        self._client: AsyncGroq | None = None
+class _GroqKey:
+    """One Groq API key's client plus its own cooldown state. FIXED
+    2026-09-07 -- see LLMService._groq_keys and _call for the failover
+    scheme this supports. `cold_until` is a `time.monotonic()` deadline,
+    not wall-clock time -- immune to a system clock adjustment, which a
+    cooldown window spanning a real deploy/restart could plausibly hit.
+    """
+
+    def __init__(self, label: str, api_key: str) -> None:
+        self.label = label
+        self.client = AsyncGroq(api_key=api_key)
+        self.cold_until: float = 0.0
 
     @property
-    def client(self) -> AsyncGroq:
-        if self._client is None:
+    def is_cold(self) -> bool:
+        return time.monotonic() < self.cold_until
+
+
+_DEFAULT_COOLDOWN_SECONDS = 60.0  # fallback when a 429 carries no parseable retry-after
+_RETRY_AFTER_IN_MESSAGE_RE = re.compile(r"try again in ([\d.]+)s", re.I)
+
+
+def _parse_retry_after(exc: GroqRateLimitError) -> float:
+    """How long to mark a key cold for, from the actual 429 -- not a
+    hardcoded guess. Groq's HTTP response carries a standard `Retry-After`
+    header (seconds); some of Groq's own error messages also spell it out
+    in prose ("Please try again in 1.234s"), which the RateLimitError this
+    was found via (docs/evaluation.md's concurrency-ceiling entry) actually
+    used. Header first (structured, from the real response), the message
+    regex second (Groq's own documented wording, not a stable contract),
+    a fixed default last -- never zero, which would mark a key cold for no
+    time at all and defeat the entire point of tracking it.
+    """
+    response = getattr(exc, "response", None)
+    if response is not None:
+        raw = response.headers.get("retry-after")
+        if raw:
+            try:
+                return max(float(raw), 1.0)
+            except ValueError:
+                pass
+    match = _RETRY_AFTER_IN_MESSAGE_RE.search(str(exc))
+    if match:
+        try:
+            return max(float(match.group(1)), 1.0)
+        except ValueError:
+            pass
+    return _DEFAULT_COOLDOWN_SECONDS
+
+
+class LLMService:
+    def __init__(self) -> None:
+        self._keys: list[_GroqKey] | None = None
+
+    @property
+    def _groq_keys(self) -> list[_GroqKey]:
+        """FIXED 2026-09-07: failover, not load-balancing -- a second key on
+        a second Groq account gives real extra headroom under the SAME
+        8000-TPM-per-key arithmetic (see docs/evaluation.md's concurrency-
+        ceiling entry), not a fix for the arithmetic. `GROQ_API_KEY_2` is
+        optional and purely additive: absent, this list has exactly one
+        entry and `_call` behaves exactly as it did before this existed --
+        one attempt, a 503 on any Groq-side failure, no crash, no new
+        failure mode. Built once and cached (not a fresh list per call) --
+        `cold_until` state has to persist on the SAME `_GroqKey` objects
+        across requests, or every call would see both keys as warm.
+        """
+        if self._keys is None:
             if not settings.GROQ_API_KEY:
                 raise AppError("LLM is not configured (GROQ_API_KEY missing).", code="llm_unconfigured")
-            self._client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-        return self._client
+            keys = [_GroqKey("primary", settings.GROQ_API_KEY)]
+            if settings.GROQ_API_KEY_2:
+                keys.append(_GroqKey("secondary", settings.GROQ_API_KEY_2))
+            self._keys = keys
+        return self._keys
 
     async def _call(self, messages: list[dict], *, temperature: float | None = None,
                     max_tokens: int = 3000) -> str:
@@ -171,28 +237,63 @@ class LLMService:
         # This is a real, observed failure mode, not theoretical: 5 concurrent
         # /legal/query requests against production measured 2/5 failing this
         # way, each ~40s in (see docs/evaluation.md's concurrency-load entry).
-        # Deliberately NOT touching timeout=/max_retries= here -- whether the
-        # underlying cause is Groq's own concurrent rate limit or something
-        # upstream of Groq (e.g. CPU contention from concurrent ONNX
-        # inference delaying this call) is still open pending a real log read
-        # of the exception this now surfaces; changing retry/timeout
-        # parameters before that would be tuning blind. This only fixes the
-        # user-facing shape of the failure, which is correct regardless of
-        # which cause it turns out to be.
-        try:
-            resp = await self.client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=messages,
-                temperature=settings.GROQ_TEMPERATURE if temperature is None else temperature,
-                max_tokens=max_tokens,
-            )
-        except GroqAPIError as exc:
-            logger.warning("groq_call_failed", error_type=type(exc).__name__, error=str(exc))
+        #
+        # EXTENDED 2026-09-07, same incident, once the Render log confirmed
+        # the cause as `groq.RateLimitError` (tokens-per-minute, not CPU
+        # contention): the fix above was correct but incomplete -- a real
+        # transient overload deserves a real retry path, not just an honest
+        # error message. Failover, not load-balancing -- see _groq_keys and
+        # docs/evaluation.md's concurrency-ceiling entry for why this is
+        # headroom against a tier limit, not a fix for it. At most ONE
+        # rotation attempt: try the first warm key; on a rate limit,
+        # cooldown it and try the next warm key once; anything else (a
+        # non-rate-limit Groq error, or every key already cold/now cold)
+        # goes straight to the same 503 as before -- deliberately never a
+        # retry loop, since retrying against an already-scarce TPM budget
+        # is how the 40-68s failures happened in the first place.
+        keys = self._groq_keys
+        warm = [k for k in keys if not k.is_cold]
+        if not warm:
+            logger.warning("groq_all_keys_cold", keys=[k.label for k in keys])
             raise AppError(
                 "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
                 code="llm_temporarily_unavailable", status_code=503,
-            ) from exc
-        return resp.choices[0].message.content.strip()
+            )
+
+        last_exc: GroqRateLimitError | None = None
+        for key in warm[:2]:
+            try:
+                resp = await key.client.chat.completions.create(
+                    model=settings.GROQ_MODEL,
+                    messages=messages,
+                    temperature=settings.GROQ_TEMPERATURE if temperature is None else temperature,
+                    max_tokens=max_tokens,
+                )
+                logger.info("groq_call_served", key=key.label)
+                return resp.choices[0].message.content.strip()
+            except GroqRateLimitError as exc:
+                retry_after = _parse_retry_after(exc)
+                key.cold_until = time.monotonic() + retry_after
+                logger.warning("groq_key_cooldown", key=key.label, retry_after_s=retry_after)
+                last_exc = exc
+                continue
+            except GroqAPIError as exc:
+                # Not a rate limit -- a different key wouldn't help (timeout,
+                # connection, 5xx are per-request/per-service failures, not
+                # per-key), so this goes straight to the 503, same as before
+                # rotation existed, no rotation attempted.
+                logger.warning("groq_call_failed", error_type=type(exc).__name__, error=str(exc), key=key.label)
+                raise AppError(
+                    "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
+                    code="llm_temporarily_unavailable", status_code=503,
+                ) from exc
+
+        # Every warm key hit a rate limit during this call (both cold now).
+        logger.warning("groq_all_keys_rate_limited", keys=[k.label for k in warm])
+        raise AppError(
+            "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
+            code="llm_temporarily_unavailable", status_code=503,
+        ) from last_exc
 
     @staticmethod
     def _parse_json(text: str) -> Any:

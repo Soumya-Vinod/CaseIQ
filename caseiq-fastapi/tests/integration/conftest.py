@@ -9,13 +9,15 @@ Bring up a throwaway Postgres instance with:
       -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
       -p 5434:5432 pgvector/pgvector:pg17
 
-then create the DEDICATED integration-test database inside it (same
-instance/port is fine -- what matters is the database NAME, see the guard
-below):
-    docker exec caseiq-test-db psql -U postgres -c \
-      "CREATE DATABASE caseiq_integration_test"
-    docker exec caseiq-test-db psql -U postgres -d caseiq_integration_test \
-      -c "CREATE EXTENSION IF NOT EXISTS vector"
+That's the only manual step. FIXED 2026-09-07: the integration-test
+database itself (DEDICATED name, see the guard below), its `vector`
+extension, and its whole schema are now built automatically by the
+`_schema_ready` fixture -- DROP DATABASE IF EXISTS + CREATE DATABASE +
+`alembic upgrade head`, every session. No manual `CREATE DATABASE` /
+`CREATE EXTENSION` step needed or wanted anymore; running that by hand
+first just means the fixture drops it again on the next test run. See
+`_schema_ready`'s own docstring for why (create_all() drift, twice, and
+what replaced it).
 
 `make test` (plain `pytest -q`) does NOT require this -- these tests skip
 themselves at collection time if the DB isn't reachable, rather than failing
@@ -104,15 +106,87 @@ _skip_if_unreachable()
 
 @pytest.fixture(scope="session")
 def _schema_ready():
-    """Creates the vector extension + all tables ONCE, synchronously."""
-    from app.db.base import Base
-    import app.models  # noqa: F401  registers all tables on Base.metadata
+    """FIXED 2026-09-07: rebuilds caseiq_integration_test from a clean
+    DROP/CREATE DATABASE + real Alembic migrations (`alembic upgrade
+    head`), not `Base.metadata.create_all()`. create_all() only ever
+    creates MISSING tables/columns -- it never ALTERs an existing one.
+    That drifted silently at least twice in one session: a model gained a
+    column, the persistent container's schema didn't move, and tests
+    failed confusingly downstream (a missing-column error deep in a query,
+    not at schema setup) instead of at the one place that should have
+    caught it. Each time cost a manual DROP DATABASE + full rerun to
+    recover. Running the SAME migrations this project runs against real
+    Postgres (dev, Render) means this fixture cannot silently diverge from
+    what production actually has -- the exact guarantee create_all()
+    structurally cannot make, no matter how often it's rerun.
 
-    engine = create_engine(_SYNC_DATABASE_URL)
-    with engine.begin() as conn:
+    DROP DATABASE + CREATE DATABASE first, not just migrating whatever's
+    already there: idempotent-by-construction instead of idempotent-by-
+    convention. A stale caseiq_integration_test -- partial create_all()
+    tables left over from before this fix, or a half-applied migration set
+    from an interrupted previous run -- is now impossible to inherit,
+    because nothing is ever inherited; every session-scoped test run
+    starts from the same known-nothing state. This is the single most
+    dangerous operation in this file (destroys a whole database, not just
+    truncates tables) -- guarded by the SAME _REQUIRED_TEST_DB_NAME literal
+    _assert_safe_to_truncate already uses below, checked against the
+    parsed URL BEFORE any connection is made (there's no live database to
+    query yet at drop-time), never against a value redirectable via env
+    var alone.
+
+    alembic/env.py hardcodes `settings.MIGRATION_DATABASE_URL` -- pointing
+    it at the fresh test database runs `alembic upgrade head` in a
+    SUBPROCESS with real env vars, not in-process monkeypatching:
+    MIGRATION_DATABASE_URL is a read-only computed_field (no setter to
+    monkeypatch), and env.py's own SSL flag (`_connect_args`) is computed
+    at MODULE IMPORT time from settings.DATABASE_URL_RAW -- an in-process
+    override only works if alembic.env has never been imported yet in this
+    process, which is fragile to depend on across a whole pytest session. A
+    subprocess has no such import history: it reads these env vars fresh,
+    guaranteed, every time.
+    """
+    import os as _os
+    import subprocess
+    import sys
+    from urllib.parse import urlparse
+
+    parsed = urlparse(TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    db_name = parsed.path.lstrip("/")
+    if db_name != _REQUIRED_TEST_DB_NAME:
+        raise RuntimeError(
+            f"refusing to DROP/CREATE database {db_name!r}: TEST_DATABASE_URL must point at "
+            f"{_REQUIRED_TEST_DB_NAME!r}. Same guard as _assert_safe_to_truncate below, checked "
+            f"here BEFORE any connection is made, since DROP DATABASE has no undo."
+        )
+
+    maintenance_url = _SYNC_DATABASE_URL.rsplit("/", 1)[0] + "/postgres"
+    maint_engine = create_engine(maintenance_url, isolation_level="AUTOCOMMIT")
+    with maint_engine.connect() as conn:
+        conn.execute(text(f'DROP DATABASE IF EXISTS "{_REQUIRED_TEST_DB_NAME}" WITH (FORCE)'))
+        conn.execute(text(f'CREATE DATABASE "{_REQUIRED_TEST_DB_NAME}"'))
+    maint_engine.dispose()
+
+    fresh_engine = create_engine(_SYNC_DATABASE_URL)
+    with fresh_engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        Base.metadata.create_all(conn)
-    engine.dispose()
+    fresh_engine.dispose()
+
+    plain_test_url = TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    env = _os.environ.copy()
+    env["DATABASE_URL_DIRECT"] = plain_test_url
+    env["DATABASE_URL_RAW"] = ""  # falsy -- env.py's ssl="require" flag keys off this being unset
+    project_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=project_root, env=env, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "alembic upgrade head failed against the fresh test database:\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+
+    import app.models  # noqa: F401  registers all tables on Base.metadata, for the `db` fixture's TRUNCATE below
     yield
 
 

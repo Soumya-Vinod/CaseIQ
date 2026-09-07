@@ -373,3 +373,38 @@ touch Render):
 - [ ] Corpus — Render's DB has no corpus yet either; re-ingestion against `DATABASE_URL_RAW`/
       `DATABASE_URL_DIRECT` (the same Neon project used locally) is still the Priority 1 item, not
       done as part of this note.
+
+## Groq key failover: `GROQ_API_KEY_2` (2026-09-07)
+
+**Mechanism, shipped and unit-tested; the measured production ceiling is NOT in this section yet
+-- see below for why.** `docs/evaluation.md`'s concurrency-ceiling entry established the real
+number: ~8000 TPM per Groq key, ~3151 tokens/request, ~2 concurrent requests before a 429. This is
+a second key for real extra headroom under that same arithmetic -- **failover, not load-balancing,
+and not a fix for the tier limit.** Optional: `GROQ_API_KEY_2` unset behaves exactly as a single
+key always has (one attempt, the existing 503 on any Groq-side failure) -- no crash, no new
+failure mode. Set: on a `RateLimitError`, the failing key is marked cold for the `Retry-After`
+window from the actual 429 response (parsed from the header, falling back to Groq's own "try again
+in Xs" message text, falling back to a fixed 60s default), the other key is tried once, and if that
+also rate-limits or both keys are already cold, this falls straight through to the same
+`llm_temporarily_unavailable` 503 -- never a retry loop, since looping against an already-scarce
+TPM budget is how the original 40-68s failures happened. Which key served each request, and every
+cooldown, is logged (`groq_call_served`, `groq_key_cooldown`, `groq_all_keys_cold`,
+`groq_all_keys_rate_limited`) so rotation is visible, not inferred. Unit-tested end to end
+(`tests/test_llm_key_rotation.py`, 6 tests) against a real `groq.RateLimitError`/`httpx.Response`,
+not a hand-rolled stand-in: primary-cold-secondary-serves, both-cold-returns-503-not-500,
+both-rate-limited-in-one-call, no-second-key-configured (behaves as before), a non-rate-limit
+error skips rotation entirely (a different key doesn't fix a timeout), and the `Retry-After` header
+is what actually sets the cooldown window, not a blind default.
+
+**To activate**: add `GROQ_API_KEY_2` on Render (a second, real Groq API key -- a second account,
+since the point is a second TPM budget, not a second name on the same one). Until that's set, this
+key rotation exists in the code and is proven correct in isolation, but production still runs on
+one key, same ceiling as before.
+
+**The measured new ceiling is a pending TODO, not filled in with a projection.** Expected ~4
+concurrent (16000 combined TPM / ~2886 tokens/request post-prompt-trim) if it scales cleanly, but
+"expected" is exactly the word this project's own discipline says not to write into a document as
+if it were "measured" -- see the concurrency-ceiling entry's own history of what happened the one
+time a projection got treated as a result. This gets filled in for real once `GROQ_API_KEY_2` is
+live on Render and the concurrency test can be re-run against production, whatever number that
+turns out to be.
