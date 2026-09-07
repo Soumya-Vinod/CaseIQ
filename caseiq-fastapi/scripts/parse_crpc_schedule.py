@@ -364,6 +364,91 @@ def reconstruct_rows(raw_lines: list[RawLine], diagnostics: list[dict]) -> list[
     return rows
 
 
+def merge_orphan_fragments(rows: list[ScheduleRow], diagnostics: list[dict]) -> list[ScheduleRow]:
+    """ATTEMPTED 2026-09-07, MEASURED NET NEGATIVE, NOT CALLED from the
+    pipeline below -- kept and documented as a dead end for the same reason
+    v1/v2 are kept in this file's own module docstring: the finding matters
+    more than the code. Do not wire this in without re-solving what's
+    described here first.
+
+    Diagnosis that motivated this (still correct as far as it goes): 461 of
+    726 raw rows (63.5%) had empty triable_by. Sampled across all 27 pages,
+    most shared one shape -- a bare trailing fragment ("and fine.", "10
+    years and fine.") as the entire offence_description, with cognizable_raw,
+    bailable_raw, AND triable_by all empty. `court_looks_done` (the
+    close-row signal) fires once the COURT cell looks grammatically
+    finished, but court is usually the SHORTEST column ("Ditto."), while the
+    punishment column (folded into offence_description) can still be
+    wrapping onto a further physical line after court has already rendered.
+    The row that closes at that point gets a real triable_by; the
+    punishment column's leftover next line becomes its own orphan "row"
+    with nowhere to put a court/cog/bail value that was already consumed.
+
+    The fix implemented: merge any three-way-empty orphan onto the end of
+    the immediately preceding row's offence_description (matched by
+    section_number, logged not guessed if it doesn't match), rather than
+    rewrite the close heuristic itself.
+
+    MEASURED, side by side against the unmodified baseline, same PDF, same
+    run: baseline 212/381 sections complete (55.6%, matches the 56% figure
+    already in docs); with this merge applied, 211/381 (55.4%). Diffed
+    directly: zero sections gained, one LOST (s.382). Net negative, not
+    "roughly the same" -- stopped here rather than pushed further, per
+    instruction.
+
+    Root cause of the stall, found by instrumenting the actual close-row
+    loop line by line on the abetment family (s.109-114) rather than
+    reasoning about it further: `close_row()` doesn't just leave SOME rows
+    incomplete -- for a genuinely complex multi-line conditional row (s.109:
+    5 physical lines, "According as offence abetted is..." wrapping across
+    3 of them), it can close ONE LINE TOO EARLY, capturing a real but
+    TRUNCATED triable_by ("Court by which offence" -- missing "abetted is
+    triable."). That row still counts as "complete" (triable_by is
+    non-empty), so `complete_rows()` never catches it. Worse: every
+    following "Ditto"-shaped row (110, 111, 113, 114 here) Ditto-carries
+    that SAME truncated value forward via `_resolve_col`'s designed
+    behaviour -- correct ditto semantics, propagating a wrong antecedent.
+    Confirmed at least once directly (s.118: a short, simple-looking row
+    carrying 50+ characters of clearly-inherited conditional text that
+    isn't its own) -- full extent not sized, named as a real, separate
+    finding rather than folded into the coverage-percentage question this
+    pass was actually asked to answer.
+
+    Why this isn't a bounded, safe fix: the ACTUAL defect is the close
+    heuristic itself closing early on certain multi-line conditional rows,
+    not (only) what happens to the leftover fragment afterward -- fixing it
+    means changing WHEN a row closes, which risks every row that currently
+    closes correctly, exactly the regression this function's own "don't
+    rewrite the close heuristic" caution was trying to avoid, and exactly
+    what the s.382 loss demonstrates happening even from this narrower,
+    supposedly-safer attempt. There is also a second, likely-compounding
+    issue not chased down in this pass: `extract_lines()`'s y-position line
+    clustering (2.5pt tolerance) produced only 3 raw lines for s.109's 5
+    printed physical lines -- some lines are being absorbed into neighbours
+    before row-reconstruction ever sees them, upstream of everything above.
+
+    Bottom line reported to the user: 56% stands. Not near a hard ceiling
+    from source-material illegibility (the text extracts cleanly) -- but
+    the actual fix needs the close heuristic and the line-clustering step
+    redesigned, not a post-processing patch, and that's bigger and riskier
+    than this pass's two-day, bounded-safe-fix framing assumed going in.
+    """
+    merged: list[ScheduleRow] = []
+    for r in rows:
+        is_orphan = not r.cognizable_raw.strip() and not r.bailable_raw.strip() and not r.triable_by.strip()
+        if is_orphan and merged:
+            prev = merged[-1]
+            if prev.section_number == r.section_number:
+                prev.offence_description = (prev.offence_description + " " + r.offence_description).strip()
+                continue
+            diagnostics.append({
+                "page": r.source_page, "section": r.section_number,
+                "warning": "orphan_section_mismatch_not_merged", "prev_section": prev.section_number,
+            })
+        merged.append(r)
+    return merged
+
+
 PARSER_VERSION = "crpc-schedule-v3"
 
 
@@ -411,10 +496,20 @@ def complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
 
 
 if __name__ == "__main__":
+    # merge_orphan_fragments (above) is NOT called here -- measured net
+    # negative (0 sections gained, 1 lost), see its own docstring for why.
     diags: list[dict] = []
     raw_lines = extract_lines(PDF_PATH, diags)
     rows = reconstruct_rows(raw_lines, diags)
     print(f"rows: {len(rows)}")
+
+    complete = complete_rows(rows)
+    all_sections = {r.section_number for r in rows}
+    complete_sections = {r.section_number for r in complete}
+    print(f"complete rows: {len(complete)}")
+    print(f"distinct sections: {len(all_sections)} total, {len(complete_sections)} with >=1 complete row "
+          f"({len(complete_sections) / len(all_sections):.1%})")
+
     errors = [d for d in diags if "error" in d]
     warnings = [d for d in diags if "warning" in d]
     print(f"diagnostics: {len(diags)} (errors={len(errors)}, warnings={len(warnings)})")

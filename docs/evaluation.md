@@ -152,6 +152,47 @@ out-of-scope entries and `docs/golden_set_results.json`'s full per-query breakdo
 any future attempt at this gets measured against — the same discipline this file has applied to
 every other claim in it.
 
+## HEADLINE RESULT 3: some CrPC First Schedule rows are complete AND wrong — found, not sized (2026-09-07)
+
+**A pattern worth naming explicitly, because this is the third time this project has hit the same
+failure class**: valid-looking output from broken internals. (1) The embedding-provider/corpus
+mismatch — a real float similarity score, computed from two incompatible vector spaces, that looked
+like a normal confidence number. (2) The abstention threshold, above — a similarity score that
+looks like evidence of "in scope," produced by vocabulary overlap with the wrong domain entirely.
+(3) This one: a CrPC First Schedule row with a non-empty, plausible-looking `triable_by` value that
+is not actually this row's own data. None of these three fail loudly. All three produce a
+confident, structurally correct answer that is substantively wrong — the specific failure shape
+this whole project is built to prevent, recurring at a different layer each time.
+
+**The finding**: attempting the CrPC coverage fix (own entry below) required instrumenting the
+schedule parser's row-boundary logic line by line, which surfaced this by accident, not by looking
+for it. For a genuinely complex multi-line conditional row (s.109, spanning 5 physical lines in the
+source), the close-row heuristic can fire one physical line too early — capturing a real but
+TRUNCATED `triable_by` value ("Court by which offence", missing "abetted is triable."). That row
+still counts as complete (the field is non-empty), so the existing coverage filter never catches
+it. Every following Ditto-shaped row in the same family (s.110, 111, 113, 114) then correctly
+Ditto-carries that SAME truncated value forward — `_resolve_col`'s ditto-propagation logic is
+doing exactly what it's designed to do; the antecedent it's faithfully copying is simply wrong.
+**Confirmed independently at s.118 via s.109**: a short, simple-looking row carrying 50+ characters
+of conditional court/cognizability text that is demonstrably not its own.
+
+**Unsized, deliberately — logged, not estimated.** How many of the 212 sections currently counted
+as "complete" carry a silently-wrong value this way is not known. Sizing it needs checking each
+complete row's `triable_by`/`cognizable_raw`/`bailable_raw` against the source PDF's own text for
+that specific section, not against the heuristics that produced the value in the first place — a
+different, larger task than this pass did, and not attempted here rather than guessed at.
+
+**What this changes**: the known CrPC gap was "56% coverage, the rest missing" — missing data
+produces an honest caveat, which is what the `fir-refused` situation guide already carried (in
+both `entitlementsIntro` and `closingNote` -- the same guide, not two separate guides). It is now "56%
+coverage, and an unknown fraction of that 56% may be silently wrong" — wrong data produces a
+confident, specific, incorrect answer (a real triable_by value, not an absence) with nothing in the
+response to distinguish it from a correct one. The situation guides' existing caveat still covers
+this in effect (it already tells the reader not to treat the page as the final word), but it was
+written for a coverage gap, not a correctness question — worth being precise about which one it's
+actually protecting against now, in that guide's own caveat context, without overstating what's
+confirmed (one verified instance, not a measured rate).
+
 ## Headline finding: similarity does not separate in-scope from out-of-scope queries
 
 **The sharpest result in this document.** A civil-law question this corpus has nothing to answer
@@ -2958,6 +2999,84 @@ and the failure surfaces as something other than a `groq.APIError` (e.g. a raw t
 else in the pipeline), it would still fall through to the generic handler. Left as-is pending the
 log read, rather than widening the catch blind.
 
+## Concurrency ceiling: settled by the Render log, and it's arithmetic, not a bug (2026-09-07)
+
+**The log read came back: `groq.RateLimitError`, HTTP 429, tokens-per-minute.** CPU contention
+from concurrent ONNX inference (hypothesis 2, above) is ruled out — the exception is Groq's own,
+not a raw timeout or cancellation. The blocking-event-loop partial ruling from the prior entry
+held: correctly-threaded work can still serialize on a fractional CPU core, but that was never
+what actually fired here.
+
+**The numbers turn this from "a scaling problem" into "arithmetic that doesn't scale."** The
+Groq API key backing this project has an 8,000 tokens-per-minute limit. One `/legal/query` request
+measured ~3,151 tokens (prompt + completion, Groq's own TPM accounting). `8000 / 3151 ≈ 2.5` —
+**call it 2 concurrent requests before the ceiling, not 5 and not 20.** The 5-concurrent and
+20-concurrent measurements two entries above weren't showing a gradual degradation curve; they
+were showing the same hard ceiling from two different distances. The log line that resolved this
+also ends `200 OK` — that request succeeded on the SDK's own retry, confirming retry-with-backoff
+partially works, it just has no headroom to work with at this TPM budget.
+
+**The one lever that's actually available — checked before acting on it, not assumed**: was the
+model naming (`openai/gpt-oss-120b` in the log) evidence of a second silent config drift, the
+EMBEDDING_PROVIDER incident's twin? Checked directly: no. `app/core/config.py`'s own default and
+local `.env` have both said `openai/gpt-oss-120b` since 2026-08-30, a deliberate, documented swap
+(this file, `docs/deployment.md`) after `llama-3.3-70b-versatile` was retired from Groq's catalog.
+The log naming that model is direct proof the intended config reached production, not evidence of
+drift — Groq can only echo back the model it actually served.
+
+**The token breakdown, measured rather than guessed at**, for the theft query specifically:
+
+| Component | Tokens | Share |
+|---|---|---|
+| Fixed system prompt (`_STRUCTURED_PROMPT`, before this fix) | 1,233 | ~40% |
+| RAG context, 6 retrieved sections (`RAG_TOP_K=6`) | 503 | ~16% |
+| Completion (real answer) | 706 | ~23% |
+
+The first proposal was to cut retrieved-section count or length — "likely padding." Measured, that
+was wrong: RAG context is only ~16% of the budget, and it's the one place a cut has a real quality
+cost, directly against the grounding work this project spent most of its effort on. **Fixed
+instead: the fixed system prompt, compressed for wording, not rules** (`app/services/llm.py`,
+`_STRUCTURED_PROMPT`) — every GROUNDING and NEVER-OPERATIONAL instruction preserved, the
+explanatory "why" prose behind each one cut, since an LLM needs the instruction, not the
+justification for it. Measured result: **1,233 → 968 tokens, a 265-token (21.5%) cut, paid on
+every single request unconditionally** — a materially better ratio than trimming the 503-token RAG
+context could have offered even fully zeroed out.
+
+**Re-verified against the exact C5 citation battery**, not assumed safe because the diff looked
+conservative: the same six real in-scope queries plus the two adversarial abstention cases (Titan,
+the right-of-way easement), re-run against production, diffing `citation_verification_stats`
+before/after the same way the original C5 entry did. Result: **20 citations, 0 stripped as
+nonexistent, 0 stripped as ungrounded** (a larger battery than the original 13, since the current
+embedder retrieves more real cross-references than the hash-embedder era did — defamation alone
+now cites 5 acts/sections instead of 3). Full backend suite unaffected: **108 passed, 0 failed.**
+
+**Honest arithmetic on what the trim actually buys**: `(3151 - 265) / 8000⁻¹ ≈ 2,886` tokens per
+request → `8000 / 2886 ≈ 2.77` concurrent requests before the ceiling. **Still rounds to 2.** A
+265-token cut on a 3,151-token request was never going to cross an integer boundary — reaching a
+real "3" needs total tokens near 2,666, roughly halving the request, which isn't available without
+cutting into either retrieval evidence or answer completeness. The trim is real and shipped; it is
+not a fix for the ceiling, and is not documented as one.
+
+**Two options considered and not taken, on purpose, not by default:**
+
+- **Raising `GROQ_MAX_TOKENS` down from 3,000.** Checked before dismissing: real completions
+  measured ~706 tokens for a straightforward query, well under the cap — the cap isn't what's
+  being spent, so lowering it wouldn't reduce actual TPM usage on a typical request, only risk
+  truncating a genuinely detailed answer on a complex one. Not a lever here.
+- **A semaphore capping concurrent Groq calls at 2, queuing anything beyond that into a slower
+  success instead of a 500/503.** Deliberately skipped, not an oversight. It's cheap to build (an
+  `asyncio.Semaphore` around one call site) but it smooths a burst band this project's actual
+  traffic isn't expected to hit in practice — a clean `503 llm_temporarily_unavailable` with a
+  "try again" message (already shipped, see above) is a defensible, demonstrable answer to
+  "what happens past the ceiling," and building queuing infrastructure to make that band invisible
+  is work spent on a demo-scale project's traffic shape that doesn't justify it. Revisit if real
+  usage ever shows concurrent bursts are actually common, not preemptively.
+
+**Bottom line, stated as what it is**: this Groq tier supports **~2 concurrent users** before a
+429. That is a tier constraint, not an implementation defect — the system-prompt trim narrows the
+gap by 21.5% and still rounds to the same number. The honest fix for "more than 2 concurrent
+users" is a higher Groq tier, not more engineering against this one.
+
 ## Two smaller fixes, same session
 
 - **`git_commit: null` in production `/health`, closed.** `app/core/build_info.py`'s own
@@ -2983,3 +3102,49 @@ log read, rather than widening the catch blind.
   owner's own turns are included only when the CURRENT caller's user_id actually matches that
   owner. Three new integration tests (`tests/integration/test_conversation_history.py`) cover the
   cross-user case directly — full suite: **108 passed, 0 failed.**
+
+## CrPC First Schedule coverage: a fix attempted, root-caused deeper, and reverted (2026-09-07)
+
+**56% (212/381 sections) stood before this entry and stands after it.** The parseability read that
+preceded this (own entry, same date) found the incomplete rows shared one dominant, uniform
+signature — an orphaned trailing punishment fragment with empty cognizable/bailable/court — and
+recommended attempting a fix rather than accepting 56% as a source-material ceiling, since the
+underlying PDF text extracts cleanly (`extract_text()`, confirmed directly, not scanned/OCR noise).
+That read was right about the text being clean and wrong about the fix being simple: implemented,
+measured, reverted, same day.
+
+**What was built**: `merge_orphan_fragments()` in `scripts/parse_crpc_schedule.py` — a
+post-processing pass appending any three-way-empty orphan row's leftover text onto the immediately
+preceding row (matched by section number), deliberately NOT touching the close-row heuristic
+itself, to avoid risking rows that already close correctly.
+
+**Measured, side by side against the unmodified baseline, same PDF, same run** (not estimated):
+baseline 212/381 sections complete; with the fix applied, 211/381. **Diffed directly: zero
+sections gained, one lost (s.382). Net negative.** Per instruction — stop and report the real
+number rather than push toward the 75-85% projection — stopped here. The fix is written and kept
+in the file, documented as a dead end (same convention this script's own v1/v2 history already
+uses), but is NOT wired into the pipeline; `PARSER_VERSION` stays `crpc-schedule-v3`, unchanged.
+
+**Why it stalled, found by instrumenting the actual close-row loop line by line** (the abetment
+family, s.109-114) rather than reasoning about it further: the real defect isn't only "some rows
+never get a court value" — the close heuristic can also fire one physical line too early on a
+genuinely complex multi-line row, producing a WRONG but non-empty value that then propagates via
+correct Ditto-carry-forward logic to every following row in the family. That's a significant enough
+finding on its own terms — not a detail of this fix attempt — to have its own entry: see "HEADLINE
+RESULT 3" near the top of this file. A second, likely-compounding issue surfaced but not chased
+down: `extract_lines()`'s y-position line-clustering (2.5pt tolerance) produced only 3 raw lines for
+s.109's 5 printed physical lines — some physical lines are being silently absorbed into neighbours
+before row-reconstruction ever sees them, upstream of the close-heuristic bug.
+
+**Read revised, honestly**: not a source-material ceiling (the earlier read's core claim holds —
+the text is clean, this is a parser problem, not 1970s-typesetting illegibility). But the actual
+fix needs the close heuristic AND the line-clustering step redesigned together, not a bounded
+post-processing patch — genuinely bigger and riskier than the two-day, safe-patch framing this
+pass started with. **Closed as out of scope, per revised read**: a combined redesign isn't a
+bounded task, and isn't attempted further here.
+
+**Consequence**: the cognizability caveat in the `fir-refused` situation guide does NOT come out —
+coverage is unchanged, so the condition for removing it was never met. Checked, not assumed (this
+also corrected an earlier miscount in this same pass: the caveat appears twice within that one
+guide, `entitlementsIntro` and `closingNote`, not once each across two separate guides). It now
+stands for two reasons, not one — see HEADLINE RESULT 3.

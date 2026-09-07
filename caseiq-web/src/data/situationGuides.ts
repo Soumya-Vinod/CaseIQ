@@ -34,6 +34,22 @@
  * even though ordering wasn't. A distressed person scanning this list on a
  * phone is served by position, not by a category that would also imply the
  * other three guides are for someone else.
+ *
+ * The cognizability caveat in `fir-refused` -- it appears twice in that one
+ * guide, bookending it (`entitlementsIntro` up top, `closingNote` at the
+ * bottom), not two separate guides -- is NOT a generic hedge -- don't
+ * simplify or remove it without re-reading docs/evaluation.md's "HEADLINE
+ * RESULT 3" entry (2026-09-07) first. It was written for one reason
+ * (CrPC's First Schedule is only 56% parsed -- an unclassified section is
+ * a real, honest gap) and now stands for a second, distinct one found
+ * later the same day: some fraction of that 56% -- unsized, at least one
+ * confirmed instance -- carries a cognizability/court value silently
+ * inherited from the WRONG row via a parser bug, not merely absent. The
+ * caveat's existing wording ("can depend on details a lawyer or legal aid
+ * clinic can check") already covers both cases in effect, but the two are
+ * different failure modes -- one is missing data, the other is confident,
+ * specific, wrong data -- and only the coverage half was true when this
+ * caveat was first written.
  */
 
 export interface GuideEntitlement {
