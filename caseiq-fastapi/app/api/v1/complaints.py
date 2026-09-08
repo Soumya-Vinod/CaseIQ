@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
@@ -9,6 +9,7 @@ from app.api.deps import CurrentUser, DB, OptionalUser
 from app.core.config import settings
 from app.core.exceptions import NotFoundError
 from app.core.logging import logger
+from app.core.ratelimit import limiter
 from app.models.complaint import Complaint, ComplaintStatus
 from app.schemas.complaint import ComplaintIn, ComplaintOut
 from app.services.llm import llm_service
@@ -35,7 +36,21 @@ def _out(c: Complaint, *, download_url: str | None) -> ComplaintOut:
 
 
 @router.post("", response_model=ComplaintOut, status_code=status.HTTP_201_CREATED)
-async def create_complaint(payload: ComplaintIn, db: DB, user: OptionalUser):
+# FIXED 2026-09-08 (docs/evaluation.md): second Groq-backed endpoint on the
+# same shared TPM budget as /legal/query -- the retrieval+drafting call a
+# few lines below runs through the identical llm_service. Provisional
+# number, same as /legal/query's -- no real traffic history to calibrate
+# against yet. Keyed by app.core.ratelimit's rate_limit_key, not slowapi's
+# IP-only default -- see that module's own docstring for why.
+#
+# The `response: Response` parameter is required here too -- see the
+# matching comment on app.api.v1.legal.process_query for why slowapi
+# crashes on every request (not just a 429) without it, found only by
+# actually triggering a live request against /legal/query first.
+@limiter.limit("8/hour")
+async def create_complaint(
+    payload: ComplaintIn, db: DB, user: OptionalUser, request: Request, response: Response,
+):
     c = Complaint(user_id=user.id if user else None, **payload.model_dump())
     db.add(c)
     await db.flush()

@@ -1,13 +1,14 @@
 import time
 from datetime import date
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request, Response, status
 
 from uuid import UUID
 
 from app.api.deps import DB, OptionalUser, client_ip
 from app.api.v1.conversations import _session_owner
 from app.core.exceptions import BlockedQueryError
+from app.core.ratelimit import limiter
 from app.core.logging import logger
 from app.core.security import hash_ip
 from app.models.audit import AuditLog
@@ -171,7 +172,30 @@ async def _history(db: DB, session_id: str, user_id: UUID | None = None) -> list
 
 
 @router.post("/query", response_model=QueryOut)
-async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: Request):
+# FIXED 2026-09-08 (docs/evaluation.md): the one endpoint this project's
+# whole shared Groq TPM budget runs through, and nothing capped how much
+# of it a single client could take. Provisional, stated as such, not a
+# calibrated number -- there's essentially no real traffic history yet to
+# calibrate against; revisit once there is. Keyed by app.core.ratelimit's
+# rate_limit_key (user_id when logged in, client_ip() otherwise), not
+# slowapi's own IP-only default -- see that module's own docstring for
+# why the default was wrong behind Render's proxy.
+#
+# FIXED 2026-09-08, caught only by actually triggering a live request (see
+# docs/evaluation.md): slowapi's per-route decorator injects rate-limit
+# headers onto whatever the wrapped function returns -- but this endpoint
+# returns a QueryOut model via response_model, not a Response, so slowapi
+# falls back to `kwargs.get("response")`. Without a `response: Response`
+# parameter for FastAPI to inject, that's None, and slowapi calls
+# `_inject_headers(None, ...)`, which raises unconditionally on EVERY
+# request, 200s included -- not just on a 429. The `response: Response`
+# parameter below is what gives slowapi something real to write headers
+# onto; FastAPI copies its headers/status onto the actual serialized
+# response afterwards.
+@limiter.limit("8/hour")
+async def process_query(
+    payload: QueryIn, db: DB, user: OptionalUser, request: Request, response: Response,
+):
     # FIXED 2026-09-06 (checklist item 6, Phase A): every LegalQuery row
     # below used to store payload.query RAW. Storage now gets the same
     # redaction applied before this ever left the process for Groq (see

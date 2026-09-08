@@ -1,10 +1,11 @@
 """FastAPI application factory."""
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1.router import api_router
 from app.core.build_info import get_build_info
@@ -70,7 +71,51 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # FIXED 2026-09-08 (docs/evaluation.md): SlowAPIMiddleware was never
+    # added -- app.state.limiter and the exception handler existed, but
+    # nothing actually enforced any limit on any route (confirmed by
+    # grep, not assumed: zero @limiter.limit usages anywhere before this).
+    # This is what makes app.core.ratelimit's default_limits (and any
+    # @limiter.limit override on a specific route) actually run.
+    app.add_middleware(SlowAPIMiddleware)
+
+    @app.exception_handler(RateLimitExceeded)
+    def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        # Same envelope every other error in this app uses
+        # (app.core.exceptions._envelope's shape) -- slowapi's OWN default
+        # handler returns {"error": "Rate limit exceeded: <detail>"}, a
+        # flat string that doesn't match anything else this API returns.
+        # `exc.detail` is slowapi's own human-readable description of
+        # which limit was hit (e.g. "5 per 1 hour") -- included so the
+        # message says something specific, not just "try again."
+        # `_inject_headers` is the same call slowapi's default handler
+        # makes -- Retry-After and the X-RateLimit-* headers, not
+        # reimplemented here, just kept.
+        #
+        # FIXED 2026-09-08, found only by reading slowapi.middleware's own
+        # source after a live trigger surfaced a related crash (see
+        # app.api.v1.legal.process_query's comment): a route with NO
+        # @limiter.limit decorator (i.e. every route except /legal/query and
+        # /complaints, covered only by this Limiter's default_limits) has
+        # its check run inside SlowAPIMiddleware's *synchronous* dispatch,
+        # which explicitly does `if inspect.iscoroutinefunction(handler):
+        # handler = _rate_limit_exceeded_handler` -- an async handler here
+        # would have been silently swapped for slowapi's own flat-string
+        # default on every one of those routes, while looking correctly
+        # wired everywhere else. A plain `def` (nothing below needs to be
+        # async) satisfies both call paths: Starlette's normal async
+        # exception middleware for /legal/query and /complaints' decorator-
+        # raised RateLimitExceeded, and this middleware's own manual sync
+        # dispatch for every default_limits-only route.
+        response = JSONResponse(
+            status_code=429,
+            content={"error": {
+                "code": "rate_limited",
+                "message": f"Too many requests ({exc.detail}) -- please wait and try again.",
+            }},
+        )
+        return request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
 
     app.add_middleware(
         CORSMiddleware,

@@ -3463,3 +3463,89 @@ coverage is unchanged, so the condition for removing it was never met. Checked, 
 also corrected an earlier miscount in this same pass: the caveat appears twice within that one
 guide, `entitlementsIntro` and `closingNote`, not once each across two separate guides). It now
 stands for two reasons, not one — see HEADLINE RESULT 3.
+
+## HEADLINE RESULT 6: rate limiting was fully wired and enforced nothing — sixth instance of the pattern (2026-09-08)
+
+`app/core/ratelimit.py` existed, was imported into `app/main.py`, set `app.state.limiter`, and had
+an exception handler registered for `RateLimitExceeded`. It looked configured. Confirmed by grep,
+not assumed: zero `@limiter.limit` usages anywhere in the codebase, and `SlowAPIMiddleware` — the
+one thing that makes `default_limits` actually run — was never added. Every route, including
+`/legal/query`, returned 200s exactly like it always did, indistinguishable from "working" until
+someone actually checked. Same shape as HEADLINE RESULTs 1-5: a config that produces valid-looking
+behaviour while quietly doing nothing.
+
+**Two latent bugs sat inside that inert scaffolding**, neither surfaced by the missing-middleware
+gap alone, both of which would have made the finished feature look configured while either doing
+nothing or limiting everyone as one client:
+
+1. `storage_uri` pointed at `settings.REDIS_URL` — already confirmed unprovisioned on Render
+   (`docs/deployment.md`). Turning the middleware on as-is would have pointed at a Redis that was
+   never there.
+2. `key_func` was slowapi's own `get_remote_address`, which reads `request.client.host` directly
+   and does not check `X-Forwarded-For`. Behind Render's reverse proxy that resolves to Render's
+   own internal address for every request — every anonymous client (most of this app's traffic)
+   would have collapsed onto one shared key, either rate-limiting everyone as a single client or,
+   depending on which side of the limit that shared counter landed on, not limiting anyone at all.
+
+**Fixed, not sequentially — all three problems (missing middleware, both latent bugs) closed
+together**, since finishing the middleware alone would have immediately surfaced both bugs:
+`storage_uri` omitted entirely (real slowapi in-memory default, the correct store for Render's
+current single free-tier instance — see `app/core/ratelimit.py`'s own docstring for the
+multi-instance failure mode this doesn't yet need to handle); `key_func` replaced with
+`rate_limit_key()` — `user:{sub}` from a directly-decoded JWT when a valid bearer token is present,
+`ip:{client_ip()}` otherwise, reusing `app.api.deps.client_ip()` (already correct, already used for
+audit logging) instead of slowapi's blind default. Both `/legal/query` and `/complaints` carry
+`@limiter.limit("8/hour")` — `/complaints` because it's a second Groq-backed endpoint on the same
+shared TPM budget (`create_complaint` calls the same `llm_service` retrieval+drafting path
+`/legal/query` does). Every other route (read-only: sections, search, cognizability) is covered
+automatically by the `Limiter`'s `default_limits=["200/hour"]` once `SlowAPIMiddleware` is active,
+without a per-route decorator. **Both numbers are stated as provisional, not calibrated** — there
+is essentially no real production traffic history yet to calibrate against; revisit once there is.
+
+**Then, actually triggering a limit — required, not optional, and it found two more bugs the fix
+above didn't touch, neither visible from `headers_enabled=True` or from reading the decorator's own
+docs:**
+
+- **Bug 3: turning the fix on would have 500'd every enforced request, 200s included, not just
+  429s.** slowapi's `@limiter.limit(...)` decorator injects rate-limit headers onto whatever the
+  wrapped function returns; `process_query` and `create_complaint` return a `response_model`
+  object, not a `Response`, so slowapi falls back to `kwargs.get("response")` — and neither function
+  had a `response: Response` parameter for FastAPI to inject one. `_inject_headers(None, ...)` was
+  called on every single request, raising `Exception: parameter 'response' must be an instance of
+  starlette.responses.Response` unconditionally. First real request sent against the real app
+  hit this immediately. Fixed by adding a `response: Response` parameter to both endpoint
+  signatures — FastAPI copies its headers/status onto the actual serialized response afterward, the
+  documented pattern for slowapi-decorated endpoints that don't return a raw `Response`.
+- **Bug 4: the project's own error envelope only ever reached two of the covered routes.**
+  `SlowAPIMiddleware.dispatch` defers entirely to a route's own `@limiter.limit` decorator when one
+  exists (`/legal/query`, `/complaints`) — those raise `RateLimitExceeded` as a normal exception,
+  handled correctly by Starlette's real async exception middleware. Every other route (covered only
+  by `default_limits`) is checked inside the middleware's own *synchronous* `dispatch`, which
+  resolves the registered handler itself and explicitly does: if the handler is a coroutine, discard
+  it and fall back to slowapi's own bare-string default handler instead. The original
+  `async def _rate_limit_handler` was exactly that coroutine — it would have silently applied to
+  `/legal/query` and `/complaints` while every other rate-limited route (the entire `default_limits`
+  surface) fell back to slowapi's own un-enveloped `{"error": "Rate limit exceeded: <detail>"}`,
+  correct-looking on the two routes anyone would think to test and wrong everywhere else. Fixed by
+  making the handler a plain `def` — nothing in its body is actually async, and a sync handler
+  satisfies both Starlette's normal dispatch and slowapi's own manual one.
+
+**Verified live, both paths, against the real `app.main.app` object** (real DB, real middleware,
+real decorators — not a mock, and not assumed from `headers_enabled=True`): the real in-memory
+counter was pre-seeded directly (same storage, same keys the real request path uses) to one hit
+below each limit, avoiding ~24 real Groq-backed calls just to reach the boundary by brute force,
+then exactly the boundary pair of real HTTP requests was sent per path.
+
+- `/legal/query`, request #8 (decorator path): `200`, `X-RateLimit-Limit: 8`,
+  `X-RateLimit-Remaining: 0`. Request #9: `429`,
+  `body: {"error": {"code": "rate_limited", "message": "Too many requests (8 per 1 hour) -- please
+  wait and try again."}}`, `Retry-After: 3586` (seconds to reset, consistent with an ~1-hour
+  window).
+- `/health`, request #200 (`default_limits` path, no per-route decorator): `200`,
+  `X-RateLimit-Limit: 200`, `X-RateLimit-Remaining: 0`. Request #201: `429`, same envelope shape —
+  `{"error": {"code": "rate_limited", "message": "Too many requests (200 per 1 hour) -- please wait
+  and try again."}}`, `Retry-After: 3600` — confirming the sync-handler fix actually closed Bug 4,
+  not just in theory.
+
+Full suite re-run after every fix in this entry: **132 passed, 0 failed** — same baseline as before
+this work started, both before and after the two additional bugs found by live-triggering.

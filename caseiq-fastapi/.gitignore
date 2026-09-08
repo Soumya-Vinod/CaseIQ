@@ -6,5 +6,15 @@ venv/
 .env
 .pytest_cache/
 media/
-documents/*.pdf
 *.log
+
+# documents/*.pdf deliberately tracked, not ignored (2026-09-08): the 5
+# source PDFs (BNS/BNSS/BSA/CrPC/IPC, ~6.85MB total) used to be excluded
+# here, but the exclusion was unexplained boilerplate from this repo's
+# first commit (git log -p --follow), not a documented licensing or size
+# decision -- checked directly: no LICENSE file anywhere in the repo, no
+# redistribution/copyright note in documents/provenance.json or any docs
+# file. provenance.json's source_url + source_sha256 per act is a re-
+# download path, not a backup -- it's a bet that five government URLs
+# resolve to byte-identical files years from now. 6.85MB is nothing;
+# tracking the real files directly is safer than depending on that bet.
