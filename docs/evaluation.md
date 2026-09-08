@@ -271,6 +271,260 @@ strongest concrete argument in this document for real embeddings or hybrid retri
 threshold tuning. Full detail, and the 0.55/0.60 retest that confirmed it, under "Confidence score
 and abstention" below.
 
+## HEADLINE RESULT 5: abstention doesn't partially detect out-of-domain — outside three domains, it doesn't detect it at all (2026-09-08)
+
+**The finding, stated precisely, not softened**: expanded the out-of-scope golden set from 10
+questions (5 domains) to 45 (13 domains: IP, labor, company, tax, constitutional, family/
+succession, insurance, immigration, environmental, banking, education, consumer, property/
+tenancy), each verified against the live corpus before being kept, split train/held-out
+*before* any measurement (32/13, held-out weighted toward the harder cases by construction —
+every domain's adversarial example landed there). Re-ran the exact production abstention
+condition (`is_abstention(sections) or is_civil_scope_mismatch(question)`, imported directly
+from `app.services.retrieval`, not reimplemented) against the full set.
+
+**6/45 (13.3%). Held-out: 0/13 (0%). Adversarial: 0/5 (0%).** By domain: `company`, `family`,
+and `property` — the three domains the civil-phrase list happens to cover — score 2/4 each.
+**The other ten domains score zero, without exception**, whether or not they had an obvious
+keyword to catch: banking, constitutional, consumer, education, environmental, immigration,
+insurance, IP, labor, tax. This is not "abstention is weaker on out-of-domain than on
+gibberish" — that framing (HEADLINE RESULT 2) undersold it. Outside the three domains a
+keyword list happened to be built for, this mechanism does not detect out-of-domain at all.
+
+**A second, independent finding, worth naming on its own terms**: the original 5/10 (50%) was
+never a real measurement of this system's out-of-domain detection — it was a sampling
+artifact. Ten questions drawn from five domains, three of which already had dedicated
+keyword coverage, produced a number roughly **twice as good as the true rate** (50% vs. the
+real 13.3%) purely because of which domains got sampled, not because the underlying detection
+was actually that good. **Same family as the other four headline findings in this file — a
+measurement that looked valid because nobody checked what it sampled.** The first three were
+about data that looked correct and wasn't (an embedding score, an abstention threshold, a
+Ditto-propagated value); the fourth was a feature that looked shipped and wasn't reachable;
+this one is a *number* that looked like evidence and was actually a coin flip weighted by
+which domains happened to get written down first. Worth stating as its own lesson because the
+failure mode generalizes past this one metric: any golden set authored by whoever's already
+thinking about the problem will oversample the cases that occurred to them, which are
+disproportionately the cases already partly handled — a smaller, quieter version of the same
+mistake, not a coincidence next to it.
+
+### Option E: shipped, a real but partial mitigation
+
+Four options were scoped against this problem before any of them were built: (A) expand the
+civil-phrase keyword net -- cheapest, but the two biggest misses are company law and
+constitutional law, domains the phrase list was never meant to cover, and every phrase added
+needs its own false-positive audit; (B) a classifier over the existing 384-dim query embeddings
+-- needs real training data (tens to 100+ negatives, well past what existed), circular if
+evaluated on its own training set; (C) a cheap LLM gate before the main answer call -- measured
+at ~100 tokens/call, small individually but a full second Groq round-trip on every query, real
+cost against the concurrency ceiling this project just finished measuring; (E) a free signal
+already sitting in the existing candidate pool, unused. Of the four, only E was built this
+pass, deliberately: free (reuses the 20-wide pre-fusion candidate pool `_vector_candidates()`
+already fetches, no new query, no new LLM call), and its own measurement cleared a real bar
+before shipping. B and C remain scoped, not built -- see below.
+
+`app/services/retrieval.py`: `_top_hit_margin()` computes `top1 − mean(rest)` over the raw
+pre-fusion vector pool (NOT the fused top-6 `is_abstention` sees — measuring against one and
+shipping against the other would have made the measurement meaningless). Two variants tested:
+top1-minus-2nd-best overlaps almost completely between in-scope and out-of-scope (in-scope mean
+0.041, OOS mean 0.022) and is not usable at any threshold. Top1-minus-mean-of-rest is genuinely
+separated (in-scope mean 0.156, OOS mean 0.074, roughly double) — this is what shipped, as
+`has_ambiguous_top_hit()`, OR'd alongside `is_abstention`/`is_civil_scope_mismatch` at both call
+sites (`app/api/v1/legal.py`, `app/api/v1/complaints.py`), never replacing either.
+
+**Shipped at threshold 0.05 — verified against the shipped code, not just the scratch
+measurement**: `scripts/eval_golden_set.py` (now importing `has_ambiguous_top_hit` directly,
+reporting an in-scope false-positive count on every run) reproduces exactly: **6/45 → 15/45
+(33.3%) overall, 0/13 → 3/13 (23.1%) held-out, adversarial 0/5 → 1/5.** Cost: **exactly one
+in-scope false positive across all 44** — full suite 127 passed, 0 failed (8 new unit tests for
+the pure computation, `tests/test_ambiguous_top_hit.py`).
+
+**The false positive, named, not left for someone to rediscover as a mystery**: *"What is
+anticipatory bail?"* — a real in-scope procedural question. Its candidate pool is naturally
+flat: many sections in this corpus are genuinely bail-adjacent (arrest, custody, remand,
+release procedure), so the best match doesn't stand out numerically from several other
+legitimately-relevant sections the same way a query with one dominant correct answer does. Not
+a retrieval defect — the top hit is still correct — just this signal's specific, known blind
+spot. If this query (or one shaped like it) is ever reported as wrongly declining to answer,
+this threshold is why, not a new bug.
+
+**Deliberately not tuned past 0.05.** At 0.08 the combined catch rate reaches 29/45 (64%) and
+held-out 7/13 (54%) — better coverage — but the in-scope false-positive count jumps to 10/44
+(22.7%). Refusing to answer roughly one in four real legal questions to catch more out-of-scope
+ones is a worse trade than the problem being solved. 0.05 is the only measured point where the
+cost is small enough to call this a strict improvement rather than a new tradeoff to defend.
+
+**Still a partial mitigation, stated honestly against this entry's own number**: even combined
+with E, the full-set rate is 33.3%, held-out 23.1% — real, roughly doubled, and still means most
+out-of-scope questions in ten of these thirteen domains get answered rather than declined. B and
+C remain scoped, not built, and are the next real levers now that there's a golden set large
+enough to measure them against honestly.
+
+### Option C measured: false-positive rate first, per instruction — not built or shipped
+
+C's own scoping said the decisive number before committing to anything is the in-scope
+false-positive rate. Measured directly, not estimated: the exact minimal gate prompt from the
+scoping (~100 tokens, "is this Indian criminal law -- CRIMINAL or OTHER") called against
+`openai/gpt-oss-120b` directly (bypassing the app -- this is a measurement, nothing wired into
+production), against the full 44 in-scope set and the out-of-scope **train split only (32 of
+45)** — held-out untouched, per instruction, reserved for choosing between finished options
+later.
+
+**The most valuable finding in this measurement isn't the token count — it's what a shipped
+version of the original estimate would have done in production.** The first two attempts at this
+measurement returned *0/76 usable verdicts* — `max_tokens=5`, sized for "one word out," was
+consumed entirely by an internal `reasoning` field this model produces before any visible
+`content`, every single call, `finish_reason="length"` every time, silently. `max_tokens=40`
+still truncated 100% of calls. Had C been built and shipped straight from the original scoping
+estimate (a defensible-looking ~100-110 tokens, "cheap gate before retrieval," no reason at the
+time to suspect otherwise), every gate call in production would have returned an empty verdict,
+silently, with no exception, no error, no log line pointing at the cause — and depending only on
+which way the calling code happened to default an unresolved verdict, one of two outcomes:
+**fail open** (treat "no verdict" as "not out-of-scope," and the entire gate is permanently inert
+— C shipped, tested green, doing nothing, forever) or **fail closed** (treat it as "out-of-scope,"
+and every single query gets abstained — a full-outage bug wearing an abstention message as a
+disguise). Neither failure mode would look like a crash. Both would look like normal, intended
+behavior from outside the process.
+
+**This is the fifth instance of the same class this project keeps finding, not a new one**:
+the embedding-provider/corpus mismatch, the Ditto-propagated CrPC data, the unreachable profile
+UI, and the sampling-artifact golden set were all valid-looking output, a valid-looking feature,
+or a valid-looking number produced by something quietly not doing what it looked like it was
+doing. This is the same shape one layer earlier — a *config value* (`max_tokens=5`, chosen from
+an estimate that was never actually run) that looks reasonable and produces silently
+wrong-or-absent behavior, catchable only by actually running the real call against the real
+model and reading what came back, which is exactly what caught it here and exactly what none of
+the other four were caught by anything less than.
+
+**Measured cost, 76 complete calls**: mean **329.7 tokens/call** (median 320, max 484) — roughly
+**3x** the original ~100-110 token estimate, almost entirely reasoning overhead (mean 150.9
+reasoning tokens, up to 307 on the hardest query). Applied to the concurrency arithmetic
+`docs/deployment.md` just finished measuring: a gate on every query moves the per-query total
+from ~2,886 to ~3,216 tokens (+11%), and the combined 16,000 TPM ceiling from ~5.5 to ~5.0
+concurrent — a real, if modest, reduction in the headroom the two-key failover work just bought.
+
+**The numbers themselves**:
+- **In-scope false positives: 3/44 (6.8%)** — worse than E's 1/44 (2.3%). Named, not left
+  generic: *"What is the order for maintenance of wives and children?"*, *"What is relevant
+  under the law of evidence?"*, *"What is the presumption of legitimacy of a child?"* — all
+  three real in-scope questions (BNSS 144/CrPC 125, BSA 3, and a BSA evidentiary presumption
+  respectively) that read as civil/family-law-adjacent on their surface wording alone, without
+  the retrieved-section context the main pipeline has and this isolated gate doesn't.
+- **Out-of-scope (train split): 32/32 (100%).** Every one of the 32 train-split out-of-scope
+  questions, across all 13 domains, correctly identified as OTHER — a dramatically higher catch
+  rate than E's 12/32 (37.5%) on the identical 32 questions.
+
+**Not committed to anything further, per instruction.** This is the false-positive number, not
+a build decision. 6.8% is a real, usable-looking rate on its face (much better than a naive
+similarity threshold's 50-80%), but it's nearly 3x E's cost for one specific case and it's a
+full second Groq round-trip charged against a TPM budget this project just spent real effort
+recovering headroom on.
+
+### C against held-out and register shift — the train number didn't hold up the way it was doubted to fail, either
+
+The concern raised before trusting 32/32: the train questions were authored in this session, to
+a domain taxonomy, specifically to read as out-of-domain — an LLM recognising questions written
+to be recognisable isn't the same as detecting real ones. Checked directly, two ways, before
+trusting the train number for anything.
+
+**Against the 13 held-out (weighted toward the hardest cases by construction — all 5 adversarial
+examples live here): 12/13 (92.3%), adversarial-only 4/5 (80%).** Not a sharp drop from train's
+100% — barely a drop at all. The one miss: the banking/hacker adversarial case ("A hacker
+fraudulently withdrew money from my bank account, and the bank is refusing to refund me") —
+verdict CRIMINAL, the fraud/hacking vocabulary winning over the actual ask (a bank-liability
+dispute), exactly the failure mode adversarial cases are built to surface.
+
+**Against 5 train questions rewritten the way someone would actually type them** (casual,
+misspelled, partial, Hinglish where realistic — e.g. *"neighbour ne wall bana diya blocking my
+road access kya karu"* for the original right-of-way question) — **0/5 flipped.** Same verdict,
+same content, different register, every time. The authorship-style concern doesn't hold, at
+least at this sample size — worth stating plainly since it was a real, reasonable doubt to have
+and it earned a real answer rather than staying an open question.
+
+### B, built and measured, not just scoped
+
+Logistic regression over the exact 384-dim query embeddings production already computes
+(`app.services.embeddings.embedder`, same text construction `semantic_search` uses) — no new
+infrastructure, the vector already exists for every query. Trained on the 44 in-scope + 32
+OOS-train (76 examples). **In-scope false positives measured by leave-one-out cross-validation**
+(each of the 44 evaluated by a model trained on the other 43 plus all 32 negatives — evaluating
+on data the final model saw during training would repeat exactly the leakage risk this whole
+pass exists to avoid): **0/44.** A single final model trained on the full 76 evaluated against
+the untouched 13 held-out: **11/13 (84.6%) caught, adversarial-only 5/5 (100%)** — including the
+banking/hacker case C missed. Same 5 casual-rephrased pairs as C: **0/5 flipped.**
+
+### All three, side by side, against held-out — nothing picked
+
+| | in-scope false positives | held-out caught | adversarial caught | register-shift flips | cost |
+|---|---|---|---|---|---|
+| **E** (shipped, 0.05) | 1/44 (2.3%) | 3/13 (23.1%) | 1/5 (20%) | not applicable | free, already computed |
+| **C** (measured, not built) | 3/44 (6.8%) | 12/13 (92.3%) | 4/5 (80%) | 0/5 | ~330 tokens + a full Groq round-trip, every query |
+| **B** (built, not shipped) | 0/44 (LOO-CV) | 11/13 (84.6%) | 5/5 (100%) | 0/5 | free at inference; a retrain/redeploy step exists |
+
+Read plainly, not steered toward a conclusion: **E is cheapest and safest but catches the least
+by a wide margin.** **C and B both dramatically outperform E on catch rate, especially on the
+adversarial cases that are the actual point of this exercise** — B slightly ahead on false
+positives and adversarial coverage, C slightly ahead on raw held-out catch, both essentially tied
+on cost of being wrong. **C costs real, ongoing tokens and a second network round-trip on every
+query, permanently, against a TPM budget this project just finished fighting to extend.** **B
+costs nothing at inference but carries a structural risk neither E nor C has**: it's trained
+against one specific embedding space, and this project has already lived through what happens
+when an embedding provider changes underneath a system that assumed it wouldn't (`HEADLINE
+RESULT` at the top of this file) — a future embedder swap would silently invalidate B's decision
+boundary with no error, the same failure shape, one layer higher. Sample sizes throughout stay
+small (13 held-out, 5 casual pairs, 5 adversarial) — real numbers, not projections, but a
+handful of examples each, not a claim of statistical power beyond what 13 and 5 actually carry.
+
+### Decision: B shipped, alongside E, not replacing it — C measured and rejected
+
+**Shipped**: B, OR'd in as a fourth independent signal alongside `is_abstention`,
+`is_civil_scope_mismatch`, and E's `has_ambiguous_top_hit` — never replacing any of them (E is
+free and catches real cases B doesn't; kept). `app/services/domain_classifier.py` evaluates the
+trained logistic regression with four lines of pure Python (a dot product and a sigmoid) — no
+scikit-learn import on the app's own request-handling path; scikit-learn stays a training-time-
+only dependency of `scripts/train_domain_classifier.py`, same pattern this project already uses
+for pdfplumber/pymupdf in `requirements.txt`. Reasoning: 0/44 false positives under leave-one-out
+CV, 5/5 adversarial caught (including the banking/hacker case C missed), free at inference — C's
+one additional held-out catch (12/13 vs. B's 11/13) wasn't worth a second Groq round-trip on
+every query against a TPM budget this project just spent a session recovering.
+
+**The one real objection, fixed by construction, not left as a caveat**: a classifier's decision
+boundary means nothing against a different embedding space than the one it was trained on — the
+exact failure shape `HEADLINE RESULT` (top of this file) already cost a debugging session once.
+`scripts/train_domain_classifier.py` stamps the artifact with the embedding model's own identity
+at training time; `assert_domain_gate_matches_embedder`, called from `app/main.py`'s lifespan
+alongside `assert_embedding_config_matches_corpus`, fails loudly at boot on a mismatch. **Verified
+live, not just written**: corrupted the artifact's stamped `embedding_model_id`, ran the real
+lifespan startup path, confirmed it raises `DomainGateConfigMismatch` with the real running
+embedder's identity in the message before anything else in the app can serve a request; restored
+the artifact and confirmed the suite is clean again. An embedder swap now fails loudly by
+construction, the same way the corpus mismatch does — the whole lesson of the headline results in
+this file, applied to the newest thing added to the pipeline rather than left as the next one to
+be found live.
+
+**C: measured, not built, not omitted from the record.** In-scope false positives 3/44 (6.8%,
+worse than both E and B — the three named questions, `maintenance of wives and children`,
+`relevant under the law of evidence`, `legitimacy of a child`, are ordinary in-scope questions,
+not edge cases, which is exactly why this weighed against shipping it more than the raw
+percentage suggests). Held-out 12/13 (92.3%) and adversarial 4/5 (80%) — genuinely strong,
+confirmed not to be an authorship-style artifact (0/5 flips on casual/Hinglish rephrasing of the
+same content). Real cost ~330 tokens and a full second Groq round-trip per query, on top of a
+concurrency ceiling this project just finished recovering headroom on, for numbers B matches or
+beats at zero marginal inference cost. Rejected on that tradeoff, not on capability — if E and B
+both regress or a future measurement changes the concurrency picture, C's numbers are here to
+revisit, not re-derive from scratch.
+
+**Verified against the shipped code, not the scratch measurement, same discipline as E's own
+verification**: `scripts/eval_golden_set.py` (now importing `has_classifier_flag` directly,
+alongside `has_ambiguous_top_hit`) reproduces the LOO estimate on a same-data self-check (0/44
+in-scope false positives) and the combined production result: **44/45 (97.8%) out-of-scope
+overall — train 32/32, held-out 12/13, adversarial 5/5.** Only one out-of-scope question survives
+across the entire 45-question set: *"Can a public university expel a student for their political
+opinions?"* (constitutional, held-out) — missed independently by E, C, and B alike, the one case
+none of the three signals this project has now tried actually catches. **Recall@5/MRR on the 44
+in-scope side confirmed unchanged: 0.909/0.730** — B sits in the same retrieval path E does and
+changes nothing about which sections get retrieved, only whether the pipeline answers at all.
+Full suite: **132 passed, 0 failed** (5 new unit tests for the pure classifier math and the
+startup-assertion contract, on top of E's existing 8).
+
 ## Case study: one query, five stages, the whole project
 
 *"What is the punishment for defamation?"* — the project's very first recorded test — traced

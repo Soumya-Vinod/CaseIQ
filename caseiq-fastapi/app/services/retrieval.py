@@ -20,6 +20,7 @@ Two independent filters apply to every query here, always:
 from __future__ import annotations
 
 import re
+import statistics
 from datetime import date, timedelta
 
 from sqlalchemy import and_, func, or_, select
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.corpus import Act, JudicialStatus, SectionVersion
 from app.models.offence_attributes import OffenceAttributes
+from app.services.domain_classifier import in_scope_probability, DOMAIN_GATE_THRESHOLD
 from app.services.embeddings import embedder
 
 # Hand-curated stopgap for a semantic-embedding gap, added 2026-08-30 after
@@ -483,6 +485,89 @@ async def _lexical_candidates(
     return out
 
 
+def _top_hit_margin(vector_hits: list) -> float | None:
+    """Option E (docs/evaluation.md, 2026-09-08): how much the best vector
+    candidate stands out from the rest of its own 20-wide pre-fusion pool
+    (`_CANDIDATE_POOL`), NOT the fused/top-K list is_abstention sees --
+    computed here, right where `vector_hits` already exists, because
+    measuring this against anything else (e.g. re-deriving it from the
+    already-fused top 6) would be measuring different data than what was
+    actually validated against the golden set. `None` when there's under
+    2 candidates to compare (nothing to take a margin against).
+
+    Deliberately top1 minus the MEAN of the rest, not top1 minus 2nd-best:
+    measured both. top1-vs-2nd overlaps almost completely between in-scope
+    and out-of-scope queries (in-scope mean 0.041, OOS mean 0.022 --
+    directionally right, useless in practice: any threshold catching a
+    real share of OOS also flags 50-80% of real in-scope queries). top1
+    minus the mean of the other 19 is a genuinely different, better-
+    separated signal (in-scope mean 0.156 vs OOS mean 0.074, roughly 2x)
+    -- see `has_ambiguous_top_hit` for the calibrated threshold and what
+    it actually buys.
+    """
+    sims = sorted((h[3] for h in vector_hits), reverse=True)
+    if len(sims) < 2:
+        return None
+    return sims[0] - statistics.mean(sims[1:])
+
+
+# Calibrated against docs/golden_set.json's 45-entry out-of-scope set (13
+# domains, held out per docs/evaluation.md's split) plus the 44 in-scope
+# set -- not guessed. 0.05 is the most conservative measured operating
+# point: combined with the existing checks it moves the out-of-scope catch
+# rate from 6/45 to 15/45 and held-out specifically from 0/13 to 3/13, for
+# exactly ONE identifiable in-scope false positive across all 44:
+# "What is anticipatory bail?" -- a real in-scope procedural question
+# whose candidate pool is naturally flat (many genuinely bail-adjacent
+# sections cluster close together, no single standout), not a defect in
+# retrieval itself, just this signal's known blind spot. Deliberately NOT
+# tuned past this: 0.08 nearly triples the false-positive rate (22.7%,
+# 10/44) for proportionally less additional coverage -- worse than the
+# problem it would be solving. If "What is anticipatory bail?" (or a
+# similarly-shaped query) is ever reported as wrongly abstaining, this
+# threshold is why -- it is a known, accepted cost, not a bug to chase.
+AMBIGUOUS_TOP_HIT_MARGIN = 0.05
+
+
+def has_ambiguous_top_hit(sections: list[dict]) -> bool:
+    """True when the top retrieved section doesn't meaningfully stand out
+    from the rest of its own candidate pool -- a second, independent
+    signal from `is_abstention`'s similarity floor and
+    `is_civil_scope_mismatch`'s phrase list, meant to be OR'd alongside
+    both at the call site (app.api.v1.legal, app.api.v1.complaints), not
+    folded into either. `top_hit_margin` is attached by `semantic_search`
+    onto every returned section (a query-level value, repeated per
+    section rather than carried in a separate return value, to avoid
+    changing `semantic_search`'s return type for its other 14 call sites
+    that never look at it) -- absent (`None`) on the rare all-lexical
+    fallback path (`keyword_search`), which correctly never triggers this.
+    """
+    if not sections:
+        return False
+    margin = sections[0].get("top_hit_margin")
+    return margin is not None and margin < AMBIGUOUS_TOP_HIT_MARGIN
+
+
+def has_classifier_flag(sections: list[dict]) -> bool:
+    """Option B (docs/evaluation.md, HEADLINE RESULT 5's follow-up): a
+    fourth, independent signal -- a small logistic-regression classifier
+    over the same query embedding `semantic_search` already computes
+    (app.services.domain_classifier), OR'd alongside is_abstention,
+    is_civil_scope_mismatch, and has_ambiguous_top_hit at both call sites,
+    replacing none of them. Measured before shipping (docs/evaluation.md's
+    side-by-side table): 0/44 in-scope false positives under leave-one-out
+    CV, 5/5 adversarial out-of-scope cases caught. Same attach-to-every-
+    section convention as `top_hit_margin` -- a query-level value, not a
+    per-section one, repeated rather than changing this function's return
+    type; absent on the all-lexical `keyword_search` fallback, which
+    correctly never triggers this.
+    """
+    if not sections:
+        return False
+    prob = sections[0].get("classifier_in_scope_prob")
+    return prob is not None and prob < DOMAIN_GATE_THRESHOLD
+
+
 async def semantic_search(
     db: AsyncSession, query: str, top_k: int | None = None,
     as_of: date | None = None, incident_date: date | None = None,
@@ -508,6 +593,9 @@ async def semantic_search(
 
     vector_hits = await _vector_candidates(db, qvec, as_of, incident_date, _CANDIDATE_POOL)
     lexical_hits = await _lexical_candidates(db, expanded_query, as_of, incident_date, _CANDIDATE_POOL)
+    top_hit_margin = _top_hit_margin(vector_hits)
+    # Option B -- same qvec already computed above, no second embedding call.
+    classifier_in_scope_prob = in_scope_probability(qvec)
 
     scores: dict[tuple, float] = {}
     rows: dict[tuple, tuple[SectionVersion, str, float | None, dict | None]] = {}
@@ -543,6 +631,12 @@ async def semantic_search(
                    lexical_hit=key in lexical_hit_keys)
         for key in ordered_keys
     ]
+    # Query-level values, attached to every returned section rather than
+    # changing this function's return type -- see has_ambiguous_top_hit's
+    # and has_classifier_flag's own docstrings for why.
+    for r in results:
+        r["top_hit_margin"] = top_hit_margin
+        r["classifier_in_scope_prob"] = classifier_in_scope_prob
 
     if results:
         return await attach_offence_attributes(db, results)

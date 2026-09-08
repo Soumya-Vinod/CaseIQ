@@ -25,6 +25,8 @@ from app.services.llm import llm_service
 from app.services.pii_redaction import RedactionSession, restore_deep, restore_text
 from app.services.retrieval import (
     build_rag_context,
+    has_ambiguous_top_hit,
+    has_classifier_flag,
     implies_past_incident,
     is_abstention,
     is_civil_scope_mismatch,
@@ -274,8 +276,30 @@ async def process_query(payload: QueryIn, db: DB, user: OptionalUser, request: R
     # rules), and C5 backstops anything that slips through anyway -- this
     # only changes whether the LLM is asked, never what it's allowed to
     # answer with.
-    abstained = (is_abstention(sections) or civil_scope_mismatch) \
-        and not touches_violence_or_harm(payload.query)
+    # Option E, shipped 2026-09-08 (docs/evaluation.md): a third,
+    # independent signal alongside the similarity floor and the civil-
+    # phrase list -- "does the top hit stand out from its own candidate
+    # pool" catches some real out-of-scope queries neither existing check
+    # does (measured: 6/45 -> 15/45 on the golden set's out-of-scope set,
+    # 0/13 -> 3/13 on the held-out slice specifically), for exactly one
+    # identifiable in-scope false positive across all 44 in-scope
+    # queries -- see has_ambiguous_top_hit's own docstring for which one
+    # and why, before treating a report of it as a new bug.
+    #
+    # Option B, shipped 2026-09-08 (docs/evaluation.md): a fourth,
+    # independent signal -- a small classifier over the same query
+    # embedding, OR'd in alongside the other three, replacing none of
+    # them (E is free and catches cases this doesn't; kept). Measured
+    # against a held-out set none of the shipping decision was based on:
+    # 0/44 in-scope false positives (leave-one-out CV), 5/5 adversarial
+    # out-of-scope cases caught including one E and the LLM-gate option
+    # both missed. See app.services.domain_classifier's own docstring for
+    # the embedder-identity assertion this depends on -- a mismatch there
+    # crashes startup rather than silently serving wrong verdicts.
+    abstained = (
+        is_abstention(sections) or civil_scope_mismatch
+        or has_ambiguous_top_hit(sections) or has_classifier_flag(sections)
+    ) and not touches_violence_or_harm(payload.query)
     if abstained:
         # No fabricated citations alongside a refusal -- see is_abstention's
         # docstring for exactly what counts as "not enough evidence".

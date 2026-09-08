@@ -7,329 +7,762 @@
       "question": "What is the punishment for theft?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for defamation?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for murder?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is culpable homicide not amounting to murder?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is cheating and dishonestly inducing delivery of property?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is criminal breach of trust?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for dowry harassment?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for dowry death?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for rape?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for kidnapping?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for robbery?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for dacoity?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for extortion?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for forgery?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for criminal intimidation?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for rioting?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is an unlawful assembly?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for an acid attack?",
       "rank": 3,
       "recall_at_5": true,
-      "reciprocal_rank": 0.3333333333333333
+      "reciprocal_rank": 0.3333333333333333,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for stalking?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for voyeurism?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for mischief?",
       "rank": 3,
       "recall_at_5": true,
-      "reciprocal_rank": 0.3333333333333333
+      "reciprocal_rank": 0.3333333333333333,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for counterfeiting currency?",
       "rank": 2,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 0.5,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for attempt to murder?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is wrongful confinement?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is wrongful restraint?",
       "rank": 2,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 0.5,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for assault?",
       "rank": null,
       "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "reciprocal_rank": 0.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for sexual harassment?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is abetment of suicide?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the procedure to file an FIR?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the procedure for arrest without a warrant?",
       "rank": 4,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 0.25,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the procedure for issuing a search warrant?",
       "rank": 5,
       "recall_at_5": true,
-      "reciprocal_rank": 0.2
+      "reciprocal_rank": 0.2,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the police report or charge sheet after investigation?",
       "rank": 5,
       "recall_at_5": true,
-      "reciprocal_rank": 0.2
+      "reciprocal_rank": 0.2,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "How does a magistrate take cognizance of an offence?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the order for maintenance of wives and children?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is compounding of offences?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is relevant under the law of evidence?",
       "rank": 4,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 0.25,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is expert opinion as evidence?",
       "rank": 1,
       "recall_at_5": true,
-      "reciprocal_rank": 1.0
+      "reciprocal_rank": 1.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "On whom does the burden of proof lie?",
       "rank": 2,
       "recall_at_5": true,
-      "reciprocal_rank": 0.5
+      "reciprocal_rank": 0.5,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the presumption of legitimacy of a child?",
       "rank": 3,
       "recall_at_5": true,
-      "reciprocal_rank": 0.3333333333333333
+      "reciprocal_rank": 0.3333333333333333,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is the punishment for bigamy?",
       "rank": 4,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 0.25,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is anticipatory bail?",
       "rank": 4,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25
+      "reciprocal_rank": 0.25,
+      "ambiguous_top_hit_false_positive": true,
+      "classifier_false_positive": false
     },
     {
       "question": "What is plea bargaining?",
       "rank": null,
       "recall_at_5": false,
-      "reciprocal_rank": 0.0
+      "reciprocal_rank": 0.0,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is a dying declaration?",
       "rank": 9,
       "recall_at_5": false,
-      "reciprocal_rank": 0.1111111111111111
+      "reciprocal_rank": 0.1111111111111111,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     },
     {
       "question": "What is a hostile witness?",
       "rank": 10,
       "recall_at_5": false,
-      "reciprocal_rank": 0.1
+      "reciprocal_rank": 0.1,
+      "ambiguous_top_hit_false_positive": false,
+      "classifier_false_positive": false
     }
   ],
-  "n_out_of_scope": 10,
-  "out_of_scope_abstain_rate": 0.5,
+  "n_out_of_scope": 45,
+  "out_of_scope_abstain_rate": 0.9777777777777777,
   "out_of_scope": [
     {
-      "question": "My neighbor built a wall that blocks my right of way to the main road, what can I do?",
+      "question": "A company is using a logo that looks like my registered trademark, what can I do?",
       "would_abstain": true,
-      "caught_by": "civil_phrase",
-      "top_similarity": 0.2617
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.3124,
+      "domain": "ip",
+      "split": "train",
+      "adversarial": false
     },
     {
-      "question": "I have adverse possession over a piece of land I've farmed for 15 years, is it mine now?",
+      "question": "Someone is selling counterfeit copies of my patented product online, what are my legal options?",
       "would_abstain": true,
-      "caught_by": "civil_phrase",
-      "top_similarity": 0.3628
+      "caught_by": "classifier",
+      "top_similarity": 0.5772,
+      "domain": "ip",
+      "split": "train",
+      "adversarial": false
     },
     {
-      "question": "How do I get a succession certificate for my late father's bank accounts?",
+      "question": "My ex-business partner copied my logo design for his new startup, can I stop him?",
       "would_abstain": true,
-      "caught_by": "civil_phrase",
-      "top_similarity": 0.294
+      "caught_by": "classifier",
+      "top_similarity": 0.2039,
+      "domain": "ip",
+      "split": "heldout",
+      "adversarial": false
     },
     {
-      "question": "My ex-husband refuses to pay alimony after our divorce, what can I do?",
+      "question": "My employer hasn't paid my salary for the last three months, what can I do?",
       "would_abstain": true,
-      "caught_by": "civil_phrase",
-      "top_similarity": 0.2239
+      "caught_by": "classifier",
+      "top_similarity": 0.2456,
+      "domain": "labor",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "I was fired without notice after 5 years at my company, is that legal?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.287,
+      "domain": "labor",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My workplace denies me the maternity leave I'm entitled to, what should I do?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.2302,
+      "domain": "labor",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My employer fired me the day after I reported being harassed by my manager, is that retaliation?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3285,
+      "domain": "labor",
+      "split": "heldout",
+      "adversarial": true
+    },
+    {
+      "question": "How do I register a private limited company in India?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.4328,
+      "domain": "company",
+      "split": "train",
+      "adversarial": false
     },
     {
       "question": "A builder is refusing to complete construction despite a signed agreement, can I ask for specific performance?",
       "would_abstain": true,
       "caught_by": "civil_phrase",
-      "top_similarity": 0.3226
+      "top_similarity": 0.3226,
+      "domain": "company",
+      "split": "train",
+      "adversarial": false
     },
     {
-      "question": "A company is using a logo that looks like my registered trademark, what can I do?",
-      "would_abstain": false,
-      "caught_by": null,
-      "top_similarity": 0.3124
+      "question": "What is the process to dissolve a partnership firm?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3323,
+      "domain": "company",
+      "split": "train",
+      "adversarial": false
     },
     {
-      "question": "My employer hasn't paid my salary for the last three months, what can I do?",
-      "would_abstain": false,
-      "caught_by": null,
-      "top_similarity": 0.2456
-    },
-    {
-      "question": "How do I register a private limited company in India?",
-      "would_abstain": false,
-      "caught_by": null,
-      "top_similarity": 0.4328
+      "question": "Two directors on my company's board are in a deadlock over a major decision, how is this resolved legally?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.2817,
+      "domain": "company",
+      "split": "heldout",
+      "adversarial": false
     },
     {
       "question": "I received an income tax notice for undisclosed foreign assets, what should I do?",
-      "would_abstain": false,
-      "caught_by": null,
-      "top_similarity": 0.3982
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3982,
+      "domain": "tax",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My GST refund has been pending for six months, what can I do?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.1976,
+      "domain": "tax",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "Can I appeal an income tax assessment order I think is wrong?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.518,
+      "domain": "tax",
+      "split": "heldout",
+      "adversarial": false
     },
     {
       "question": "Can the government stop me from publishing a newspaper article critical of a minister?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.4986,
+      "domain": "constitutional",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "Is it legal for the state to ban a peaceful protest march?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.4577,
+      "domain": "constitutional",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "Can a public university expel a student for their political opinions?",
       "would_abstain": false,
       "caught_by": null,
-      "top_similarity": 0.4986
+      "top_similarity": 0.3168,
+      "domain": "constitutional",
+      "split": "heldout",
+      "adversarial": false
+    },
+    {
+      "question": "How do I get a succession certificate for my late father's bank accounts?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.294,
+      "domain": "family",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My ex-husband refuses to pay alimony after our divorce, what can I do?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.2239,
+      "domain": "family",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "How do I contest my father's will that leaves everything to my brother?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3384,
+      "domain": "family",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My brother forged my late father's signature on our property transfer documents. I don't want to file a police complaint -- I just want to correct the property records. How do I do that civilly?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.4097,
+      "domain": "family",
+      "split": "heldout",
+      "adversarial": true
+    },
+    {
+      "question": "My health insurance claim was rejected after my surgery, what can I do?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.2514,
+      "domain": "insurance",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My car insurance company is refusing to pay out after an accident that wasn't my fault, what are my options?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3653,
+      "domain": "insurance",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "How do I file a complaint against my insurance company with the insurance ombudsman?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.2697,
+      "domain": "insurance",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My house was robbed and my insurance company won't honor my claim for the stolen jewelry, what can I do?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3541,
+      "domain": "insurance",
+      "split": "heldout",
+      "adversarial": true
+    },
+    {
+      "question": "My visa renewal application was rejected, how do I appeal?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.558,
+      "domain": "immigration",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "How do I sponsor my spouse for an Indian visa?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3563,
+      "domain": "immigration",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "I overstayed my visa by a few days due to a medical emergency, what happens now?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3212,
+      "domain": "immigration",
+      "split": "heldout",
+      "adversarial": false
+    },
+    {
+      "question": "A factory near my house is polluting the local river, how do I report this to the pollution control board?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.2516,
+      "domain": "environmental",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "Can I sue a company for cutting down protected trees on their property?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.2657,
+      "domain": "environmental",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "How do I get compensation for crop damage caused by industrial pollution?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3314,
+      "domain": "environmental",
+      "split": "heldout",
+      "adversarial": false
+    },
+    {
+      "question": "My bank is refusing to close my fixed deposit account before maturity, what are my rights?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.2438,
+      "domain": "banking",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "How do I dispute an unauthorized transaction on my credit card?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3786,
+      "domain": "banking",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My loan application was rejected without explanation, can I ask the bank why?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3382,
+      "domain": "banking",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "A hacker fraudulently withdrew money from my bank account, and the bank is refusing to refund me -- what can I do to get my money back?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.2741,
+      "domain": "banking",
+      "split": "heldout",
+      "adversarial": true
+    },
+    {
+      "question": "My daughter was denied admission to a government school despite meeting all criteria, what can I do?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3651,
+      "domain": "education",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "The university is refusing to release my degree certificate over a fee dispute, what are my options?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.4207,
+      "domain": "education",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "Can a private school expel a student without giving a valid reason?",
+      "would_abstain": true,
+      "caught_by": "ambiguous_top_hit",
+      "top_similarity": 0.3892,
+      "domain": "education",
+      "split": "heldout",
+      "adversarial": false
+    },
+    {
+      "question": "I bought a defective phone and the shop refuses to replace or refund it, what can I do?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.1948,
+      "domain": "consumer",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "How do I file a complaint against a builder who delayed my flat's possession by two years?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.5139,
+      "domain": "consumer",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "An online seller sent me a fake product instead of the branded one I ordered, what are my options?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.3686,
+      "domain": "consumer",
+      "split": "heldout",
+      "adversarial": false
+    },
+    {
+      "question": "My neighbor built a wall that blocks my right of way to the main road, what can I do?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.2617,
+      "domain": "property",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "I have adverse possession over a piece of land I've farmed for 15 years, is it mine now?",
+      "would_abstain": true,
+      "caught_by": "civil_phrase",
+      "top_similarity": 0.3628,
+      "domain": "property",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My landlord is refusing to return my security deposit after I vacated the flat, what can I do?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.273,
+      "domain": "property",
+      "split": "train",
+      "adversarial": false
+    },
+    {
+      "question": "My landlord threatened me and kept my security deposit when I asked for it back -- what can I do?",
+      "would_abstain": true,
+      "caught_by": "classifier",
+      "top_similarity": 0.2613,
+      "domain": "property",
+      "split": "heldout",
+      "adversarial": true
     }
   ]
 }

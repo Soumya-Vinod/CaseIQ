@@ -13,7 +13,10 @@ from app.models.complaint import Complaint, ComplaintStatus
 from app.schemas.complaint import ComplaintIn, ComplaintOut
 from app.services.llm import llm_service
 from app.services.pdf import generate_complaint_pdf
-from app.services.retrieval import build_rag_context, is_abstention, is_civil_scope_mismatch, semantic_search
+from app.services.retrieval import (
+    build_rag_context, has_ambiguous_top_hit, has_classifier_flag, is_abstention,
+    is_civil_scope_mismatch, semantic_search,
+)
 
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
@@ -55,7 +58,11 @@ async def create_complaint(payload: ComplaintIn, db: DB, user: OptionalUser):
         narrative = " ".join(filter(None, [payload.incident_description, payload.accused_details]))
         civil_scope_mismatch = is_civil_scope_mismatch(narrative)
         sections = await semantic_search(db, narrative) if narrative.strip() else []
-        if is_abstention(sections) or civil_scope_mismatch:
+        # Options E and B (docs/evaluation.md, 2026-09-08) -- same two
+        # additional signals legal.py's abstention gate uses, mirrored
+        # here for the same grounding discipline.
+        if (is_abstention(sections) or civil_scope_mismatch
+                or has_ambiguous_top_hit(sections) or has_classifier_flag(sections)):
             sections = []  # same rule as legal.py: no citations alongside weak/no evidence
         c.retrieved_sections = sections
         c.applicable_sections = [f"{s['act']} {s['section']}" for s in sections]

@@ -42,3 +42,12 @@ pymupdf==1.28.2   # legal_corpus.parsing.gazette_parser's BSA engine -- pdfplumb
 # --- Dev/test ---
 pytest==8.3.4
 pytest-asyncio==0.25.0
+
+# --- Training scripts only, never imported by the running app itself ---
+# scripts/train_domain_classifier.py only -- app/services/domain_classifier.py
+# (what the live app actually imports) evaluates the trained model with plain
+# Python (a dot product and a sigmoid), deliberately, so the running app never
+# pays for scikit-learn's own import/memory cost. Same pattern already used
+# for pdfplumber/pymupdf above (installed for scripts/, not on the app's own
+# request-handling import path).
+scikit-learn==1.9.0

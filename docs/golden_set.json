@@ -608,53 +608,363 @@
     ]
   },
   {
-    "question": "My neighbor built a wall that blocks my right of way to the main road, what can I do?",
-    "sections": [],
-    "out_of_scope": true
-  },
-  {
-    "question": "I have adverse possession over a piece of land I've farmed for 15 years, is it mine now?",
-    "sections": [],
-    "out_of_scope": true
-  },
-  {
-    "question": "How do I get a succession certificate for my late father's bank accounts?",
-    "sections": [],
-    "out_of_scope": true
-  },
-  {
-    "question": "My ex-husband refuses to pay alimony after our divorce, what can I do?",
-    "sections": [],
-    "out_of_scope": true
-  },
-  {
-    "question": "A builder is refusing to complete construction despite a signed agreement, can I ask for specific performance?",
-    "sections": [],
-    "out_of_scope": true
-  },
-  {
     "question": "A company is using a logo that looks like my registered trademark, what can I do?",
     "sections": [],
-    "out_of_scope": true
+    "out_of_scope": true,
+    "domain": "ip",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Someone is selling counterfeit copies of my patented product online, what are my legal options?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "ip",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My ex-business partner copied my logo design for his new startup, can I stop him?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "ip",
+    "split": "heldout",
+    "adversarial": false
   },
   {
     "question": "My employer hasn't paid my salary for the last three months, what can I do?",
     "sections": [],
-    "out_of_scope": true
+    "out_of_scope": true,
+    "domain": "labor",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "I was fired without notice after 5 years at my company, is that legal?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "labor",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My workplace denies me the maternity leave I'm entitled to, what should I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "labor",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My employer fired me the day after I reported being harassed by my manager, is that retaliation?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "labor",
+    "split": "heldout",
+    "adversarial": true
   },
   {
     "question": "How do I register a private limited company in India?",
     "sections": [],
-    "out_of_scope": true
+    "out_of_scope": true,
+    "domain": "company",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "A builder is refusing to complete construction despite a signed agreement, can I ask for specific performance?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "company",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "What is the process to dissolve a partnership firm?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "company",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Two directors on my company's board are in a deadlock over a major decision, how is this resolved legally?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "company",
+    "split": "heldout",
+    "adversarial": false
   },
   {
     "question": "I received an income tax notice for undisclosed foreign assets, what should I do?",
     "sections": [],
-    "out_of_scope": true
+    "out_of_scope": true,
+    "domain": "tax",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My GST refund has been pending for six months, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "tax",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Can I appeal an income tax assessment order I think is wrong?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "tax",
+    "split": "heldout",
+    "adversarial": false
   },
   {
     "question": "Can the government stop me from publishing a newspaper article critical of a minister?",
     "sections": [],
-    "out_of_scope": true
+    "out_of_scope": true,
+    "domain": "constitutional",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Is it legal for the state to ban a peaceful protest march?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "constitutional",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Can a public university expel a student for their political opinions?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "constitutional",
+    "split": "heldout",
+    "adversarial": false
+  },
+  {
+    "question": "How do I get a succession certificate for my late father's bank accounts?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "family",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My ex-husband refuses to pay alimony after our divorce, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "family",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "How do I contest my father's will that leaves everything to my brother?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "family",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My brother forged my late father's signature on our property transfer documents. I don't want to file a police complaint -- I just want to correct the property records. How do I do that civilly?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "family",
+    "split": "heldout",
+    "adversarial": true
+  },
+  {
+    "question": "My health insurance claim was rejected after my surgery, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "insurance",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My car insurance company is refusing to pay out after an accident that wasn't my fault, what are my options?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "insurance",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "How do I file a complaint against my insurance company with the insurance ombudsman?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "insurance",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My house was robbed and my insurance company won't honor my claim for the stolen jewelry, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "insurance",
+    "split": "heldout",
+    "adversarial": true
+  },
+  {
+    "question": "My visa renewal application was rejected, how do I appeal?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "immigration",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "How do I sponsor my spouse for an Indian visa?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "immigration",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "I overstayed my visa by a few days due to a medical emergency, what happens now?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "immigration",
+    "split": "heldout",
+    "adversarial": false
+  },
+  {
+    "question": "A factory near my house is polluting the local river, how do I report this to the pollution control board?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "environmental",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Can I sue a company for cutting down protected trees on their property?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "environmental",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "How do I get compensation for crop damage caused by industrial pollution?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "environmental",
+    "split": "heldout",
+    "adversarial": false
+  },
+  {
+    "question": "My bank is refusing to close my fixed deposit account before maturity, what are my rights?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "banking",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "How do I dispute an unauthorized transaction on my credit card?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "banking",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My loan application was rejected without explanation, can I ask the bank why?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "banking",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "A hacker fraudulently withdrew money from my bank account, and the bank is refusing to refund me -- what can I do to get my money back?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "banking",
+    "split": "heldout",
+    "adversarial": true
+  },
+  {
+    "question": "My daughter was denied admission to a government school despite meeting all criteria, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "education",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "The university is refusing to release my degree certificate over a fee dispute, what are my options?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "education",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "Can a private school expel a student without giving a valid reason?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "education",
+    "split": "heldout",
+    "adversarial": false
+  },
+  {
+    "question": "I bought a defective phone and the shop refuses to replace or refund it, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "consumer",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "How do I file a complaint against a builder who delayed my flat's possession by two years?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "consumer",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "An online seller sent me a fake product instead of the branded one I ordered, what are my options?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "consumer",
+    "split": "heldout",
+    "adversarial": false
+  },
+  {
+    "question": "My neighbor built a wall that blocks my right of way to the main road, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "property",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "I have adverse possession over a piece of land I've farmed for 15 years, is it mine now?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "property",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My landlord is refusing to return my security deposit after I vacated the flat, what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "property",
+    "split": "train",
+    "adversarial": false
+  },
+  {
+    "question": "My landlord threatened me and kept my security deposit when I asked for it back -- what can I do?",
+    "sections": [],
+    "out_of_scope": true,
+    "domain": "property",
+    "split": "heldout",
+    "adversarial": true
   }
 ]

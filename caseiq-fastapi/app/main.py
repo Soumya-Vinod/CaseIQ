@@ -14,6 +14,7 @@ from app.core.logging import configure_logging, logger
 from app.core.ratelimit import limiter
 from app.db.base import SessionLocal
 from app.middleware.request_context import RequestContextMiddleware
+from app.services.domain_classifier import assert_domain_gate_matches_embedder
 from app.services.embeddings import assert_embedding_config_matches_corpus, embedder
 
 
@@ -43,6 +44,16 @@ async def lifespan(app: FastAPI):
     # reads until a user notices wrong answers.
     async with SessionLocal() as db:
         await assert_embedding_config_matches_corpus(db, embedder)
+    # Option B, shipped 2026-09-08 (docs/evaluation.md): the domain-gate
+    # classifier's weights are only meaningful against the exact embedding
+    # space they were trained on -- same failure shape as the check just
+    # above, one layer up (a swapped embedder produces a confident, wrong
+    # classifier verdict, not an exception, for the identical reason a
+    # swapped embedder produces a confident, wrong similarity score). No DB
+    # needed for this one -- a pure in-process identity comparison against
+    # the artifact's own stamped embedding_model_id. Deliberately NOT
+    # wrapped in try/except, same reasoning as the check above.
+    assert_domain_gate_matches_embedder(embedder)
     yield
     logger.info("app_stopping")
 
