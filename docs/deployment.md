@@ -396,15 +396,33 @@ both-rate-limited-in-one-call, no-second-key-configured (behaves as before), a n
 error skips rotation entirely (a different key doesn't fix a timeout), and the `Retry-After` header
 is what actually sets the cooldown window, not a blind default.
 
-**To activate**: add `GROQ_API_KEY_2` on Render (a second, real Groq API key -- a second account,
-since the point is a second TPM budget, not a second name on the same one). Until that's set, this
-key rotation exists in the code and is proven correct in isolation, but production still runs on
-one key, same ceiling as before.
+**Activated 2026-09-08: `GROQ_API_KEY_2` set on Render, org membership confirmed, ceiling
+re-measured for real.** Before reporting any number, checked the thing this whole feature depends
+on -- Groq's TPM limit is scoped **per organization**, not per key (confirmed directly, in the
+error body's own wording: `"Rate limit reached ... in organization org_..."`), so two keys on the
+SAME org would share one budget and this feature would buy nothing. Triggered a real 429 directly
+against Groq (bypassing the app, using the first key) to read its actual org id off the response
+body: **`org_01khtyvsk0ffks2p3ce8952p10`**. No access to the second key's raw value (set directly
+on Render, never passed through here) to repeat that exact check on it -- but the measured result
+below settles the question on its own: if both keys shared that org, the ceiling could not move at
+all, full stop, regardless of how the code rotates between them. It moved. That is only possible if
+the second key draws from a different organization's budget.
 
-**The measured new ceiling is a pending TODO, not filled in with a projection.** Expected ~4
-concurrent (16000 combined TPM / ~2886 tokens/request post-prompt-trim) if it scales cleanly, but
-"expected" is exactly the word this project's own discipline says not to write into a document as
-if it were "measured" -- see the concurrency-ceiling entry's own history of what happened the one
-time a projection got treated as a result. This gets filled in for real once `GROQ_API_KEY_2` is
-live on Render and the concurrency test can be re-run against production, whatever number that
-turns out to be.
+**Measured, same 20-concurrent-request methodology as the original baseline, same production
+instance**: **11/20 succeeded (200 OK), up from 3/20 before rotation.** All 9 failures returned the
+intended clean `503 llm_temporarily_unavailable` -- zero raw 500s, confirming that fix held under
+this load too. Wall clock 84.8s (vs. 75.0s for the original 20-request run); successful requests
+took 10-85s, failures 26-85s -- both wider spreads than the single-key run, consistent with a
+failover-plus-cooldown system rather than a single hard ceiling: the first few requests exhaust key
+one, spill to key two, exhaust that too, and everything after waits out a real cooldown window
+rather than failing instantly. **Deliberately not compressed into a single "concurrent capacity"
+number the way the single-key result was** -- that arithmetic (TPM / tokens-per-request) described
+a static ceiling a lone key actually has; two keys with cooldown-gated failover behave as gradual
+capacity recovery under sustained load, not a higher static ceiling, and reporting a single derived
+number here would flatten a real behavioural difference into a misleadingly tidy one.
+
+**Bottom line**: real, measured, roughly a 3.7x improvement in this specific 20-concurrent burst
+(11/20 vs 3/20) -- confirmed to come from genuine separate headroom (per-org TPM, confirmed org
+ids diverge), not a same-org relabeling. Still framed as failover plus headroom, not a fix for the
+underlying tier limit -- sustained load well beyond what two keys' combined budget covers will
+still queue and eventually 503, honestly, same as before, just at a higher combined ceiling.
