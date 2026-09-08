@@ -193,7 +193,68 @@ written for a coverage gap, not a correctness question — worth being precise a
 actually protecting against now, in that guide's own caveat context, without overstating what's
 confirmed (one verified instance, not a measured rate).
 
-## Headline finding: similarity does not separate in-scope from out-of-scope queries
+## HEADLINE RESULT 4: a fully-built, fully-tested feature with no way to reach it (2026-09-07/08)
+
+**Same class as the other three, by the user's own framing, and worth taking at face value: a
+component verifying green while the path a user actually takes to it doesn't exist.** The first
+three entries are about DATA that looks right and isn't (an embedding score, an abstention
+threshold, a Ditto-propagated court value). This one is about a whole FEATURE that looked done and
+wasn't reachable — the same failure shape one layer up, at the UI rather than the data layer.
+
+**The finding**: checklist item 6, Phase C shipped conversation history, account export, and
+account deletion — all real, all correct, all verified against the API directly (see this file's
+earlier Phase C entries). None of it was ever verified through the UI, because there was no UI path
+to verify. `AuthProvider` was mounted in `App.tsx`. `AccountPage` fully implemented login, history,
+export, and deletion. Neither `Sidebar.tsx`'s nine-item nav nor any header linked to any of it — the
+only entry point was a small text button in `Footer.tsx` reading "Log in" (or the user's name),
+visually identical in weight to "Terms of Use." Confirmed against the LIVE deployed bundle, not
+just source: `caseiq-web.vercel.app`'s shipped JS contained the string and the code path — this
+wasn't a stale build, the link was real and really unreachable-in-practice, not absent.
+
+**Fix, reported as a plan before building and confirmed before starting, per instruction**:
+- **Sidebar entry** (`Sidebar.tsx`): a bottom row, visually separated from the nine content items
+  by a divider, reading "Guest" (with a new `PersonIcon`) or the logged-in user's name, opening the
+  same `AccountPage`. Present in both the desktop rail and the mobile drawer — two separate JSX
+  blocks in this file, not a shared component, so it needed adding twice, deliberately, not missed
+  once. Collapsed-state-safe via the same `title`/icon-only pattern every other nav item already
+  used. The footer link stays — a second path, not a replacement.
+- **`AccountPage` extended in place, not replaced** — it already did the job; the problem was never
+  its content. Added: an account-created date (`UserOut.created_at`, exposing a column the
+  `Timestamped` mixin already provided — no migration), a guest-state value proposition (12 months
+  vs. 30 days retention, named explicitly rather than implied), and a preferences section.
+- **Preferences, split by where they actually needed to live, checked rather than guessed**:
+  default act filter (Browse by act) and dismissing the redaction note are client-side only
+  (`localStorage`, work for guests, `utils/preferences.ts`) — checked directly that neither had any
+  identity-dependent meaning before deciding that. Preferred answer language and a default
+  state/district for Nearby Stations are server-side, but needed no new table: `preferred_language`
+  already existed on `User` (set at registration, never editable after); `state`/`district` already
+  existed too, declared and never write-reachable at all. One new endpoint (`PATCH /auth/me`,
+  `exclude_unset` so one section's save can't null out another's) made both actually usable. Both
+  are overrides of existing default behaviour, not replacements: a guest or a preference-unset user
+  still gets full per-query language auto-detection and the Mumbai/geolocation default exactly as
+  before; only an explicit, saved preference changes anything.
+- **Mobile**: `AccountPage.module.css` had zero media queries before this pass — the same root
+  cause as the missing nav entry, named as such rather than coincidentally adjacent: nobody could
+  reach the page, so nobody had checked whether it worked narrow. Fixed at the same 859px breakpoint
+  `Sidebar.module.css` already established, not a new value.
+
+**Verified, not assumed clean from the diff**: full TypeScript compile clean, full production
+build clean, this project's own CSS media-query CI guard clean (7 conditions, none using the range
+syntax that broke this project once before — see this file's own entry on that). Backend: 119
+passed, 0 failed, including 5 new tests for the `PATCH /auth/me` partial-update behaviour
+specifically (the one behaviour worth testing directly: a request touching one field must not null
+out a different field a separate request already set). And live, not just compiled: a real
+Playwright run against the actual dev server and a real (non-mocked) local backend — registered a
+new account, changed the language preference to Hindi, saved a state/district, dismissed the
+redaction note, reloaded the page, and confirmed every one of those persisted correctly after
+reload, screenshots taken at each step. First attempt at this live check produced several
+false-negative results (a stuck "Please wait…", a language select reporting unchanged); root-caused
+before treating them as real bugs — real network latency to the actual dev Neon instance
+(`took_ms: 1537`, `1953` in the backend's own logs for two of the calls this flow makes), not a
+functional problem — confirmed by re-running with wait-for-condition instead of a fixed timeout,
+which passed cleanly. Worth recording alongside the fix: the discipline that caught three
+data-correctness illusions this project also caught a *verification*-correctness illusion in its
+own final check, in the same session.
 
 **The sharpest result in this document.** A civil-law question this corpus has nothing to answer
 (*"can I stop a neighbour using a shortcut across my land, or can they claim a legal right of

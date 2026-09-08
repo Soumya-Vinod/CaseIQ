@@ -90,7 +90,19 @@ export interface paths {
         delete: operations["delete_account_api_v1_auth_me_delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Preferences
+         * @description Added 2026-09-07: the profile page's preferences section. `/auth/me`
+         *     was GET-only until now -- `preferred_language` could be set at
+         *     registration and never changed again; `state`/`district` existed on
+         *     the model and were never write-reachable at all. `exclude_unset`, not
+         *     a full-object overwrite: a request that only sends `state` must not
+         *     silently null out `preferred_language` (or vice versa) just because
+         *     the client didn't include it -- see UpdatePreferencesIn's own
+         *     docstring for why this shape was chosen over a `user_preferences`
+         *     table.
+         */
+        patch: operations["update_preferences_api_v1_auth_me_patch"];
         trace?: never;
     };
     "/api/v1/auth/change-password": {
@@ -1115,6 +1127,27 @@ export interface components {
             /** Refresh */
             refresh: string;
         };
+        /**
+         * UpdatePreferencesIn
+         * @description Added 2026-09-07, same profile-page pass as the sidebar/preferences
+         *     work (see docs/evaluation.md). All optional and independently
+         *     settable -- a client sends only the field(s) it's actually changing,
+         *     never a full profile replacement, so one page section updating
+         *     `preferred_language` can't accidentally null out `state`/`district`
+         *     set from a different section (or vice versa). `preferred_language`,
+         *     `state`, `district` all already existed as columns on `User` (the
+         *     first from registration, the other two declared but never
+         *     write-reachable until now) -- deliberately NOT a new `user_preferences`
+         *     table: nothing here needed one.
+         */
+        UpdatePreferencesIn: {
+            /** Preferred Language */
+            preferred_language?: string | null;
+            /** State */
+            state?: string | null;
+            /** District */
+            district?: string | null;
+        };
         /** UserOut */
         UserOut: {
             /**
@@ -1136,6 +1169,11 @@ export interface components {
             district?: string | null;
             /** Is Verified */
             is_verified: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1293,6 +1331,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_preferences_api_v1_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePreferencesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
             };
             /** @description Validation Error */
             422: {

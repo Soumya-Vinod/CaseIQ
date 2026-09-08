@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { SectionOut } from "../api/types";
 import { SectionDetailSheet } from "../components/SectionDetailSheet";
+import { getDefaultAct, setDefaultAct } from "../utils/preferences";
 import { isRedundantTitle } from "../utils/text";
 import styles from "./BrowseByActPage.module.css";
 
@@ -20,7 +21,15 @@ const ACTS = [
 const LIMIT = 200;
 
 export function BrowseByActPage() {
-  const [act, setAct] = useState("");
+  // Added 2026-09-07: remembered across visits (client-side only, works
+  // for guests -- see utils/preferences.ts and docs/evaluation.md's
+  // profile-page entry for why this never needed a server round-trip).
+  // Lazy initializer -- read once, on mount, not on every render.
+  const [act, setActState] = useState(() => getDefaultAct());
+  function setAct(next: string) {
+    setActState(next);
+    setDefaultAct(next);
+  }
   const [search, setSearch] = useState("");
   const [sections, setSections] = useState<SectionOut[] | null>(null);
   const [loading, setLoading] = useState(false);

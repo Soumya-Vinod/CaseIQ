@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "../api/client";
-import type { UserOut } from "../api/types";
+import type { UpdatePreferencesIn, UserOut } from "../api/types";
 import { clearTokens, getAccessToken, setTokens, subscribeToAuthChanges } from "../utils/auth";
 import { resetSessionId } from "../utils/session";
 
@@ -23,6 +23,7 @@ interface AuthState {
   register: (fields: RegisterFields) => Promise<{ error?: string }>;
   logout: () => void;
   deleteAccount: (password: string) => Promise<{ error?: string }>;
+  updatePreferences: (fields: UpdatePreferencesIn) => Promise<{ error?: string }>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -131,8 +132,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {};
   }
 
+  // Added 2026-09-07: the profile page's preferences section.
+  // `preferred_language`/`state`/`district` -- see UpdatePreferencesIn's
+  // own docstring for why partial (only the field(s) actually being
+  // changed) rather than the whole profile. On success, `data` is the
+  // FULL updated user (the backend returns the whole row, not just a
+  // delta), so this replaces `user` wholesale rather than merging fields
+  // client-side -- one source of truth for what the server actually has,
+  // not a client-side guess reconstructed from what was just sent.
+  async function updatePreferences(fields: UpdatePreferencesIn): Promise<{ error?: string }> {
+    const { data, error } = await api.PATCH("/api/v1/auth/me", { body: fields });
+    if (error || !data) {
+      const message = (error as { error?: { message?: string } } | undefined)?.error?.message;
+      return { error: message || "Could not save your preferences." };
+    }
+    setUser(data);
+    return {};
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, deleteAccount }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, deleteAccount, updatePreferences }}
+    >
       {children}
     </AuthContext.Provider>
   );

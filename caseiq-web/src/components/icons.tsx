@@ -134,3 +134,15 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+// Added 2026-09-07: the sidebar's account row (Guest / logged-in user's
+// name) -- same 24x24/1.75-stroke convention as every icon above, not a
+// new style.
+export function PersonIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.6 3.13-6 7-6s7 2.4 7 6" />
+    </Icon>
+  );
+}

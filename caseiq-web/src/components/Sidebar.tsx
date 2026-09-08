@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
 import {
   ArrestIcon,
   AskIcon,
@@ -10,6 +11,7 @@ import {
   LookupIcon,
   MenuIcon,
   NewsIcon,
+  PersonIcon,
   RightsIcon,
   StationsIcon,
 } from "./icons";
@@ -51,7 +53,21 @@ const COLLAPSE_KEY = "caseiq_sidebar_collapsed";
  * shape as SectionDetailSheet's bottom sheet, because an off-canvas panel
  * over the page has the same failure modes a modal does.
  */
-export function Sidebar({ tab, onTabChange }: { tab: Tab; onTabChange: (t: Tab) => void }) {
+export function Sidebar({
+  tab,
+  onTabChange,
+  onOpenAccount,
+}: {
+  tab: Tab;
+  onTabChange: (t: Tab) => void;
+  onOpenAccount: () => void;
+}) {
+  // Added 2026-09-07: found live -- the sidebar had NO auth-aware entry at
+  // all; the only way into AccountPage was a small text link in the
+  // footer, easy to miss entirely (see docs/evaluation.md's undiscoverable-
+  // profile-UI entry). This is the real entry point now; the footer link
+  // stays too, kept as a second path, not replaced.
+  const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_KEY) === "1";
@@ -119,6 +135,32 @@ export function Sidebar({ tab, onTabChange }: { tab: Tab; onTabChange: (t: Tab) 
     };
   }, [drawerOpen]);
 
+  // One row, reused in both the rail and the drawer -- `collapsed` only
+  // ever matters to the rail (the drawer is never icon-only), so the
+  // drawer's own call site below always passes false. Guest/name label and
+  // the click target are identical either way -- only the icon-only
+  // collapse behaviour differs.
+  function accountRow(isCollapsed: boolean) {
+    const label = user ? user.full_name : "Guest";
+    return (
+      <div className={styles.accountRow}>
+        <button
+          type="button"
+          className={styles.accountButton}
+          onClick={() => {
+            onOpenAccount();
+            setDrawerOpen(false);
+          }}
+          title={isCollapsed ? label : undefined}
+          aria-label={label}
+        >
+          <PersonIcon className={styles.navIcon} />
+          <span className={styles.navLabel}>{label}</span>
+        </button>
+      </div>
+    );
+  }
+
   const navContent = (
     <>
       <div className={styles.brandRow}>
@@ -149,6 +191,9 @@ export function Sidebar({ tab, onTabChange }: { tab: Tab; onTabChange: (t: Tab) 
           </li>
         ))}
       </ul>
+
+      <div className={styles.accountDivider} aria-hidden="true" />
+      {accountRow(collapsed)}
 
       <button
         type="button"
@@ -231,6 +276,9 @@ export function Sidebar({ tab, onTabChange }: { tab: Tab; onTabChange: (t: Tab) 
             </li>
           ))}
         </ul>
+
+        <div className={styles.accountDivider} aria-hidden="true" />
+        {accountRow(false)}
       </nav>
     </>
   );

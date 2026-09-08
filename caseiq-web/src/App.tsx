@@ -39,7 +39,7 @@ function App() {
   return (
     <AuthProvider>
       <div className={styles.shell}>
-        <Sidebar tab={tab} onTabChange={handleTabChange} />
+        <Sidebar tab={tab} onTabChange={handleTabChange} onOpenAccount={() => setFooterPage("account")} />
         <main className={styles.content}>
           {footerPage === "privacy" && <PrivacyPage onBack={() => setFooterPage(null)} />}
           {footerPage === "terms" && <TermsPage onBack={() => setFooterPage(null)} />}

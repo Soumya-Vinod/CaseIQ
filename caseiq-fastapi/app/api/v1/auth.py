@@ -14,7 +14,8 @@ from app.models.complaint import Complaint
 from app.models.legal import LegalQuery, QueryStatus
 from app.models.user import User
 from app.schemas.auth import (
-    AuthOut, ChangePasswordIn, DeleteAccountIn, LoginIn, RefreshIn, RegisterIn, Tokens, UserOut,
+    AuthOut, ChangePasswordIn, DeleteAccountIn, LoginIn, RefreshIn, RegisterIn, Tokens,
+    UpdatePreferencesIn, UserOut,
 )
 import jwt
 
@@ -64,6 +65,25 @@ async def refresh(payload: RefreshIn, db: DB):
 
 @router.get("/me", response_model=UserOut)
 async def me(user: CurrentUser):
+    return UserOut.model_validate(user)
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_preferences(payload: UpdatePreferencesIn, user: CurrentUser, db: DB):
+    """Added 2026-09-07: the profile page's preferences section. `/auth/me`
+    was GET-only until now -- `preferred_language` could be set at
+    registration and never changed again; `state`/`district` existed on
+    the model and were never write-reachable at all. `exclude_unset`, not
+    a full-object overwrite: a request that only sends `state` must not
+    silently null out `preferred_language` (or vice versa) just because
+    the client didn't include it -- see UpdatePreferencesIn's own
+    docstring for why this shape was chosen over a `user_preferences`
+    table.
+    """
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    db.add(user)
+    await db.flush()
     return UserOut.model_validate(user)
 
 

@@ -2,8 +2,26 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { ConversationDetailOut, ConversationSummaryOut } from "../api/types";
 import { useAuth } from "../contexts/AuthContext";
+import { dismissRedactionNote, isRedactionNoteDismissed } from "../utils/preferences";
 import { setSessionId } from "../utils/session";
 import styles from "./AccountPage.module.css";
+
+// Added 2026-09-07: the preferred-language selector. "en" is deliberately
+// the same value for both "auto-detect" and "explicitly want English" --
+// the backend (app.api.v1.legal.process_query) only ever runs per-query
+// detection when the incoming language IS "en", and `preferred_language`'s
+// own DB default is also "en", so there is no way to distinguish "never
+// set a preference" from "chose English" given the current schema. Not
+// worth a schema change for: auto-detect already answers an English query
+// in English, so the two cases behave identically in practice. Named here
+// rather than silently offering a choice that doesn't really exist.
+const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+  { value: "en", label: "Auto-detect (default)" },
+  { value: "hi", label: "Hindi" },
+  { value: "mr", label: "Marathi" },
+  { value: "ta", label: "Tamil" },
+  { value: "te", label: "Telugu" },
+];
 
 /**
  * Terms/Privacy/Account are reachable only from the footer, not the primary
@@ -16,6 +34,17 @@ import styles from "./AccountPage.module.css";
  * means: point this tab's active session_id at the historical one
  * (utils/session.ts's setSessionId) and jump to the Ask tab, so the next
  * question typed there continues that same server-side conversation.
+ *
+ * EXTENDED 2026-09-07 into the actual profile page (kept this component and
+ * file name -- see docs/evaluation.md's undiscoverable-profile-UI entry for
+ * why: this already did the job, the problem was never what this page
+ * contained, only that nothing pointed at it). Added: account-created date,
+ * a guest-state value proposition, and the preferences section --
+ * `preferred_language`/`state`/`district` (server-side, PATCH /auth/me,
+ * logged-in only) plus a note on the two preferences that work without an
+ * account at all (Browse by act's remembered filter, the redaction note's
+ * own dismiss button below) -- see utils/preferences.ts for why those two
+ * specifically never needed a server round-trip.
  */
 export function AccountPage({
   onBack,
@@ -24,7 +53,7 @@ export function AccountPage({
   onBack: () => void;
   onGoToAsk: () => void;
 }) {
-  const { user, loading, login, register, logout, deleteAccount } = useAuth();
+  const { user, loading, login, register, logout, deleteAccount, updatePreferences } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +73,25 @@ export function AccountPage({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [accountDeleted, setAccountDeleted] = useState(false);
+
+  // Added 2026-09-07: preferences section. State/district are drafted
+  // separately from `user` (a plain object, no form state of its own)
+  // and only written on explicit Save, not on every keystroke -- language
+  // saves immediately on change since a <select> has no "still typing"
+  // state to protect against. Redrafted from `user` whenever it changes
+  // (e.g. right after a save, or on first load) via the effect below.
+  const [savingLanguage, setSavingLanguage] = useState(false);
+  const [stateDraft, setStateDraft] = useState("");
+  const [districtDraft, setDistrictDraft] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [locationSaved, setLocationSaved] = useState(false);
+  const [preferencesError, setPreferencesError] = useState<string | null>(null);
+  const [redactionNoteDismissed, setRedactionNoteDismissed] = useState(() => isRedactionNoteDismissed());
+
+  useEffect(() => {
+    setStateDraft(user?.state ?? "");
+    setDistrictDraft(user?.district ?? "");
+  }, [user?.state, user?.district]);
 
   useEffect(() => {
     if (!user) {
@@ -140,6 +188,33 @@ export function AccountPage({
     else setAccountDeleted(true);
   }
 
+  async function handleLanguageChange(value: string) {
+    setSavingLanguage(true);
+    setPreferencesError(null);
+    const result = await updatePreferences({ preferred_language: value });
+    setSavingLanguage(false);
+    if (result.error) setPreferencesError(result.error);
+  }
+
+  async function handleSaveLocation(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingLocation(true);
+    setLocationSaved(false);
+    setPreferencesError(null);
+    const result = await updatePreferences({
+      state: stateDraft.trim() || null,
+      district: districtDraft.trim() || null,
+    });
+    setSavingLocation(false);
+    if (result.error) setPreferencesError(result.error);
+    else setLocationSaved(true);
+  }
+
+  function handleDismissRedactionNote() {
+    dismissRedactionNote();
+    setRedactionNoteDismissed(true);
+  }
+
   return (
     <main className={styles.page}>
       <button type="button" className={styles.backLink} onClick={onBack}>
@@ -183,18 +258,92 @@ export function AccountPage({
               <span className={styles.accountLabel}>Email</span>
               <span>{user.email}</span>
             </div>
+            <div className={styles.accountRow}>
+              <span className={styles.accountLabel}>Member since</span>
+              <span>
+                {new Date(user.created_at).toLocaleDateString(undefined, {
+                  year: "numeric", month: "long", day: "numeric",
+                })}
+              </span>
+            </div>
           </div>
           <button type="button" className={styles.logoutButton} onClick={logout}>
             Log out
           </button>
 
+          <h2 className={styles.sectionTitle}>Preferences</h2>
+
+          {preferencesError && <div className={styles.errorBox}>{preferencesError}</div>}
+
+          <label className={styles.field}>
+            <span className={styles.label}>Answer language</span>
+            <select
+              className={styles.input}
+              value={user.preferred_language}
+              disabled={savingLanguage}
+              onChange={(e) => void handleLanguageChange(e.target.value)}
+            >
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className={styles.fieldHint}>
+            Overrides CaseIQ's automatic per-question language detection. Leave on Auto-detect
+            unless you specifically want every answer in one language regardless of how you ask.
+          </p>
+
+          <form className={styles.inlineForm} onSubmit={handleSaveLocation}>
+            <label className={styles.field}>
+              <span className={styles.label}>State</span>
+              <input
+                className={styles.input}
+                value={stateDraft}
+                onChange={(e) => {
+                  setStateDraft(e.target.value);
+                  setLocationSaved(false);
+                }}
+                placeholder="e.g. Maharashtra"
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>District</span>
+              <input
+                className={styles.input}
+                value={districtDraft}
+                onChange={(e) => {
+                  setDistrictDraft(e.target.value);
+                  setLocationSaved(false);
+                }}
+                placeholder="e.g. Mumbai Suburban"
+              />
+            </label>
+            <button type="submit" className={styles.saveButton} disabled={savingLocation}>
+              {savingLocation ? "Saving…" : locationSaved ? "Saved ✓" : "Save"}
+            </button>
+          </form>
+          <p className={styles.fieldHint}>
+            Prefills the Nearby Stations search when location access isn't available, instead of
+            defaulting to Mumbai. You can still search a different city any time — this only sets
+            the starting point.
+          </p>
+
           <h2 className={styles.sectionTitle}>Your question history</h2>
 
-          <p className={styles.noteBox}>
-            Your privacy is protected — names, numbers and addresses you type are replaced with
-            placeholders before your question reaches the AI, and only this version is stored.
-            That's why you'll see [NAME] and [PHONE] here instead of what you wrote.
-          </p>
+          {!redactionNoteDismissed && (
+            <div className={styles.noteBox}>
+              <p>
+                Your privacy is protected — names, numbers and addresses you type are replaced
+                with placeholders before your question reaches the AI, and only this version is
+                stored. That's why you'll see [NAME] and [PHONE] here instead of what you wrote.
+              </p>
+              <button type="button" className={styles.linkButton} onClick={handleDismissRedactionNote}>
+                Got it, don't show this again
+              </button>
+            </div>
+          )}
           <p className={styles.retentionLine}>
             CaseIQ's stated retention period is 12 months for a logged-in account's conversations
             (30 days for anonymous use). This is CaseIQ's documented policy, not an automated
@@ -314,6 +463,17 @@ export function AccountPage({
 
       {!accountDeleted && !loading && !user && (
         <>
+          <div className={styles.guestCard}>
+            <p className={styles.guestEyebrow}>Guest</p>
+            <p>
+              You're using CaseIQ without an account — every feature works fully this way,
+              including asking questions and filing complaint drafts. Logging in adds two things:
+              your question history is kept for <strong>12 months</strong> instead of{" "}
+              <strong>30 days</strong>, and you can set a preferred answer language and a default
+              location for nearby police stations, below.
+            </p>
+          </div>
+
           <div className={styles.tabs}>
             <button
               type="button"
@@ -377,6 +537,15 @@ export function AccountPage({
               {submitting ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
             </button>
           </form>
+
+          <h2 className={styles.sectionTitle}>Preferences without an account</h2>
+          <p className={styles.retentionLine}>
+            A couple of things are remembered on this device even without logging in, and work
+            the same either way: Browse by act keeps your last-used act filter, and the retention
+            note above only needs dismissing once per device. Preferences tied to your identity
+            specifically — answer language, a saved location — need an account, since they follow
+            you across devices rather than staying on this one.
+          </p>
         </>
       )}
     </main>

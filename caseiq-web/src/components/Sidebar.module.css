@@ -187,6 +187,55 @@
   cursor: pointer;
 }
 
+/* Added 2026-09-07: the sidebar's account entry -- visually separated from
+   the nine content nav items above it (`.navList`'s own `flex: 1` already
+   pushes this block to the bottom of the rail/drawer, no extra spacer
+   needed), not just a tenth item in the same list. */
+.accountDivider {
+  height: 1px;
+  margin: 0.6rem 0.2rem;
+  background: var(--border);
+}
+
+.accountRow {
+  display: flex;
+}
+
+.accountButton {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 0.7rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--gold);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.accountButton:hover {
+  background: var(--gold-dim);
+  border-color: var(--gold-border);
+}
+
+.accountButton:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.railCollapsed .accountButton {
+  justify-content: center;
+  padding: 0;
+}
+
 .railCollapsed .collapseToggle {
   justify-content: center;
   padding: 0;

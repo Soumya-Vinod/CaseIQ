@@ -7,6 +7,7 @@ import { HelplineStrip } from "../components/HelplineStrip";
 import { IncidentDatePrompt } from "../components/IncidentDatePrompt";
 import { RelatedQuestions } from "../components/RelatedQuestions";
 import { SourcesPanel } from "../components/SourcesPanel";
+import { useAuth } from "../contexts/AuthContext";
 import { getSessionId } from "../utils/session";
 import styles from "./QueryPage.module.css";
 
@@ -30,6 +31,7 @@ const EXAMPLE_QUESTIONS = [
 ];
 
 export function QueryPage() {
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,19 @@ export function QueryPage() {
         {
           body: {
             query: text.trim(),
-            language: "en",
+            // FIXED 2026-09-07: hardcoded "en" for every request, guest or
+            // logged-in -- fine for a guest (the backend already
+            // auto-detects per query whenever the incoming value IS "en",
+            // see app.api.v1.legal.process_query), but meant a logged-in
+            // user's own `preferred_language` (settable via the profile
+            // page's preferences section) could never actually change
+            // anything. This is an OVERRIDE of auto-detect, not a
+            // replacement for it: a guest, or a logged-in user who's never
+            // set a preference, still gets "en" here and full per-query
+            // detection exactly as before -- only an explicitly-set
+            // preference (anything other than the "en" default) skips
+            // detection and forces that language directly.
+            language: user?.preferred_language ?? "en",
             // FIXED 2026-09-06: this was hardcoded "" -- and the backend's
             // own follow-up mechanism (app.api.v1.legal._history) returns
             // no history at all for an empty session_id, so no user of the

@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -49,6 +50,28 @@ class UserOut(ORMModel):
     state: str | None = None
     district: str | None = None
     is_verified: bool
+    # Added 2026-09-07 (profile page, checklist item 6 follow-up): the
+    # column has existed on every user row since `User`'s `Timestamped`
+    # mixin, it just was never exposed here -- no migration, this is
+    # purely a read-path addition.
+    created_at: datetime
+
+
+class UpdatePreferencesIn(BaseModel):
+    """Added 2026-09-07, same profile-page pass as the sidebar/preferences
+    work (see docs/evaluation.md). All optional and independently
+    settable -- a client sends only the field(s) it's actually changing,
+    never a full profile replacement, so one page section updating
+    `preferred_language` can't accidentally null out `state`/`district`
+    set from a different section (or vice versa). `preferred_language`,
+    `state`, `district` all already existed as columns on `User` (the
+    first from registration, the other two declared but never
+    write-reachable until now) -- deliberately NOT a new `user_preferences`
+    table: nothing here needed one.
+    """
+    preferred_language: str | None = None
+    state: str | None = None
+    district: str | None = None
 
 
 class AuthOut(BaseModel):

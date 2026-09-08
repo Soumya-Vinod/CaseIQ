@@ -5,6 +5,7 @@ import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { useEffect, useRef, useState } from "react";
 import cachedStations from "../data/police-stations-mmr.json";
+import { useAuth } from "../contexts/AuthContext";
 import styles from "./PoliceStationsPage.module.css";
 
 // Fetched once, server-side (scripts/fetch-police-stations.mjs), not at
@@ -124,6 +125,7 @@ function formatAddress(tags: Record<string, string>): string {
  * that makes the map unusable for a demo. OSM needs neither a key nor a card.
  */
 export function PoliceStationsPage() {
+  const { user } = useAuth();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -241,24 +243,54 @@ export function PoliceStationsPage() {
     }
   }, [center]);
 
+  // Extracted 2026-09-07 (was inline in handleCitySearch) so the saved-
+  // state/district autofill below can trigger the exact same lookup a
+  // manual search does, rather than duplicating it.
+  async function geocodeAndCenter(q: string): Promise<boolean> {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      );
+      const results: { lat: string; lon: string }[] = await res.json();
+      if (!results.length) {
+        setCityError(`No location found for "${q}".`);
+        return false;
+      }
+      setCenter([parseFloat(results[0].lat), parseFloat(results[0].lon)]);
+      return true;
+    } catch {
+      setCityError("Could not search for that city. Please try again.");
+      return false;
+    }
+  }
+
   async function handleCitySearch(e: React.FormEvent) {
     e.preventDefault();
     if (!cityQuery.trim()) return;
     setCityError(null);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityQuery)}&format=json&limit=1`,
-      );
-      const results: { lat: string; lon: string }[] = await res.json();
-      if (!results.length) {
-        setCityError(`No location found for "${cityQuery}".`);
-        return;
-      }
-      setCenter([parseFloat(results[0].lat), parseFloat(results[0].lon)]);
-    } catch {
-      setCityError("Could not search for that city. Please try again.");
-    }
+    await geocodeAndCenter(cityQuery);
   }
+
+  // Added 2026-09-07: a logged-in user's saved district/state (profile
+  // page preferences) prefills the city search the moment geolocation is
+  // denied, instead of leaving the hardcoded DEFAULT_CENTER (Mumbai/
+  // VESIT) as the only fallback. Override, not replacement -- geolocation
+  // still wins whenever it's actually granted (real-time, more accurate
+  // than a saved region), this only improves the DENIED path, and typing
+  // a different city afterward still overrides it for that visit, same
+  // as any other search. Runs once per denial (the `ran` ref, not
+  // `geoStatus` alone, so it doesn't refire on unrelated re-renders or
+  // fight a city search the person already typed themselves).
+  const autofillRanRef = useRef(false);
+  useEffect(() => {
+    if (geoStatus !== "denied" || autofillRanRef.current) return;
+    if (!user?.district && !user?.state) return;
+    autofillRanRef.current = true;
+    const q = [user.district, user.state].filter(Boolean).join(", ");
+    setCityQuery(q);
+    void geocodeAndCenter(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoStatus, user?.district, user?.state]);
 
   return (
     <main className={styles.page}>

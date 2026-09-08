@@ -21,6 +21,7 @@ export type UserOut = components["schemas"]["UserOut"];
 export type AuthOut = components["schemas"]["AuthOut"];
 export type LoginIn = components["schemas"]["LoginIn"];
 export type RegisterIn = components["schemas"]["RegisterIn"];
+export type UpdatePreferencesIn = components["schemas"]["UpdatePreferencesIn"];
 export type Tokens = components["schemas"]["Tokens"];
 export type ConversationSummaryOut = components["schemas"]["ConversationSummaryOut"];
 export type ConversationDetailOut = components["schemas"]["ConversationDetailOut"];
