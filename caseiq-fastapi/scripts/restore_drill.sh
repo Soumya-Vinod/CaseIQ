@@ -34,14 +34,16 @@
 #   BACKUP_AGE_PUBLIC_KEY   -- passed through to backup_dump.sh. Not needed
 #                               (and not read) when EXISTING_ENC_PATH is set
 #                               -- nothing gets freshly encrypted in that mode.
-#   PG_DUMP_BIN (optional)  -- if exported before running this, it reaches
-#                               backup_dump.sh's fresh-dump path unchanged
-#                               (ordinary shell inheritance, not special-
-#                               cased here). Irrelevant when EXISTING_ENC_PATH
-#                               is set -- no dump gets taken in that mode.
-#                               Plain `pg_dump` is correct on a normal
-#                               machine; only needed if PATH resolution
-#                               can't be trusted -- see backup_dump.sh.
+#   PG_DUMP_BIN (optional)  -- force a specific pg_dump binary in step 1's
+#                               call to backup_dump.sh, skipping its own
+#                               auto-resolution (see scripts/lib/pg_bin.sh).
+#                               Irrelevant when EXISTING_ENC_PATH is set --
+#                               no dump gets taken in that mode. Step 4's
+#                               pg_restore is always auto-resolved against
+#                               RESTORE_TARGET_URL directly; there is no
+#                               override for it, on purpose -- the wrong
+#                               pg_restore for the actual target is never
+#                               something to force past.
 #
 #   EXISTING_ENC_PATH       -- OPTIONAL. Path to an already-encrypted
 #                               .dump.age file -- e.g. one just pulled down
@@ -113,7 +115,14 @@ else
 fi
 
 echo "== 4/5: restore data only (schema already exists from step 3) =="
-pg_restore --data-only --disable-triggers --no-owner --no-privileges \
+# Resolved against RESTORE_TARGET_URL specifically, not DATABASE_URL_DIRECT
+# -- this is the second, independently-discovered pg_dump/pg_restore call
+# site in this repo (docs/evaluation.md, "a fix applied to the place it
+# was found, not everywhere it belonged"); scripts/lib/pg_bin.sh is the
+# shared fix, used here the same way backup_dump.sh uses it for pg_dump.
+source "$HERE/lib/pg_bin.sh"
+PG_RESTORE_BIN="$(resolve_pg_bin "$RESTORE_TARGET_URL" pg_restore)"
+"$PG_RESTORE_BIN" --data-only --disable-triggers --no-owner --no-privileges \
   -d "$RESTORE_TARGET_URL" "$DEC_PATH"
 
 echo "== 5/5: verify =="

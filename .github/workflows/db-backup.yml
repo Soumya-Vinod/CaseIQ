@@ -35,34 +35,28 @@ jobs:
       - uses: actions/checkout@v4
         # Shallow -- this job only needs scripts/backup_dump.sh, not history.
 
-      - name: Install pg_dump and age
-        # Found live, twice: adding PGDG's apt source and installing the
-        # UNVERSIONED `postgresql-client` package didn't get pg_dump 18 --
-        # ubuntu-latest already ships postgresql-client-16, apt treats the
-        # unversioned name as already satisfied, PGDG never gets consulted.
-        # Switching to the versioned package name (`postgresql-client-18`,
-        # below) looked like the fix and STILL wasn't: it installs 16 and
-        # 18 side by side, and Debian's pg_wrapper resolves plain `pg_dump`
-        # on PATH to 16 regardless of what else is installed -- confirmed
-        # by an actual debug step on the runner (`which -a pg_dump`,
-        # `/usr/lib/postgresql/18/bin/pg_dump --version` working directly,
-        # `dpkg -l` showing both packages installed), not guessed a third
-        # time. See docs/evaluation.md for the full arc -- the two wrong
-        # guesses are the more important finding than the wrapper itself.
-        #
-        # The actual fix is in "Dump and encrypt" below: call pg_dump by an
-        # absolute path (PG_DUMP_BIN), not through PATH at all -- going
-        # around the wrapper, not fighting it.
-        #
-        # `postgresql-client-18` here still needs a manual bump the day
-        # Neon moves off Postgres 18 -- apt can't install a major version
-        # nobody asked for. backup_dump.sh's own version assertion will say
-        # so loudly if that bump is missed, rather than this failing
-        # silently.
+      - name: Install pg_dump (matching Neon) and age
+        # FIXED 2026-09-12, three times over before landing here for good
+        # (docs/evaluation.md, "a fix applied to the place it was found,
+        # not everywhere it belonged"): two wrong guesses in this exact
+        # step (unversioned apt package; then a versioned one Debian's own
+        # pg_wrapper still didn't resolve to), then a THIRD, identical
+        # failure in nightly-eval.yml, against a DIFFERENT server version
+        # entirely -- because the fix lived only here. Installing the
+        # matching client package is now centralized in
+        # scripts/ci_install_matching_pg_client.sh (queries the real
+        # target for its actual version, never a hardcoded one -- this
+        # project now talks to Neon at 18 and a separate eval Postgres at
+        # 17, and a fix pinned to either number is the same mistake with
+        # extra steps); resolving the right installed BINARY at use time
+        # (the part installing alone never fixed -- Debian's wrapper is
+        # still there) is scripts/lib/pg_bin.sh's resolve_pg_bin(), used
+        # inside backup_dump.sh itself now, not derived here.
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
         run: |
-          sudo apt-get install -y postgresql-common
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-client-18 age
+          caseiq-fastapi/scripts/ci_install_matching_pg_client.sh "$DATABASE_URL_DIRECT"
+          sudo apt-get install -y age
 
       - name: Dump and encrypt
         id: dump
@@ -71,13 +65,6 @@ jobs:
           BACKUP_AGE_PUBLIC_KEY: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
         run: |
           chmod +x caseiq-fastapi/scripts/backup_dump.sh
-          # Derived, not hardcoded a second time -- the ONE place a Neon
-          # major-version bump requires an edit is the apt package name
-          # above; this picks up whatever that step actually installed
-          # (highest installed major wins, via `sort -V`), so this step
-          # doesn't also need editing when that one changes.
-          export PG_DUMP_BIN="$(ls -d /usr/lib/postgresql/*/bin/pg_dump | sort -V | tail -1)"
-          echo "using PG_DUMP_BIN=$PG_DUMP_BIN ($("$PG_DUMP_BIN" --version))"
           enc_path="$(caseiq-fastapi/scripts/backup_dump.sh)"
           echo "enc_path=$enc_path" >> "$GITHUB_OUTPUT"
 

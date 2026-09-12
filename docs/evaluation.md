@@ -3712,3 +3712,106 @@ test_ratelimit.py included) passes clean -- **137 passed, 0 failed**, no `Runtim
 `RuntimeError`, runtime back down to ~75s from the ~190s a real (if accidental) Neon round-trip per
 request had been adding. Confirmed directly, not inferred from the passing count alone: the
 specific `test_health.py` failure this caused is reproduced and gone, both independently checked.
+
+## A fix applied to the place it was found, not everywhere it belonged (2026-09-12)
+
+`nightly-eval.yml`'s first real run failed on the identical pg_dump-version mismatch as
+`backup_dump.sh`'s two earlier incidents (this file, above) -- server 17.11 (the eval job's own
+Postgres service container), pg_dump 16.15 (`ubuntu-latest`'s default). The fix for that already
+existed, verified, in production use, in `backup_dump.sh` and `db-backup.yml`. It didn't help,
+because it lived only there. This is the fourth instance of the pattern this file keeps naming --
+different shape again: not a config that looks right and isn't, not a wrong-but-valid-looking
+write, but a KNOWN, ALREADY-FIXED bug recurring in new code because the fix was local to the file
+it was found in rather than centralized where every future caller would inherit it automatically.
+
+**Closed by centralizing, not patching the third site**: `scripts/lib/pg_bin.sh` is now the one
+place this project decides which `pg_dump`/`pg_restore` binary to use for a given target --
+`resolve_pg_bin(target_url, bin_name)` queries the ACTUAL target server's version (never a
+hardcoded one -- this project now talks to at least two Postgres majors at once, Neon at 18 and the
+eval job's own service container at 17, so hardcoding either is the same mistake with extra steps),
+checks Debian's own versioned install path first (`/usr/lib/postgresql/<major>/bin/<bin>` --
+confirmed live, not assumed, that Debian's `pg_wrapper` does not reliably resolve plain `pg_dump`
+on PATH to the newest installed major when several are present), and falls back to a
+PATH-lookup-plus-verify for non-Debian environments (this project's own dev machine, tested
+directly). `scripts/backup_dump.sh` and `scripts/restore_drill.sh` -- the two places in this repo
+that shell out to `pg_dump`/`pg_restore` -- both call it now; neither carries its own version logic
+any more. `scripts/ci_install_matching_pg_client.sh` is the matching CI-side half: installs
+whatever client package the ACTUAL target needs, determined at runtime via `psql` (whose own wire
+protocol tolerates cross-version use far better than `pg_dump`'s archive format does, so the
+runner's already-installed default `psql` is fine for the one probe query) -- `db-backup.yml` and
+`nightly-eval.yml` both call it now, pointed at their own different real targets, neither with a
+version number written anywhere in the YAML.
+
+**Verified directly, both directions, against both real target versions** -- not assumed from the
+design alone: `resolve_pg_bin` correctly REFUSED a mismatched `pg_restore` (PG18 on PATH against
+the local Postgres 17 container used for restore drills: `"pg_restore ... major version (18) does
+not match the target server's major version (17)"`) and correctly ACCEPTED the matching one once
+PG17 was made available, completing a real restore. Separately confirmed `resolve_pg_bin` accepts
+PG18 against real Neon and refuses PG17 against it -- the same function resolving correctly to
+DIFFERENT answers for DIFFERENT targets in the same test session, which is the actual property this
+whole fix depends on. Also fixed while centralizing, found reviewing the shared function before
+shipping it: the original per-script FATAL messages interpolated the raw target URL, including
+embedded credentials, into an error string -- harmless for `backup_dump.sh` alone (a registered
+GitHub secret, redacted from Actions logs automatically) but not something a shared helper used
+against arbitrary local/CI URLs should carry as a habit. Redacted before shipping, not after.
+
+### The 28 minutes this project couldn't measure locally, measured for real
+
+The first real `nightly-eval.yml` run got far enough (after the pg_dump fix) to time the thing this
+session's own CI-scoping work explicitly could not: full corpus re-ingestion -- 5 acts, ~2,155
+sections, real ONNX embeddings, real DB writes -- from the tracked PDFs, on an actual GitHub Actions
+runner rather than a dev machine that hit three separate out-of-memory kills trying. **28 minutes**,
+before the snapshot step's own pg_dump failure ended the run.
+
+**Is 28 minutes nightly acceptable?** On the numbers alone: yes, easily -- this repo's public status
+makes GitHub Actions minutes free, nobody is blocked waiting on a scheduled job, and 28 minutes
+inside a once-a-night window is not a real resource problem. But the real question underneath the
+one asked is different: is paying it EVERY night the right design, given what actually varies
+night to night. This job's corpus has exactly one source of truth: the 5 tracked PDFs plus the
+ingestion/seed scripts, both fully version-controlled in this same repo. Unlike the earlier framing
+of a cached corpus ("can silently diverge from what got manually re-ingested against production at
+some other time") -- true for a cache standing in for PRODUCTION's own hand-edited corpus, which
+this project's history shows really does drift outside any tracked process -- THIS job's corpus is
+never hand-edited; it is a pure, deterministic function of inputs already sitting in git. A cache
+keyed on a hash of THOSE inputs (the 5 PDF files' own content plus the ingestion/seed scripts'
+content), not on the post-ingestion `corpus_versions` checksum my original design used, would be
+safe on a different, stronger basis than "at most one day stale" -- it would be exactly as fresh as
+the tracked source, always, and only ever pay the 28 minutes on a night where the PDFs or the
+ingestion scripts actually changed, which recent history suggests is rare. **Revised recommendation,
+given the real number**: this is worth building -- source-hash-keyed cache restore before the
+ingestion step, ingestion only on a cache miss -- rather than accepting 28 minutes as the nightly
+floor forever.
+
+### Built, with the hash scope corrected before shipping, not after
+
+The first draft of "hash the PDFs plus the ingestion scripts" was itself incomplete -- caught before
+building, not after: it named `scripts/ingest_*.py`, but those are thin CLIs by this project's own
+established convention (`app/legal_corpus/ingest.py`'s own docstring: "`scripts/ingest_sections.py`
+stays a thin CLI; this is where the DB-writing logic lives"). The actual logic that determines what
+gets stored -- parsers, the validation gate, the provenance guard, and a hardcoded 2000-character
+truncation applied to every section's text before it's embedded -- lives in `app/legal_corpus/`,
+not in `scripts/`. Hashing only the CLI wrappers would have missed every one of those. More
+consequentially: the embedder's identity itself was missing from the first draft entirely, named
+explicitly by the user as the gap -- an embedder swap against IDENTICAL PDFs produces a completely
+different corpus (**HEADLINE RESULT 1**, this file's very first entry), and a cache keyed only on
+source files would have kept serving a stale, wrong-embedding-space corpus indefinitely across an
+embedder change, the exact failure this whole project's first finding was about, reintroduced
+through a caching shortcut. Checked, not assumed, for anything else in this category (chunking
+parameters, retrieval-time config): `RAG_TOP_K` and similar only affect what gets *fetched*, never
+what gets *written* -- excluded on that basis, not by oversight.
+
+**Final key**: sha256 over (a) every file under `app/legal_corpus/`, `app/services/embeddings.py`,
+the six real `scripts/ingest_*`/`parse_*`/`seed_*` CLI entry points, and `documents/` (PDFs +
+provenance.json), sorted for determinism, plus (b) the ACTUAL running `embedder.model_id` and
+`settings.EMBEDDING_DIM` -- read by importing the real code in the workflow itself, not hand-copied,
+so this can't independently drift from what `assert_embedding_config_matches_corpus` itself checks.
+
+**Verified directly before shipping**: the same hash computed twice, back to back, matched exactly
+(determinism); touching one line in `app/legal_corpus/ingest.py`, recomputing, and reverting changed
+the hash and then restored it exactly (`git diff` empty after) -- confirmed the key is actually
+sensitive to the files it claims to cover, not merely present. `nightly-eval.yml` now restores from
+cache on a hit and only re-ingests (paying the 28 minutes) on a miss, saving a fresh snapshot under
+the same key afterward. Not yet verified end to end on a real runner -- that needs two real nightly
+runs (one to populate the cache, one to confirm the second actually skips ingestion), which only
+GitHub Actions itself can prove; a cache that's never been observed to hit is just a slower first
+run with extra steps.

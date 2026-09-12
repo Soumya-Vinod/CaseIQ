@@ -3,24 +3,44 @@ name: Nightly eval (corpus + golden set)
 # The golden-set eval needs the REAL embedded corpus (2,155 real sections,
 # real ONNX embeddings) -- unlike backend-ci.yml's fast suite, which needs
 # no corpus at all (tests/integration/conftest.py's own fixtures seed
-# their own minimal synthetic rows). Nightly, not on every push: re-
-# ingesting from the tracked PDFs takes multiple minutes (see docs/
-# deployment.md's CI-scoping entry for why a clean number couldn't be
-# measured on a dev machine, and why that's fine -- this is the runner
-# it actually needs to be measured on), and the numbers themselves
-# (Recall@5, out-of-scope catch rate, in-scope false positives) don't
-# move on every commit.
+# their own minimal synthetic rows). Nightly, not on every push: the
+# numbers themselves (Recall@5, out-of-scope catch rate, in-scope false
+# positives) don't move on every commit, and full re-ingestion measured
+# 28 real minutes the first time this job actually ran (docs/
+# evaluation.md -- the number this project's own dev machine could never
+# produce, three separate OOM kills trying).
 #
-# Corpus source: always re-ingested fresh here, every night, from the
-# tracked PDFs -- not restored from a cache that might silently diverge
-# from what got manually re-ingested against production at some other
-# time (this project's own history: corpus changes have happened by hand
-# against Neon directly, with no CI step involved at all). "At most one
-# day stale, and staleness is a decision" -- the corpus this eval runs
-# against is never older than last night's run. The resulting snapshot is
-# still cached afterward, tagged with that run's real corpus_versions
-# checksum, purely as a dated, checksummed record -- not as a shortcut
-# this job relies on to skip ingestion.
+# Corpus source: a content-addressed cache, not "always re-ingest" and not
+# a time-based one either. The cache key is a hash of everything that can
+# change what actually gets STORED for identical source PDFs -- see
+# docs/evaluation.md's cache-key entry for the full reasoning and the
+# audit behind this list:
+#   - the 5 tracked source PDFs + provenance.json
+#   - app/legal_corpus/ (parsers, the validation gate, the provenance
+#     guard, the 2000-char embedding-input truncation in ingest.py,
+#     versioning, judicial_status/acts seed data) -- NOT just the thin
+#     scripts/*.py CLI wrappers, which contain none of the actual logic
+#   - app/services/embeddings.py -- the embedder implementations
+#     themselves, not just their model_id label
+#   - the running embedder's ACTUAL model_id + EMBEDDING_DIM -- read from
+#     the real running code, the same identity app.services.embeddings.
+#     assert_embedding_config_matches_corpus checks at app startup. An
+#     embedder swap against IDENTICAL PDFs produces a completely
+#     different corpus (this project's own HEADLINE RESULT 1) -- if this
+#     weren't in the key, a swapped embedder would silently keep hitting
+#     a stale cache built under the old one.
+# Explicitly NOT in the key: RAG_TOP_K or anything else that affects
+# retrieval-time behaviour rather than what gets written to
+# section_versions/offence_attributes/judicial_status -- checked, not
+# assumed, during the audit that produced this list.
+#
+# This is safe on a stronger basis than "at most one day stale": unlike a
+# cache standing in for PRODUCTION's own corpus (which really has drifted
+# from any tracked process in this project's history -- hand-edited
+# against Neon directly, no CI step involved), this job's corpus is a
+# pure, deterministic function of inputs already sitting in this repo. The
+# cache is exactly as fresh as those inputs, always, and only ever misses
+# when one of them actually changed.
 on:
   schedule:
     # 03:30 UTC -- after db-backup.yml's own 02:17 UTC slot, so the two
@@ -57,6 +77,7 @@ jobs:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: caseiq_eval
+      EVAL_DB_URL: "postgresql://postgres:postgres@localhost:5434/caseiq_eval"
     steps:
       - uses: actions/checkout@v4
 
@@ -68,41 +89,94 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Compute corpus-source cache key
+        id: corpus_key
+        # Everything listed in this workflow's own top comment, hashed
+        # together into one key. model_id and EMBEDDING_DIM are read by
+        # actually importing the real running code -- the same values
+        # assert_embedding_config_matches_corpus checks -- not guessed or
+        # hand-copied, so this can't silently drift from what the app
+        # itself considers its own identity.
+        run: |
+          MODEL_ID=$(python -c "from app.services.embeddings import embedder; print(embedder.model_id)")
+          EMBEDDING_DIM=$(python -c "from app.core.config import settings; print(settings.EMBEDDING_DIM)")
+          echo "resolved embedder identity: $MODEL_ID (dim=$EMBEDDING_DIM)"
+          HASH=$({
+            find app/legal_corpus app/services/embeddings.py \
+                 scripts/ingest_sections.py scripts/ingest_offence_attributes.py \
+                 scripts/ingest_bnss_offence_attributes.py scripts/seed_judicial_status.py \
+                 scripts/parse_crpc_schedule.py scripts/parse_bnss_schedule.py \
+                 documents -type f -print0 | sort -z | xargs -0 sha256sum
+            echo "model_id=$MODEL_ID"
+            echo "embedding_dim=$EMBEDDING_DIM"
+          } | sha256sum | cut -d' ' -f1)
+          echo "key=corpus-src-$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Install pg_dump/pg_restore matching this job's own Postgres service
+        # FIXED 2026-09-12 -- this exact job is the THIRD place this
+        # project hit the pg_dump-version mismatch (Neon: 18; this eval
+        # service container: 17; ubuntu-latest's own default: 16) before
+        # the fix was centralized (docs/evaluation.md, "a fix applied to
+        # the place it was found, not everywhere it belonged"). Same
+        # script db-backup.yml uses, pointed at THIS job's own target --
+        # never a hardcoded version, on purpose, since this project now
+        # talks to two servers with two different majors.
+        run: caseiq-fastapi/scripts/ci_install_matching_pg_client.sh "$EVAL_DB_URL"
+
       - name: Build schema
         run: python -m alembic upgrade head
 
-      - name: Re-ingest the corpus fresh from the tracked PDFs
+      - name: Try restoring a cached corpus matching today's source
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: caseiq-fastapi/corpus_snapshot.dump
+          key: ${{ steps.corpus_key.outputs.key }}
+
+      - name: Restore the cached corpus (cache hit)
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: |
+          source scripts/lib/pg_bin.sh
+          PG_RESTORE_BIN="$(resolve_pg_bin "$EVAL_DB_URL" pg_restore)"
+          "$PG_RESTORE_BIN" --data-only --disable-triggers --no-owner --no-privileges \
+            -d "$EVAL_DB_URL" corpus_snapshot.dump
+
+      - name: Re-ingest the corpus fresh from the tracked PDFs (cache miss)
+        if: steps.cache.outputs.cache-hit != 'true'
         # scripts/ingest_sections.py --all computes real ONNX embeddings
-        # for all ~2,155 sections in one pass -- this is the slow step.
-        # Measure the real number here, on this runner, the first time
-        # this workflow actually runs -- not assumed from a dev machine
-        # that hit three separate OOM kills trying (docs/evaluation.md's
-        # CI-scoping entry has the honest account of why that number
-        # isn't trustworthy).
+        # for all ~2,155 sections in one pass -- this is the slow step,
+        # measured at 28 real minutes the first time this job ran. Only
+        # runs when the source-hash cache above missed -- i.e. the PDFs,
+        # the ingestion/parsing logic, or the embedder identity actually
+        # changed since the last night this succeeded.
         run: |
           python -m scripts.ingest_sections --all
           python -m scripts.ingest_offence_attributes
           python -m scripts.ingest_bnss_offence_attributes
           python -m scripts.seed_judicial_status
 
-      - name: Snapshot the fresh corpus, tagged with its own checksum
-        id: snapshot
+      - name: Snapshot the freshly-ingested corpus for next time (cache miss only)
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          CHECKSUM=$(psql "postgresql://postgres:postgres@localhost:5434/caseiq_eval" \
-            -tAc "SELECT checksum FROM corpus_versions ORDER BY created_at DESC LIMIT 1")
-          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
-          pg_dump -Fc -t acts -t section_versions -t offence_attributes -t judicial_status -t corpus_versions \
-            "postgresql://postgres:postgres@localhost:5434/caseiq_eval" -f corpus_snapshot.dump
+          source scripts/lib/pg_bin.sh
+          PG_DUMP_BIN="$(resolve_pg_bin "$EVAL_DB_URL" pg_dump)"
+          "$PG_DUMP_BIN" -Fc -t acts -t section_versions -t offence_attributes -t judicial_status -t corpus_versions \
+            "$EVAL_DB_URL" -f corpus_snapshot.dump
 
-      - uses: actions/cache/save@v4
+      - name: Save the corpus cache (cache miss only)
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
         with:
           path: caseiq-fastapi/corpus_snapshot.dump
-          key: corpus-snapshot-${{ steps.snapshot.outputs.checksum }}
+          key: ${{ steps.corpus_key.outputs.key }}
 
       - name: Pre-flight -- embedding config matches this corpus
         # Turns a silent, cratered-numbers-with-no-explanation failure
         # (this project's own first HEADLINE RESULT, docs/evaluation.md)
-        # into a named one, before the eval below ever runs.
+        # into a named one, before the eval below ever runs. Exercises
+        # the restored-from-cache path exactly the same as a fresh
+        # ingest -- if the cache key's own model_id/EMBEDDING_DIM
+        # inputs were ever wrong, this is what would catch it.
         run: python -m scripts.ci_preflight_embedding_check
 
       - name: Golden set (Recall@5, out-of-scope catch, false positives)
