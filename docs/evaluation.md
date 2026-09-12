@@ -3549,3 +3549,38 @@ then exactly the boundary pair of real HTTP requests was sent per path.
 
 Full suite re-run after every fix in this entry: **132 passed, 0 failed** — same baseline as before
 this work started, both before and after the two additional bugs found by live-triggering.
+
+## A fix verified locally that didn't hold in the environment it was written for (2026-09-12)
+
+`scripts/backup_dump.sh`'s `pg_dump` refused to run against Neon's server (18.6) from a pg_dump
+17.2 -- "aborting because of server version mismatch." Fixed locally: installed pg_dump 18,
+confirmed the real dump/restore drill passed end to end (see the backup-planning entry,
+`docs/deployment.md`). Then the actual GitHub Actions workflow this was for ran for the first
+time and failed with the identical error -- `pg_dump 16.15` against server `18.6`.
+
+**Root cause, found by reading what actually ran, not by re-guessing**: the workflow's own fix for
+this (adding PGDG's apt repo, then `apt-get install postgresql-client`) was written and reasoned
+about, but never run anywhere before this. `ubuntu-latest` (24.04) already ships
+`postgresql-client-16` preinstalled; the unversioned package name is satisfied by what's already
+there, and apt never consults the newly-added PGDG repo for it. The explicit, versioned package
+name (`postgresql-client-18`) is what actually forces the newer install -- confirmed against
+PostgreSQL's own documentation before shipping it, not pattern-matched from the version number
+that happened to work locally.
+
+**Different shape from this file's other HEADLINE RESULT instances (embedding/corpus mismatch,
+abstention non-detection, the CrPC parser data, the unreachable profile UI, the golden-set sampling
+artifact, the rate-limiting scaffolding) — but the same root**: something was checked, passed, and
+was treated as done, in a place that wasn't the place it actually needed to hold. Those were mostly
+"looked configured, wasn't" in one environment; this one is "verified in environment A, shipped
+for environment B, never run in B until it mattered." Closed the same way the others were: run it
+for real where it actually runs, not where it's convenient to check.
+
+**Closed with a standing check, not just the one-time fix**: `backup_dump.sh` now asserts its own
+`pg_dump`'s major version matches the live server's major version as its first action, before
+touching anything else, and fails loudly with both numbers if they disagree — same principle as
+`assert_embedding_config_matches_corpus`. `pg_dump` only reliably refuses when it's OLDER than the
+server (what surfaced this incident); a NEWER pg_dump against an older server is not guaranteed to
+fail at all, and would have been a silent version of the same gap. Verified directly, not assumed:
+tested against the real Neon server with a deliberately mismatched pg_dump 17 (fails with
+"pg_dump major version (17) does not match the server's major version (18)", exit 1) and with the
+matching pg_dump 18 (passes, produces a real encrypted dump, exit 0).

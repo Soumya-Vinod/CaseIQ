@@ -34,6 +34,35 @@ set -euo pipefail
 : "${DATABASE_URL_DIRECT:?DATABASE_URL_DIRECT must be set}"
 : "${BACKUP_AGE_PUBLIC_KEY:?BACKUP_AGE_PUBLIC_KEY must be set}"
 
+# FIXED 2026-09-12, found live in the actual GitHub Actions run this exists
+# for, not locally: a fix verified on this machine (pg_dump 18 installed
+# here) that didn't hold in the environment it was actually written for
+# (ubuntu-latest shipped pg_dump 16 preinstalled; adding the PGDG apt repo
+# without a versioned package name left that 16 in place -- see this
+# workflow's own "Install pg_dump and age" step for the full story).
+# Different shape from this project's other verified-somewhere-that-wasn't-
+# where-it-mattered instances (docs/evaluation.md), same root: a check that
+# passed here said nothing about whether it would pass there.
+#
+# This assertion is what makes that kind of drift loud instead of an
+# eventual pg_dump error message that happens to be legible on ONE side of
+# the mismatch (pg_dump refuses a NEWER server; it does not reliably refuse
+# an OLDER one, which can silently succeed while assuming server-side
+# behaviour that isn't there). Same principle as
+# assert_embedding_config_matches_corpus: two independently-changeable
+# things -- whatever pg_dump this runner happens to have, and Neon's actual
+# server version -- must be checked to agree, not assumed to, in either
+# direction. Runs before anything else in this script, every time.
+PG_DUMP_MAJOR="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+SERVER_VERSION_NUM="$(psql "$DATABASE_URL_DIRECT" -tAc 'SHOW server_version_num;' | tr -d '[:space:]')"
+SERVER_MAJOR="$((SERVER_VERSION_NUM / 10000))"
+if [ "$PG_DUMP_MAJOR" != "$SERVER_MAJOR" ]; then
+  echo "FATAL: pg_dump major version ($PG_DUMP_MAJOR) does not match the" \
+       "server's major version ($SERVER_MAJOR) -- refusing to dump." \
+       "Install a pg_dump matching the server, don't just retry." >&2
+  exit 1
+fi
+
 OUT_DIR="${OUT_DIR:-./backups}"
 mkdir -p "$OUT_DIR"
 

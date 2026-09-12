@@ -31,27 +31,60 @@
 #                               script, run by a person, ever decrypts). For
 #                               a mechanism-only test, a throwaway keypair
 #                               (`age-keygen`) is fine.
-#   BACKUP_AGE_PUBLIC_KEY   -- passed through to backup_dump.sh
+#   BACKUP_AGE_PUBLIC_KEY   -- passed through to backup_dump.sh. Not needed
+#                               (and not read) when EXISTING_ENC_PATH is set
+#                               -- nothing gets freshly encrypted in that mode.
 #
-# Usage:
+#   EXISTING_ENC_PATH       -- OPTIONAL. Path to an already-encrypted
+#                               .dump.age file -- e.g. one just pulled down
+#                               from the real caseiq-backups repo -- to
+#                               restore from INSTEAD of dumping a fresh one.
+#                               This is the only mode that actually proves
+#                               the file that left this machine (via the
+#                               real GH Actions workflow, pushed to a repo
+#                               only you can read) is the one that restores
+#                               -- a drill that only ever restores from a
+#                               dump generated and consumed on the same
+#                               machine, in the same run, hasn't proven that.
+#                               DATABASE_URL_DIRECT is still required in
+#                               this mode -- step 5 still compares the
+#                               restored data against the live source, which
+#                               means: if real writes happened between when
+#                               that backup was taken and now, a mismatch is
+#                               data drift, not a broken restore -- check the
+#                               dump's timestamp against recent activity
+#                               before treating a mismatch here as a bug.
+#
+# Usage (fresh dump, mechanism test):
 #   DATABASE_URL_DIRECT=... RESTORE_TARGET_URL=... RESTORE_TARGET_NEEDS_SSL=false \
 #     AGE_IDENTITY_FILE=... BACKUP_AGE_PUBLIC_KEY=... ./scripts/restore_drill.sh
+#
+# Usage (real downloaded backup, the drill that actually proves the chain):
+#   DATABASE_URL_DIRECT=... RESTORE_TARGET_URL=... RESTORE_TARGET_NEEDS_SSL=false \
+#     AGE_IDENTITY_FILE=... EXISTING_ENC_PATH=/path/to/pulled/backup-*.dump.age \
+#     ./scripts/restore_drill.sh
 set -euo pipefail
 
 : "${DATABASE_URL_DIRECT:?}"
 : "${RESTORE_TARGET_URL:?}"
 : "${RESTORE_TARGET_NEEDS_SSL:?must be 'true' or 'false', no default}"
 : "${AGE_IDENTITY_FILE:?}"
-: "${BACKUP_AGE_PUBLIC_KEY:?}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT   # WORK holds a decrypted dump with real PII -- always scrubbed on exit
 
-echo "== 1/5: dump + encrypt the real source =="
-ENC_PATH="$(OUT_DIR="$WORK" DATABASE_URL_DIRECT="$DATABASE_URL_DIRECT" \
-  BACKUP_AGE_PUBLIC_KEY="$BACKUP_AGE_PUBLIC_KEY" "$HERE/backup_dump.sh")"
-echo "   -> $ENC_PATH"
+if [ -n "${EXISTING_ENC_PATH:-}" ]; then
+  echo "== 1/5: using an existing encrypted file, not dumping a fresh one =="
+  ENC_PATH="$EXISTING_ENC_PATH"
+  echo "   -> $ENC_PATH"
+else
+  : "${BACKUP_AGE_PUBLIC_KEY:?}"
+  echo "== 1/5: dump + encrypt the real source =="
+  ENC_PATH="$(OUT_DIR="$WORK" DATABASE_URL_DIRECT="$DATABASE_URL_DIRECT" \
+    BACKUP_AGE_PUBLIC_KEY="$BACKUP_AGE_PUBLIC_KEY" "$HERE/backup_dump.sh")"
+  echo "   -> $ENC_PATH"
+fi
 
 echo "== 2/5: decrypt =="
 DEC_PATH="$WORK/decrypted.dump"
