@@ -20,7 +20,7 @@ import asyncpg
 # corrupt: real column data, not just row identity).
 TABLES: dict[str, str] = {
     "users": "email || hashed_password || coalesce(phone,'') || coalesce(state,'')",
-    "legal_queries": "original_query || coalesce(session_id,'') || coalesce(ip_address,'')",
+    "legal_queries": "original_query || coalesce(session_id,'') || coalesce(ip_hash,'')",
     "query_responses": "conversational_summary || structured_data::text || coalesce(corpus_version_id::text,'')",
     "complaints": "complainant_name || complainant_address || incident_description || accused_details",
     "audit_logs": "action || coalesce(ip_hash,'') || coalesce(request_id,'')",

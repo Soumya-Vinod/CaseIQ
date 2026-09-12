@@ -223,17 +223,19 @@ async def process_query(
         # LegalQuery/QueryResponse specifically; audit_logs is a different
         # table with its own 90-day retention for a different purpose,
         # abuse investigation). Flagged rather than silently left
-        # inconsistent -- same treatment as the ip_address note just below.
+        # inconsistent -- same treatment as the ip_hash note just below.
         db.add(AuditLog(user_id=user.id if user else None, action="dark_query_blocked",
                         details={"query": payload.query, "pattern": pattern},
                         ip_hash=hash_ip(client_ip(request))))
-        # NOTE: LegalQuery.ip_address below still stores the raw IP -- a separate
-        # model from AuditLog, out of M2's explicit scope ("hash IPs" was scoped
-        # to audit logging). Flagged, not fixed here: same DPDP concern applies.
+        # FIXED 2026-09-12: LegalQuery used to store the raw IP here while
+        # AuditLog just above already hashed it -- same DPDP gap M2 fixed
+        # for audit_logs but left open here (0011_hash_legal_query_ip.py).
+        # Same hash_ip() call as AuditLog's, not a new one, so the two
+        # tables' hashes correlate for the same visitor.
         db.add(LegalQuery(user_id=user.id if user else None, original_query=stored_query,
                           status=QueryStatus.BLOCKED, is_flagged=True,
                           flag_reason=f"pattern:{pattern}", session_id=payload.session_id,
-                          ip_address=client_ip(request)))
+                          ip_hash=hash_ip(client_ip(request))))
         raise BlockedQueryError(
             "This query was flagged as potentially harmful. CaseIQ helps citizens understand "
             "their legal rights, not facilitate harm. This incident has been logged."
@@ -258,7 +260,7 @@ async def process_query(
         took_ms = int((time.perf_counter() - started) * 1000)
         q = LegalQuery(user_id=user.id if user else None, original_query=stored_query,
                        detected_language=language, status=QueryStatus.PROCESSED,
-                       session_id=payload.session_id, ip_address=client_ip(request))
+                       session_id=payload.session_id, ip_hash=hash_ip(client_ip(request)))
         db.add(q)
         await db.flush()
         db.add(QueryResponse(
@@ -332,7 +334,7 @@ async def process_query(
 
     q = LegalQuery(user_id=user.id if user else None, original_query=stored_query,
                    detected_language=language, status=QueryStatus.PROCESSING,
-                   session_id=payload.session_id, ip_address=client_ip(request))
+                   session_id=payload.session_id, ip_hash=hash_ip(client_ip(request)))
     db.add(q)
     await db.flush()
 

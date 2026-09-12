@@ -59,7 +59,15 @@ class LegalQuery(UUIDPk, Timestamped, Base):
     detected_language: Mapped[str] = mapped_column(String(10), default="en")
     status: Mapped[QueryStatus] = mapped_column(String(20), default=QueryStatus.PENDING)
     session_id: Mapped[str] = mapped_column(String(100), default="", index=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45))
+    # FIXED 2026-09-12 (docs/dpdp-compliance.md, alembic/versions/
+    # 0011_hash_legal_query_ip.py): used to store the raw client IP -- IP is
+    # personal data under India's DPDP Act 2023. Same fix audit_logs already
+    # got (0003_hash_audit_ip): a keyed hash (app.core.security.hash_ip),
+    # never the raw address. Reusing that exact function, not a new one, so
+    # the same visitor's rows here and in audit_logs correlate on the same
+    # hash value (both keyed with the same SECRET_KEY) -- useful for abuse
+    # investigation, the same property hash_ip was built for.
+    ip_hash: Mapped[str | None] = mapped_column(String(45))
     is_followup: Mapped[bool] = mapped_column(Boolean, default=False)
     is_flagged: Mapped[bool] = mapped_column(Boolean, default=False)
     flag_reason: Mapped[str] = mapped_column(String(255), default="")
