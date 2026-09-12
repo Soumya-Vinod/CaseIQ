@@ -1,0 +1,131 @@
+name: Nightly eval (corpus + golden set)
+
+# The golden-set eval needs the REAL embedded corpus (2,155 real sections,
+# real ONNX embeddings) -- unlike backend-ci.yml's fast suite, which needs
+# no corpus at all (tests/integration/conftest.py's own fixtures seed
+# their own minimal synthetic rows). Nightly, not on every push: re-
+# ingesting from the tracked PDFs takes multiple minutes (see docs/
+# deployment.md's CI-scoping entry for why a clean number couldn't be
+# measured on a dev machine, and why that's fine -- this is the runner
+# it actually needs to be measured on), and the numbers themselves
+# (Recall@5, out-of-scope catch rate, in-scope false positives) don't
+# move on every commit.
+#
+# Corpus source: always re-ingested fresh here, every night, from the
+# tracked PDFs -- not restored from a cache that might silently diverge
+# from what got manually re-ingested against production at some other
+# time (this project's own history: corpus changes have happened by hand
+# against Neon directly, with no CI step involved at all). "At most one
+# day stale, and staleness is a decision" -- the corpus this eval runs
+# against is never older than last night's run. The resulting snapshot is
+# still cached afterward, tagged with that run's real corpus_versions
+# checksum, purely as a dated, checksummed record -- not as a shortcut
+# this job relies on to skip ingestion.
+on:
+  schedule:
+    # 03:30 UTC -- after db-backup.yml's own 02:17 UTC slot, so the two
+    # nightly jobs don't compete for the same runner queue slot.
+    - cron: "30 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  golden-set:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: caseiq_eval
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: caseiq-fastapi
+    env:
+      # CI-only, never real -- no live Neon credentials in this workflow
+      # at all, on purpose (this job never touches production).
+      SECRET_KEY: ci-nightly-eval-not-a-real-secret-32-chars-min
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5434"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: caseiq_eval
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: caseiq-fastapi/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Build schema
+        run: python -m alembic upgrade head
+
+      - name: Re-ingest the corpus fresh from the tracked PDFs
+        # scripts/ingest_sections.py --all computes real ONNX embeddings
+        # for all ~2,155 sections in one pass -- this is the slow step.
+        # Measure the real number here, on this runner, the first time
+        # this workflow actually runs -- not assumed from a dev machine
+        # that hit three separate OOM kills trying (docs/evaluation.md's
+        # CI-scoping entry has the honest account of why that number
+        # isn't trustworthy).
+        run: |
+          python -m scripts.ingest_sections --all
+          python -m scripts.ingest_offence_attributes
+          python -m scripts.ingest_bnss_offence_attributes
+          python -m scripts.seed_judicial_status
+
+      - name: Snapshot the fresh corpus, tagged with its own checksum
+        id: snapshot
+        run: |
+          CHECKSUM=$(psql "postgresql://postgres:postgres@localhost:5434/caseiq_eval" \
+            -tAc "SELECT checksum FROM corpus_versions ORDER BY created_at DESC LIMIT 1")
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          pg_dump -Fc -t acts -t section_versions -t offence_attributes -t judicial_status -t corpus_versions \
+            "postgresql://postgres:postgres@localhost:5434/caseiq_eval" -f corpus_snapshot.dump
+
+      - uses: actions/cache/save@v4
+        with:
+          path: caseiq-fastapi/corpus_snapshot.dump
+          key: corpus-snapshot-${{ steps.snapshot.outputs.checksum }}
+
+      - name: Pre-flight -- embedding config matches this corpus
+        # Turns a silent, cratered-numbers-with-no-explanation failure
+        # (this project's own first HEADLINE RESULT, docs/evaluation.md)
+        # into a named one, before the eval below ever runs.
+        run: python -m scripts.ci_preflight_embedding_check
+
+      - name: Golden set (Recall@5, out-of-scope catch, false positives)
+        # Thresholds are today's real measured baseline, not aspirational
+        # numbers -- see docs/evaluation.md for how each was arrived at.
+        run: |
+          python -m scripts.eval_golden_set | tee golden_set_output.txt
+          python -c "
+          import re, sys
+          text = open('golden_set_output.txt').read()
+          recall = float(re.search(r'Recall@5 = ([\d.]+)', text).group(1))
+          oos_num, oos_den = map(int, re.search(r'Out-of-scope abstain rate = (\d+)/(\d+)', text).groups())
+          fp_num, fp_den = map(int, re.search(r'Option E false positives.*?: (\d+)/(\d+)', text).groups())
+          print(f'Recall@5={recall} (floor 0.909), out-of-scope={oos_num}/{oos_den} (floor 44/45), false_positives={fp_num}/{fp_den} (ceiling 1/44)')
+          failures = []
+          if recall < 0.909:
+              failures.append(f'Recall@5 {recall} < 0.909')
+          if oos_num < 44:
+              failures.append(f'out-of-scope catch {oos_num}/{oos_den} < 44/45')
+          if fp_num > 1:
+              failures.append(f'false positives {fp_num}/{fp_den} > 1/44')
+          if failures:
+              print('FAILED:', '; '.join(failures))
+              sys.exit(1)
+          print('All thresholds held.')
+          "

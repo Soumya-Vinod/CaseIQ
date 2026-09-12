@@ -41,3 +41,13 @@ jobs:
       # any of this project's own @media conditions went missing or
       # duplicated between source and the built bundle.
       - run: npm run build
+
+      - name: Lint (oxlint)
+        # Real, installed, already scripted ("lint": "oxlint" in
+        # package.json) -- just never wired into CI before this. Gates
+        # immediately, not report-only: run for real during CI scoping,
+        # 0 errors (6 pre-existing warnings, not failures) against the
+        # current codebase, so there's no backlog to work through first --
+        # unlike the backend's ruff config, found the same day in the same
+        # state and left report-only specifically because it has one.
+        run: npm run lint

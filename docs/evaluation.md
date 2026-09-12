@@ -3671,3 +3671,44 @@ compare, only whether it looks like what it's not supposed to look like, and whe
 actually confirms the target before the write happens. Verified directly: a placeholder-looking key
 is refused even with `--yes` passed; a real-looking key prints the host and fingerprint and
 requires typed confirmation; declining aborts with nothing written.
+
+## "Self-contained" integration tests were writing to production Neon, undetected (2026-09-12)
+
+Building the four rate-limiting tests scoped for CI (`tests/integration/test_ratelimit.py`), each
+one exercising a real HTTP request through the real app, real middleware, real decorator. The DB
+was overridden two ways -- FastAPI's `get_db` dependency, and `app.main`'s own `SessionLocal`
+reference for the app's lifespan startup checks -- believed complete, and stated as complete in
+this file's own earlier "backend-ci scoping" writeup: "no live Neon dependency at all."
+
+**It wasn't complete.** `app/middleware/request_context.py` writes an `audit_logs` row for every
+`/api/`-prefixed request, via its OWN `from app.db.base import SessionLocal` -- a THIRD, independent
+reference to the real global engine, invisible to both overrides above (one rebinds a FastAPI
+dependency, the other rebinds the name as it exists in `app.main`'s namespace only). Every one of
+these tests' requests to `/api/v1/legal/query` was, until this was found, silently writing a real
+row to production `audit_logs` -- confirmed directly from a failing test's own captured log output
+(`app_starting ... neon.tech`, a real connection pool, not a hypothetical).
+
+**How this surfaced**: not from noticing the writes themselves (nothing about them looked wrong --
+same shape as this file's very first HEADLINE RESULT: a valid, well-formed write, in the wrong
+place, that produces no error on its own). It surfaced as collateral damage to a LATER, unrelated
+test (`tests/test_health.py`) in the same pytest run: the real connection pool held a connection
+opened during the rate-limit test's own event loop; when that loop closed at test end, the pooled
+connection was orphaned, and the next test to touch the same global pool crashed trying to
+terminate it ("Event loop is closed", deep inside asyncpg's own protocol layer). Chased through
+several wrong turns first -- a per-test vs. module-level engine, `NullPool` vs. the default pool,
+`TestClient` vs. `httpx.AsyncClient`/`ASGITransport` -- each a real, defensible hypothesis, each
+fixing something adjacent without fixing the actual crash, because the actual leaking connection
+was never the test's OWN engine at all. Found only by reading the failing traceback's OWN captured
+log line closely enough to notice it named Neon's real hostname, not the local test database this
+suite believes it's the only thing running against.
+
+**The same "one thing imported from three independent places" shape this project keeps finding**:
+first in embedding config (provider vs. corpus), then in the two pg_dump-version incidents above,
+now in test isolation itself. Fixed by patching all three `SessionLocal` references the same way,
+not the two that were visible from `app.main`'s own code path.
+
+**Verified, not assumed, after the fix**: the full suite (137 tests, tests/integration/
+test_ratelimit.py included) passes clean -- **137 passed, 0 failed**, no `RuntimeWarning`, no
+`RuntimeError`, runtime back down to ~75s from the ~190s a real (if accidental) Neon round-trip per
+request had been adding. Confirmed directly, not inferred from the passing count alone: the
+specific `test_health.py` failure this caused is reproduced and gone, both independently checked.

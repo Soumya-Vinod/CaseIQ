@@ -1,0 +1,128 @@
+name: Backend CI
+
+# Every push/PR: the fast, fully self-contained suite -- no live Neon
+# dependency (see the `postgres` service below; job-level POSTGRES_* env
+# vars point BOTH the integration-test fixtures' explicit TEST_DATABASE_URL
+# default AND the app's own fallback settings.DATABASE_URL at the same
+# local container, so app.main's lifespan startup checks -- exercised by
+# tests/test_health.py -- run against a real, empty, local Postgres
+# instead of silently depending on production, which they did before this
+# was checked directly during CI scoping). ~75-190s observed locally
+# across several runs this session; real network to a container in the
+# same runner should land in a similar range.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "caseiq-fastapi/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "caseiq-fastapi/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: caseiq_integration_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: caseiq-fastapi
+    env:
+      # Matches tests/integration/conftest.py's own TEST_DATABASE_URL
+      # default exactly -- no override needed there. Also what
+      # settings.DATABASE_URL falls back to (POSTGRES_* fields) when
+      # DATABASE_URL_RAW is unset, which it deliberately is here: this
+      # whole job has no Neon credentials, on purpose.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5434"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: caseiq_integration_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: caseiq-fastapi/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Test (unit + integration, real local Postgres+pgvector, no Neon)
+        run: pytest -q
+
+      - name: Lint (report-only -- see docs/evaluation.md)
+        # ruff's own config (pyproject.toml) has apparently never been run
+        # before -- 284 real violations found scoping this, 51 auto-
+        # fixable. Not a gate: a red build for a pre-existing backlog is
+        # how a build gets ignored. Visible in every run's log; revisit
+        # gating once the backlog is worked down.
+        run: |
+          pip install ruff
+          ruff check . || true
+
+  pdf-integrity:
+    # Cheap, no network: only the local-file-vs-provenance.json half of
+    # scripts/verify_pdf_provenance.py -- the tracked PDFs are now
+    # publicly redistributed by this repo (docs/deployment.md), so
+    # catching an accidental edit/corruption to one of them is worth a
+    # sha256 check on every push. The re-download half is deliberately
+    # NOT here -- 2 of 3 recorded source_urls were already dead as of
+    # 2026-09-09, so gating on live government URLs would be permanently
+    # red for reasons that have nothing to do with this repo.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: caseiq-fastapi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify tracked PDFs match provenance.json (no network)
+        run: |
+          python -c "
+          import hashlib, json, sys
+          from pathlib import Path
+          docs_dir = Path('documents')
+          provenance = json.loads((docs_dir / 'provenance.json').read_text(encoding='utf-8'))['acts']
+          failures = []
+          for act, rec in provenance.items():
+              path = docs_dir / rec['filename']
+              actual = hashlib.sha256(path.read_bytes()).hexdigest()
+              expected = rec['source_sha256']
+              print(f'{act}: {\"MATCH\" if actual == expected else \"MISMATCH\"}')
+              if actual != expected:
+                  failures.append(act)
+          sys.exit(1 if failures else 0)
+          "
+
+  secret-scan:
+    # Forward-looking, not retroactive: the git-history audit done during
+    # backup planning (docs/deployment.md, 'The repo is public') only ever
+    # covered the past, one time, by hand. This is what protects the next
+    # commit, on every push, automatically.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
