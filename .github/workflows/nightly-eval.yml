@@ -121,7 +121,7 @@ jobs:
         # script db-backup.yml uses, pointed at THIS job's own target --
         # never a hardcoded version, on purpose, since this project now
         # talks to two servers with two different majors.
-        run: caseiq-fastapi/scripts/ci_install_matching_pg_client.sh "$EVAL_DB_URL"
+        run: scripts/ci_install_matching_pg_client.sh "$EVAL_DB_URL"
 
       - name: Build schema
         run: python -m alembic upgrade head

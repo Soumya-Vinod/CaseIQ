@@ -31,6 +31,9 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: caseiq-fastapi
     steps:
       - uses: actions/checkout@v4
         # Shallow -- this job only needs scripts/backup_dump.sh, not history.
@@ -55,7 +58,7 @@ jobs:
         env:
           DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
         run: |
-          caseiq-fastapi/scripts/ci_install_matching_pg_client.sh "$DATABASE_URL_DIRECT"
+          scripts/ci_install_matching_pg_client.sh "$DATABASE_URL_DIRECT"
           sudo apt-get install -y age
 
       - name: Dump and encrypt
@@ -64,8 +67,8 @@ jobs:
           DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
           BACKUP_AGE_PUBLIC_KEY: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
         run: |
-          chmod +x caseiq-fastapi/scripts/backup_dump.sh
-          enc_path="$(caseiq-fastapi/scripts/backup_dump.sh)"
+          chmod +x scripts/backup_dump.sh
+          enc_path="$(scripts/backup_dump.sh)"
           echo "enc_path=$enc_path" >> "$GITHUB_OUTPUT"
 
       - name: Push to private backup repo
