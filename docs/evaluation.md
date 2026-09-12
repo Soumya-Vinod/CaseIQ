@@ -3610,3 +3610,64 @@ after it failed again. Same standing rule this file already keeps re-learning in
 (verify against real data and real runs over anything asserted, including this project's own prior
 turn) — this is the version of it that cost two round trips instead of one because the debug step
 came third instead of first.
+
+## A wrong-but-valid-looking write to production — one step further along the same family (2026-09-12)
+
+`scripts/backfill_legal_query_ip_hash.py`'s first real run against production hashed all 69
+`legal_queries` rows with the wrong `SECRET_KEY` — a leftover shell env var override from unrelated
+local testing earlier the same session, never cleared before the command was pointed at the live
+Neon DB. The output gave no reason to doubt it: 69 rows in, 69 hashed out, every value a
+well-formed 40-character hex string, the exact shape a correct run would produce. Nothing about the
+result looked wrong. It was completely wrong.
+
+**Why this is a different shape from every other instance in this file, not a repeat of one**:
+HEADLINE RESULTS 1-6 and the pg_dump incident above are all "a check passed / a config looked
+right, in a place that wasn't the place it needed to hold" — inert scaffolding, a mismatched
+embedder, a wrong environment. Here nothing was checked at all, because there was nothing
+*wrong-looking* to check — the failure mode wasn't "looks configured, isn't," it was "looks
+correct, is correct-shaped, and is silently keyed with the wrong secret." A row count and a regex
+for "is this 40 hex characters" — the two things the script's own idempotency logic already
+verified — cannot distinguish a hash computed with the right key from one computed with the wrong
+one. Only recomputing the hash independently, with a known input and the real key, and comparing,
+can. That's a strictly harder thing to catch than the previous six, and it was caught by exactly
+that comparison, not by the script itself.
+
+**What made this recoverable rather than a real incident**: the fresh, on-demand backup the user
+had triggered immediately before the migration — "belt and braces," explicitly not relying on
+Neon's 6-hour PITR for a one-way operation — still held the real raw IPs. Restored locally,
+pre-0011 schema, all 69 recovered; recomputed with the real key; written back to production as a
+targeted correction, not a re-run of the original (already-hashed) column.
+
+**Blast radius checked, not assumed contained**: since the same wrong key was live in the same
+shell during earlier rate-limiting verification work, `audit_logs` was checked too, not left alone
+because "that table wasn't touched today." Found precisely, not estimated: every script in this
+session that exercised a real HTTP request against the live DB used Starlette's `TestClient`, which
+hardcodes its reported client IP as the literal string `"testclient"` — never a real address. That
+made the search exact: `hash_ip("testclient")` under the wrong key matched exactly 4 `audit_logs`
+rows, all from the same earlier session, all confirmed synthetic (no real user's IP was ever at
+risk — Render's actual deployment never reads this assistant's local shell). Corrected the same
+way, using the known input directly rather than a backup (the value was certain: literally
+`"testclient"`, not recovered, computed).
+
+**Re-verified against the real key after the fix, since the earlier correlation check was run under
+the wrong one and was void**: all 4 distinct `legal_queries.ip_hash` values now match
+`hash_ip()` recomputed independently for the 4 known raw inputs, one-to-one, exactly. Two of the
+four also correlate with `audit_logs` rows for the same visitor; the other two don't, explained by
+`audit_logs`' own 90-day automated retention (`cleanup_audit_logs`) rather than a gap in the
+property itself — `legal_queries` has no such pruning yet, so older rows there can outlive their
+`audit_logs` counterpart. The correlation property was confirmed directly (recomputed hashes match)
+independent of what audit_logs still happens to retain.
+
+**Closed with a standing check, this time actually standing**: `backfill_legal_query_ip_hash.py`
+now hard-refuses to run (exit 1, no override possible) if `SECRET_KEY` contains any of a list of
+placeholder markers (`test`, `change-me`, `example`, `dummy`, ...) — there is no legitimate reason a
+real production key should ever match one. Passing that check still requires an explicit
+confirmation, printing the target host and a short SHA-256 fingerprint of the key (never the key
+itself) before writing anything, skippable only with an explicit `--yes`. Same principle as
+`backup_dump.sh`'s pg_dump-version assertion two entries above — the thing this script depends on
+but doesn't itself control gets checked and shown, not assumed — extended to cover a failure mode
+that assertion's own shape (compare two versions) couldn't: there's no "version" of a secret key to
+compare, only whether it looks like what it's not supposed to look like, and whether a human
+actually confirms the target before the write happens. Verified directly: a placeholder-looking key
+is refused even with `--yes` passed; a real-looking key prints the host and fingerprint and
+requires typed confirmation; declining aborts with nothing written.

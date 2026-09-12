@@ -150,3 +150,15 @@ claims. Full suite re-run after the model/code changes: **132 passed, 0 failed**
 real (restored, disposable) copy of the real data, but have not yet been applied to the live Neon
 database. Hashing is one-way; running the backfill against production is not something to redo if
 it turns out wrong. Held for explicit go-ahead rather than run as part of this verification pass.
+
+### 2026-09-12, later the same day — the backup was used for real, not just drilled
+
+Before running the `ip_hash` migration/backfill against production, a fresh on-demand backup was
+triggered specifically so a same-minute recovery point existed for a one-way operation, rather than
+relying on Neon's 6-hour PITR. It was needed within the hour: the first production backfill run
+hashed all 69 rows with the wrong `SECRET_KEY` (a leftover local-testing override never cleared) —
+see `docs/evaluation.md`'s "wrong-but-valid-looking write" entry for the full incident. The fresh
+backup's raw IPs were restored locally and used to recompute and correct all 69 rows with the real
+key. **This is the first time this project's backup existed to solve a real problem rather than
+being drilled against a hypothetical one** — the exact reason "actually run it, not just design it"
+was the standard held throughout this whole effort.
