@@ -230,6 +230,32 @@ auto-attach path is exactly how the second exposure above happened. When the use
 credential, they update `.env` and Render's dashboard themselves; the assistant re-reads `.env`
 after, it doesn't receive the value in conversation.
 
+## The repo is public — recorded as a decision, not a default (2026-09-09)
+
+`github.com/Soumya-Vinod/CaseIQ` is public (confirmed via the GitHub API, not assumed). That was
+already true before this note; it's written down here because the backup-planning session that
+prompted un-gitignoring the 5 source Act PDFs (`caseiq-fastapi/.gitignore`, 2026-09-08) surfaced it
+as a live fact worth being deliberate about rather than something to keep discovering by accident.
+
+**Consequence acted on**: `documents/*.pdf` (BNS/BNSS/BSA/IPC/CrPC, ~6.85MB) is now tracked and
+therefore **publicly redistributed** by this repo — anyone can clone/download the exact source
+texts CaseIQ ingests. Checked first, not assumed: no LICENSE file exists anywhere in this repo, and
+no redistribution/copyright restriction is recorded in `documents/provenance.json` or any docs
+file for any of the five. All five are central-government legislative texts (Bharatiya Nyaya
+Sanhita, Bharatiya Nagarik Suraksha Sanhita, Bharatiya Sakshya Adhiniyam, Indian Penal Code, Code
+of Criminal Procedure) sourced from `indiacode.nic.in` — India's own government legislative
+repository — which is itself a public, no-login distribution point for these exact texts. Nothing
+found suggests redistributing them is restricted; if that's ever wrong for a specific act, the fix
+is removing that one PDF from tracking, not re-gitignoring all five.
+
+**What a public repo means for everything else here, checked directly, not asserted**: full git
+history was searched for API keys, database connection strings/passwords, JWT signing secrets, and
+private key material (pattern search across every commit, all branches, plus a filename sweep for
+`.env`/credential-shaped files and a review of the largest blobs ever committed) — nothing found.
+The one previously-known credential exposure (Neon DB password, `## Security note` above) was
+via a chat transcript and a dashboard screenshot, confirmed there and reconfirmed here: it is not
+and has never been in git history, so the repo being public doesn't newly expose it.
+
 ## What is NOT deployed
 
 - **The `arq` background worker** (`app.tasks.worker.WorkerSettings`) — news refresh, embedding

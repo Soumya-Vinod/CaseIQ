@@ -1,0 +1,89 @@
+name: DB backup (unrecoverable set)
+
+# Nightly pg_dump of exactly the data that can't be rebuilt from tracked
+# source (users, conversation history, complaints -- plus corpus_versions,
+# a small FK-consistency dependency, see scripts/backup_dump.sh's own
+# comment). The corpus (acts/section_versions/offence_attributes/
+# judicial_status) is NOT here -- it's rebuildable from the tracked PDFs +
+# scripts/ingest_*, see docs/deployment.md's backup-planning entry for the
+# full reasoning and docs/dpdp-compliance.md for what each table holds.
+#
+# Runs on GitHub's infra, not Render or a local machine, specifically so it
+# still runs if the Render instance is down or nobody's machine is on --
+# Render Cron Jobs aren't available on the free tier (checked, not assumed);
+# this repo's public status makes GitHub Actions minutes free/unlimited.
+#
+# Storage: this repo is PUBLIC (docs/deployment.md, "The repo is public").
+# The dump is encrypted before it ever leaves this runner (age, recipient-
+# key mode -- this workflow only ever encrypts, it never holds a private
+# key or passphrase) and pushed to a SEPARATE, PRIVATE repo
+# (caseiq-backups), never committed here and never uploaded as a workflow
+# artifact (public-repo artifacts are downloadable by anyone with a GitHub
+# login -- confirmed, not assumed, during backup planning).
+on:
+  schedule:
+    # 02:17 UTC daily -- offset from the hour deliberately, so this isn't
+    # queued behind every other project's :00 cron on GitHub's shared
+    # runners.
+    - cron: "17 2 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        # Shallow -- this job only needs scripts/backup_dump.sh, not history.
+
+      - name: Install pg_dump and age
+        # Found live while testing this locally: `apt-get install
+        # postgresql-client` installs whatever major version Ubuntu's
+        # default repo ships (often older than Neon's), and pg_dump refuses
+        # to dump from a server NEWER than itself -- hard failure, not a
+        # warning ("aborting because of server version mismatch"). PGDG's
+        # own setup script installs whatever the latest major is instead of
+        # a version pinned here that would silently go stale as Neon
+        # upgrades.
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client age
+
+      - name: Dump and encrypt
+        id: dump
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
+          BACKUP_AGE_PUBLIC_KEY: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
+        run: |
+          chmod +x caseiq-fastapi/scripts/backup_dump.sh
+          enc_path="$(caseiq-fastapi/scripts/backup_dump.sh)"
+          echo "enc_path=$enc_path" >> "$GITHUB_OUTPUT"
+
+      - name: Push to private backup repo
+        env:
+          GH_TOKEN: ${{ secrets.BACKUP_REPO_PAT }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/Soumya-Vinod/caseiq-backups.git" backups-repo
+          mkdir -p backups-repo/dumps
+          cp "${{ steps.dump.outputs.enc_path }}" backups-repo/dumps/
+
+          cd backups-repo
+          # Retention: keep the last 30 dumps (daily cadence, ~KB-sized
+          # files -- cheap to keep more, no real reason to keep fewer).
+          # `ls | sort | head -n -30` is safe here specifically because the
+          # filenames are UTC timestamps, so lexical sort == chronological.
+          ls -1 dumps/*.dump.age | sort | head -n -30 | xargs -r rm -f
+
+          # Bot identity for this repo's own automated commits only -- not
+          # the assistant committing on the user's behalf, and not this
+          # (the public caseiq) repo, which the user's standing rule keeps
+          # entirely manual. See docs/deployment.md's backup-planning entry.
+          git config user.name "caseiq-backup-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "backup: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
