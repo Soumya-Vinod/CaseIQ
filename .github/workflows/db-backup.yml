@@ -60,6 +60,26 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-18 age
 
+      - name: Debug -- what pg_dump actually resolves to on this runner
+        # Two guesses in a row (unversioned package, then a versioned one)
+        # both wrong about what's actually on the runner -- this step exists
+        # so the NEXT fix is read off real output, not guessed a third time.
+        # Temporary: remove once the real fix (chosen from this output) is
+        # in and has passed a real run.
+        run: |
+          echo "--- which -a pg_dump ---"
+          which -a pg_dump
+          echo "--- /usr/lib/postgresql/ ---"
+          ls /usr/lib/postgresql/
+          echo "--- pg_dump --version (whatever PATH resolves) ---"
+          pg_dump --version
+          echo "--- /usr/lib/postgresql/18/bin/pg_dump --version, if it exists ---"
+          /usr/lib/postgresql/18/bin/pg_dump --version || echo "not found at that path"
+          echo "--- dpkg -l | grep postgresql-client ---"
+          dpkg -l | grep postgresql-client || true
+          echo "--- update-alternatives --display pg_dump (if managed that way) ---"
+          update-alternatives --display pg_dump 2>&1 || echo "not alternatives-managed"
+
       - name: Dump and encrypt
         id: dump
         env:
