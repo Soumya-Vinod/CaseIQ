@@ -23,6 +23,15 @@
 #                                never needs (and must never be given) the
 #                                matching private key.
 #
+# Optional:
+#   PG_DUMP_BIN              -- path/name of the pg_dump binary to use.
+#                                Defaults to plain `pg_dump` (correct on a
+#                                normal machine). Override with an absolute
+#                                path where PATH resolution can't be trusted
+#                                to give the version you actually installed
+#                                -- see the version-assertion comment below
+#                                for why that's not hypothetical.
+#
 # Writes one file to $OUT_DIR (default ./backups):
 #   backup-<UTC timestamp>.dump.age
 # and prints its path on stdout (the one line of output that matters --
@@ -36,30 +45,34 @@ set -euo pipefail
 
 # FIXED 2026-09-12, found live in the actual GitHub Actions run this exists
 # for, not locally: a fix verified on this machine (pg_dump 18 installed
-# here) that didn't hold in the environment it was actually written for
-# (ubuntu-latest shipped pg_dump 16 preinstalled; adding the PGDG apt repo
-# without a versioned package name left that 16 in place -- see this
-# workflow's own "Install pg_dump and age" step for the full story).
-# Different shape from this project's other verified-somewhere-that-wasn't-
-# where-it-mattered instances (docs/evaluation.md), same root: a check that
-# passed here said nothing about whether it would pass there.
-#
-# This assertion is what makes that kind of drift loud instead of an
+# here) that didn't hold in the environment it was actually written for.
+# Two follow-on guesses at why ALSO didn't hold until a debug step actually
+# printed what was on the runner -- see docs/evaluation.md for the full
+# arc; the short version is postgresql-client-16 and -18 end up installed
+# side by side, and Debian's pg_wrapper resolves plain `pg_dump` on PATH to
+# 16 regardless. PG_DUMP_BIN exists because of that: defaults to plain
+# `pg_dump` (correct on this machine, and anywhere PATH isn't wrapper-
+# managed), and the workflow overrides it to an absolute path so it isn't
+# subject to the wrapper's own resolution at all -- not fighting the
+# wrapper, going around it.
+PG_DUMP_BIN="${PG_DUMP_BIN:-pg_dump}"
+
+# This assertion is what makes a pg_dump/server drift loud instead of an
 # eventual pg_dump error message that happens to be legible on ONE side of
 # the mismatch (pg_dump refuses a NEWER server; it does not reliably refuse
 # an OLDER one, which can silently succeed while assuming server-side
 # behaviour that isn't there). Same principle as
 # assert_embedding_config_matches_corpus: two independently-changeable
-# things -- whatever pg_dump this runner happens to have, and Neon's actual
-# server version -- must be checked to agree, not assumed to, in either
-# direction. Runs before anything else in this script, every time.
-PG_DUMP_MAJOR="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+# things -- whichever pg_dump PG_DUMP_BIN actually resolves to, and Neon's
+# actual server version -- must be checked to agree, not assumed to, in
+# either direction. Runs before anything else in this script, every time.
+PG_DUMP_MAJOR="$("$PG_DUMP_BIN" --version | grep -oE '[0-9]+' | head -1)"
 SERVER_VERSION_NUM="$(psql "$DATABASE_URL_DIRECT" -tAc 'SHOW server_version_num;' | tr -d '[:space:]')"
 SERVER_MAJOR="$((SERVER_VERSION_NUM / 10000))"
 if [ "$PG_DUMP_MAJOR" != "$SERVER_MAJOR" ]; then
-  echo "FATAL: pg_dump major version ($PG_DUMP_MAJOR) does not match the" \
-       "server's major version ($SERVER_MAJOR) -- refusing to dump." \
-       "Install a pg_dump matching the server, don't just retry." >&2
+  echo "FATAL: pg_dump ($PG_DUMP_BIN) major version ($PG_DUMP_MAJOR) does not" \
+       "match the server's major version ($SERVER_MAJOR) -- refusing to dump." \
+       "Install/point PG_DUMP_BIN at a pg_dump matching the server, don't just retry." >&2
   exit 1
 fi
 
@@ -77,7 +90,7 @@ ENC="$RAW.age"
 # failure, so the raw dump never survives this script either way.
 trap 'rm -f "$RAW"' EXIT
 
-pg_dump "$DATABASE_URL_DIRECT" \
+"$PG_DUMP_BIN" "$DATABASE_URL_DIRECT" \
   -Fc \
   -t users -t legal_queries -t query_responses -t complaints -t audit_logs -t corpus_versions \
   -f "$RAW" \

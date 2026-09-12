@@ -3575,12 +3575,38 @@ was treated as done, in a place that wasn't the place it actually needed to hold
 for environment B, never run in B until it mattered." Closed the same way the others were: run it
 for real where it actually runs, not where it's convenient to check.
 
-**Closed with a standing check, not just the one-time fix**: `backup_dump.sh` now asserts its own
-`pg_dump`'s major version matches the live server's major version as its first action, before
-touching anything else, and fails loudly with both numbers if they disagree — same principle as
+**A standing check added alongside the fix**: `backup_dump.sh` asserts its own `pg_dump`'s major
+version matches the live server's major version as its first action, before touching anything
+else, and fails loudly with both numbers if they disagree — same principle as
 `assert_embedding_config_matches_corpus`. `pg_dump` only reliably refuses when it's OLDER than the
 server (what surfaced this incident); a NEWER pg_dump against an older server is not guaranteed to
 fail at all, and would have been a silent version of the same gap. Verified directly, not assumed:
 tested against the real Neon server with a deliberately mismatched pg_dump 17 (fails with
 "pg_dump major version (17) does not match the server's major version (18)", exit 1) and with the
 matching pg_dump 18 (passes, produces a real encrypted dump, exit 0).
+
+**Not actually closed there — round 2, same day.** The `postgresql-client-18` fix above was written,
+reasoned about carefully (confirmed the exact package name against PostgreSQL's own docs first),
+and shipped as "the fix." It was still wrong. The real workflow run failed with the exact same
+error, unchanged: `pg_dump 16.15` against server `18.6`. The assertion did its one job here —
+turned a wrong fix into a loud, immediate failure instead of a corrupted or missing backup — but
+the fix underneath it hadn't been run anywhere before being called done.
+
+**What actually settled it wasn't a third guess — it was a debug step**: `which -a pg_dump`,
+`ls /usr/lib/postgresql/`, `pg_dump --version`, the same query run against the absolute path, and
+`dpkg -l` — five commands, one real run, on the actual runner. Output: both `postgresql-client-16`
+and `-18` were installed side by side; `/usr/lib/postgresql/18/bin/pg_dump` alone reported 18.6
+correctly; plain `pg_dump` on PATH still resolved to 16.15 regardless (Debian's `pg_wrapper`, not
+alternatives-managed). Two guesses in a row had been plausible, careful, and wrong about an
+environment neither one had actually looked at. The fix that followed — call `pg_dump` by an
+absolute path via a `PG_DUMP_BIN` override, going around the wrapper instead of reasoning about it
+— took one line to write once the real output made the actual mechanism obvious.
+
+**The lesson worth keeping isn't the wrapper's behaviour** (that's a Debian/Ubuntu packaging detail,
+useful precisely once). It's this: two fixes in a row were built on reasoning about an environment
+that was never actually queried, and both looked exactly as plausible as the one that turned out to
+be right. The debug step didn't need to be clever — it needed to run *before* the next fix, not
+after it failed again. Same standing rule this file already keeps re-learning in other shapes
+(verify against real data and real runs over anything asserted, including this project's own prior
+turn) — this is the version of it that cost two round trips instead of one because the debug step
+came third instead of first.

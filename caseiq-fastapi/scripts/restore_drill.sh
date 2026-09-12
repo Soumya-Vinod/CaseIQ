@@ -34,6 +34,14 @@
 #   BACKUP_AGE_PUBLIC_KEY   -- passed through to backup_dump.sh. Not needed
 #                               (and not read) when EXISTING_ENC_PATH is set
 #                               -- nothing gets freshly encrypted in that mode.
+#   PG_DUMP_BIN (optional)  -- if exported before running this, it reaches
+#                               backup_dump.sh's fresh-dump path unchanged
+#                               (ordinary shell inheritance, not special-
+#                               cased here). Irrelevant when EXISTING_ENC_PATH
+#                               is set -- no dump gets taken in that mode.
+#                               Plain `pg_dump` is correct on a normal
+#                               machine; only needed if PATH resolution
+#                               can't be trusted -- see backup_dump.sh.
 #
 #   EXISTING_ENC_PATH       -- OPTIONAL. Path to an already-encrypted
 #                               .dump.age file -- e.g. one just pulled down

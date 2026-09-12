@@ -36,49 +36,33 @@ jobs:
         # Shallow -- this job only needs scripts/backup_dump.sh, not history.
 
       - name: Install pg_dump and age
-        # Found live -- this failed on the actual runner in exactly the way
-        # it had already been "fixed" not to (docs/evaluation.md): adding
-        # the PGDG apt source and then `apt-get install postgresql-client`
-        # (unversioned) did NOT get pg_dump 18 -- ubuntu-latest (24.04)
-        # already ships postgresql-client-16 preinstalled, apt considered
-        # the unversioned package already satisfied, and never consulted
-        # PGDG for a newer one. Server was 18.6; pg_dump 16.15 refused to
-        # run against it. PGDG's setup script alone was the wrong fix --
-        # it configures the repo, it doesn't force an upgrade of an
-        # already-installed unversioned package. `postgresql-client-18`
-        # (the explicit, versioned package name) is what actually forces
-        # apt to pull PGDG's build rather than keep the preinstalled one.
+        # Found live, twice: adding PGDG's apt source and installing the
+        # UNVERSIONED `postgresql-client` package didn't get pg_dump 18 --
+        # ubuntu-latest already ships postgresql-client-16, apt treats the
+        # unversioned name as already satisfied, PGDG never gets consulted.
+        # Switching to the versioned package name (`postgresql-client-18`,
+        # below) looked like the fix and STILL wasn't: it installs 16 and
+        # 18 side by side, and Debian's pg_wrapper resolves plain `pg_dump`
+        # on PATH to 16 regardless of what else is installed -- confirmed
+        # by an actual debug step on the runner (`which -a pg_dump`,
+        # `/usr/lib/postgresql/18/bin/pg_dump --version` working directly,
+        # `dpkg -l` showing both packages installed), not guessed a third
+        # time. See docs/evaluation.md for the full arc -- the two wrong
+        # guesses are the more important finding than the wrapper itself.
         #
-        # This IS a version pinned here, and it WILL go stale the day Neon
-        # moves off Postgres 18 -- same tradeoff flagged the first time,
-        # now made explicit rather than implicit: bump this number when
-        # docs/deployment.md's Neon section says the server moved, and
-        # backup_dump.sh's own version assertion (added the same day this
-        # comment was) will say so loudly if anyone forgets.
+        # The actual fix is in "Dump and encrypt" below: call pg_dump by an
+        # absolute path (PG_DUMP_BIN), not through PATH at all -- going
+        # around the wrapper, not fighting it.
+        #
+        # `postgresql-client-18` here still needs a manual bump the day
+        # Neon moves off Postgres 18 -- apt can't install a major version
+        # nobody asked for. backup_dump.sh's own version assertion will say
+        # so loudly if that bump is missed, rather than this failing
+        # silently.
         run: |
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-18 age
-
-      - name: Debug -- what pg_dump actually resolves to on this runner
-        # Two guesses in a row (unversioned package, then a versioned one)
-        # both wrong about what's actually on the runner -- this step exists
-        # so the NEXT fix is read off real output, not guessed a third time.
-        # Temporary: remove once the real fix (chosen from this output) is
-        # in and has passed a real run.
-        run: |
-          echo "--- which -a pg_dump ---"
-          which -a pg_dump
-          echo "--- /usr/lib/postgresql/ ---"
-          ls /usr/lib/postgresql/
-          echo "--- pg_dump --version (whatever PATH resolves) ---"
-          pg_dump --version
-          echo "--- /usr/lib/postgresql/18/bin/pg_dump --version, if it exists ---"
-          /usr/lib/postgresql/18/bin/pg_dump --version || echo "not found at that path"
-          echo "--- dpkg -l | grep postgresql-client ---"
-          dpkg -l | grep postgresql-client || true
-          echo "--- update-alternatives --display pg_dump (if managed that way) ---"
-          update-alternatives --display pg_dump 2>&1 || echo "not alternatives-managed"
 
       - name: Dump and encrypt
         id: dump
@@ -87,6 +71,13 @@ jobs:
           BACKUP_AGE_PUBLIC_KEY: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
         run: |
           chmod +x caseiq-fastapi/scripts/backup_dump.sh
+          # Derived, not hardcoded a second time -- the ONE place a Neon
+          # major-version bump requires an edit is the apt package name
+          # above; this picks up whatever that step actually installed
+          # (highest installed major wins, via `sort -V`), so this step
+          # doesn't also need editing when that one changes.
+          export PG_DUMP_BIN="$(ls -d /usr/lib/postgresql/*/bin/pg_dump | sort -V | tail -1)"
+          echo "using PG_DUMP_BIN=$PG_DUMP_BIN ($("$PG_DUMP_BIN" --version))"
           enc_path="$(caseiq-fastapi/scripts/backup_dump.sh)"
           echo "enc_path=$enc_path" >> "$GITHUB_OUTPUT"
 
