@@ -3868,3 +3868,92 @@ exception MESSAGE, not just its type -- a guard that raised `EmbeddingConfigMism
 satisfy `pytest.raises(EmbeddingConfigMismatch)`, and the entire value of this guard's message is naming
 both the stored and the running identity so whoever hits it at 3am knows what to change, not just that
 something disagreed.
+
+## The nightly-eval corpus cache, verified against real runs instead of a green tick (2026-09-12/13)
+
+Two green `nightly-eval.yml` runs (1m29s-2m05s, neither paying the documented 28-minute ingest) were
+the first real evidence the source-hash cache (this file, "Built, with the hash scope corrected before
+shipping, not after") actually behaves as designed. Treated as a claim to verify, not a result to
+accept -- this project has hit "a green gate that means nothing" enough times (HEADLINE RESULTS 1-6,
+the wrong-key backfill, the Neon-writing integration tests) that a fast, passing run needed the same
+scrutiny a slow, failing one would have gotten.
+
+**Read directly from run logs, not inferred from duration, across eight runs total**: `nightly-eval.yml`
+only ever writes the resolved cache key to `$GITHUB_OUTPUT` (never echoes it to console), so the literal
+key string is only visible in `actions/cache/restore@v4`'s own log line -- that, not the "Compute
+corpus-source cache key" step, is where verification actually had to happen. Every hit run (#4, #5, #6,
+#7, #8) restored the identical key (`corpus-src-18edc57697b9b52ed54d060b391d46a559b3c061073e5c6a64d671
+fd90806457`) and identical byte size (5005694 B) from `actions/cache/restore@v4`'s own log, and every
+one of them showed `embedding_config_check_ok dim=384 model_id=onnx:sentence-transformers/
+all-MiniLM-L6-v2` at the preflight step (never the empty-corpus skip line) and the real, established
+golden-set baseline (`Recall@5=0.909, out-of-scope=44/45, false_positives=1/44, All thresholds held.`)
+-- not a degenerate or vacuous pass. A cache hit that restores nothing, or restores a stale corpus,
+would have been indistinguishable from this at the "green tick" level; it was ruled out by reading the
+preflight and golden-set lines specifically, not assumed from the run passing.
+
+### The seeder question -- resolved by direct observation, not deduction
+
+Which run actually first populated this cache turned into its own five-round investigation, because
+every run initially suspected turned out not to be it:
+  - **Run #1** (the first-ever `nightly-eval.yml` run, 29 real minutes): failed with the exact
+    documented `pg_dump` version mismatch (server 17.11, `pg_dump` 16.15). Both the user and this
+    assistant reasoned about why it couldn't have saved the cache -- but from two different, both
+    wrong, priors (see below).
+  - **Runs #2, #3**: failed at `caseiq-fastapi/scripts/ci_install_matching_pg_client.sh: No such file
+    or directory`, exit 127 -- the exact double-prefixed-path bug fixed earlier this same effort,
+    before either run ever reached the cache-key step at all.
+  - **Runs #4, #5, #6, #7, #8**: all confirmed cache HITS, identical key and byte size to each other.
+
+That's every run in the visible history, and none of them showed a successful `actions/cache/save@v4`.
+The repo's own cache list (checked directly, not inferred from run logs: `key: corpus-src-18edc5769...`,
+`size: 4.8 MB`, `created: Sep 12`) placed the seed in a roughly 68-minute window between run #3's
+failure (14:34 UTC) and run #4's hit (15:42 UTC) -- a window with no visible run in it. Rather than
+naming a candidate without evidence, this was left explicitly unresolved and flagged as possibly a run
+that existed and was later deleted (cache lifetime in GitHub Actions is independent of whether the run
+that created it still appears in history), not a run that never happened.
+
+**Resolved without needing to find that missing run at all**: the sensitivity experiment below (run
+#10) produced the first-ever observed `Cache saved with key: ...` in this entire investigation. Once a
+save had actually been witnessed happening, in real time, under controlled conditions, the seeder
+question stopped being "which historical run did this" and became "the mechanism visibly does this,
+confirmed" -- closed by observing the behavior directly rather than by ever identifying the original
+run.
+
+### Both of us reasoned about a step list that never existed -- same error shape, applied to CI history
+
+Before run #1's actual log was read, two different explanations were offered for why it couldn't have
+saved the cache: "the save step ran and returned 0s" (user) and "the save step must have been skipped,
+since there's no `if: always()` to run it after a prior step's failure" (this assistant). Both were
+wrong, in the same way: run #1 predates the cache feature's addition to `nightly-eval.yml` entirely --
+no "Compute corpus-source cache key," no restore step, no save step exists anywhere in that run's actual
+step list. Neither explanation was checked against the run's own log before being offered; both were
+built by projecting the CURRENT workflow file backward onto a run that executed a materially different
+one. This is the identical error shape as every HEADLINE RESULT in this file and the pg_dump/backfill
+incidents above it -- a plausible, internally-consistent model of the system substituting for reading
+what the system actually did -- just encountered here in CI run history instead of application code.
+The fix was the same fix this file keeps re-arriving at: read the actual log, not the current file, not
+each other's prior guess.
+
+### Sensitivity experiment -- the key changes and reverts exactly as designed, confirmed in the environment that governs
+
+Verified in this session, locally, that the cache key is sensitive to `app/legal_corpus/` and reverts
+deterministically (this file, "Built, with the hash scope corrected before shipping, not after"). Not
+accepted as sufficient on its own: the CI-computed key is the one that actually governs `nightly-eval.
+yml`'s behavior, and CI's environment (runner OS, tool versions, `find`/`sort`/`sha256sum` behavior)
+isn't guaranteed identical to a dev machine's. Run against the real workflow:
+  1. A no-op comment added to a file under `app/legal_corpus/`, pushed, `nightly-eval` dispatched.
+     Run #10 (29m32s): computed key `corpus-src-1f2c2e44b1a9a31ba0c5bdf2478fada3ed7da024150dfa0ecc20
+     cad2a6d77d7f` -- different from the original in every character past the shared prefix. Genuine
+     miss (`Cache not found for input keys: corpus-src-1f2c2e...`), a real 28-minute re-ingest (real
+     `INSERT`/`COMMIT` statements observed against `judicial_status`, not a restore), and the first
+     `Cache saved with key: corpus-src-1f2c2e...` this whole investigation ever witnessed. Golden-set
+     numbers against this freshly-built-from-scratch corpus: `Recall@5=0.909, out-of-scope=44/45,
+     false_positives=1/44, All thresholds held.` -- identical to every restored-cache run, now proven
+     against a corpus that provably wasn't restored from anything.
+  2. The comment reverted, pushed, dispatched again. Run #11: computed key back to the ORIGINAL
+     `corpus-src-18edc57697b9b52ed54d060b391d46a559b3c061073e5c6a64d671fd90806457`, exactly -- `Cache
+     hit for: corpus-src-18edc576...`, not a third, new key. Reverting the source reverts the hash;
+     nothing about the key depends on anything outside the tracked files (timestamps, run ordering,
+     runner state).
+
+Both directions confirmed in the actual governing environment, not extrapolated from the local check.

@@ -1,0 +1,26 @@
+﻿2026-09-13T14:47:40.3056076Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-13T14:47:40.3057500Z ##[group]Run actions/cache/restore@v4
+2026-09-13T14:47:40.3057808Z with:
+2026-09-13T14:47:40.3058050Z   path: caseiq-fastapi/corpus_snapshot.dump
+2026-09-13T14:47:40.3058526Z   key: corpus-src-1f2c2e44b1a9a31ba0c5bdf2478fada3ed7da024150dfa0ecc20cad2a6d77d7f
+2026-09-13T14:47:40.3059004Z   enableCrossOsArchive: false
+2026-09-13T14:47:40.3059278Z   fail-on-cache-miss: false
+2026-09-13T14:47:40.3059527Z   lookup-only: false
+2026-09-13T14:47:40.3059745Z env:
+2026-09-13T14:47:40.3060029Z   SECRET_KEY: ci-nightly-eval-not-a-real-secret-32-chars-min
+2026-09-13T14:47:40.3060395Z   POSTGRES_HOST: localhost
+2026-09-13T14:47:40.3060640Z   POSTGRES_PORT: 5434
+2026-09-13T14:47:40.3060910Z   POSTGRES_USER: postgres
+2026-09-13T14:47:40.3061151Z   POSTGRES_PASSWORD: postgres
+2026-09-13T14:47:40.3061402Z   POSTGRES_DB: caseiq_eval
+2026-09-13T14:47:40.3061934Z   EVAL_DB_URL: ***localhost:5434/caseiq_eval
+2026-09-13T14:47:40.3062319Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T14:47:40.3062751Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-13T14:47:40.3063180Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T14:47:40.3063565Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T14:47:40.3064174Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T14:47:40.3064561Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-13T14:47:40.3064896Z ##[endgroup]
+2026-09-13T14:47:40.4110957Z (node:4077) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-13T14:47:40.4111745Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-13T14:47:40.5850020Z Cache not found for input keys: corpus-src-1f2c2e44b1a9a31ba0c5bdf2478fada3ed7da024150dfa0ecc20cad2a6d77d7f

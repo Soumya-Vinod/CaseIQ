@@ -1,0 +1,21 @@
+﻿2026-09-13T15:15:45.0714410Z ##[group]Run source scripts/lib/pg_bin.sh
+2026-09-13T15:15:45.0714797Z [36;1msource scripts/lib/pg_bin.sh[0m
+2026-09-13T15:15:45.0715154Z [36;1mPG_DUMP_BIN="$(resolve_pg_bin "$EVAL_DB_URL" pg_dump)"[0m
+2026-09-13T15:15:45.0715777Z [36;1m"$PG_DUMP_BIN" -Fc -t acts -t section_versions -t offence_attributes -t judicial_status -t corpus_versions \[0m
+2026-09-13T15:15:45.0716307Z [36;1m  "$EVAL_DB_URL" -f corpus_snapshot.dump[0m
+2026-09-13T15:15:45.0756336Z shell: /usr/bin/bash -e {0}
+2026-09-13T15:15:45.0756615Z env:
+2026-09-13T15:15:45.0756916Z   SECRET_KEY: ci-nightly-eval-not-a-real-secret-32-chars-min
+2026-09-13T15:15:45.0757276Z   POSTGRES_HOST: localhost
+2026-09-13T15:15:45.0757775Z   POSTGRES_PORT: 5434
+2026-09-13T15:15:45.0758011Z   POSTGRES_USER: postgres
+2026-09-13T15:15:45.0758259Z   POSTGRES_PASSWORD: postgres
+2026-09-13T15:15:45.0758520Z   POSTGRES_DB: caseiq_eval
+2026-09-13T15:15:45.0759234Z   EVAL_DB_URL: ***localhost:5434/caseiq_eval
+2026-09-13T15:15:45.0759611Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:15:45.0760141Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-13T15:15:45.0760567Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:15:45.0760957Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:15:45.0761336Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:15:45.0761711Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-13T15:15:45.0762047Z ##[endgroup]

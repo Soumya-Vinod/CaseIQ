@@ -1,0 +1,34 @@
+﻿2026-09-13T14:46:27.1818053Z Current runner version: '2.337.0'
+2026-09-13T14:46:27.1843525Z ##[group]Runner Image Provisioner
+2026-09-13T14:46:27.1844433Z Hosted Compute Agent
+2026-09-13T14:46:27.1845083Z Version: 20260828.587
+2026-09-13T14:46:27.1845832Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-13T14:46:27.1846594Z Build Date: 2026-08-28T16:44:25Z
+2026-09-13T14:46:27.1847494Z Worker ID: {a696a8ce-6462-45a3-b263-4312e7ae7ead}
+2026-09-13T14:46:27.1848259Z Azure Region: westcentralus
+2026-09-13T14:46:27.1848928Z ##[endgroup]
+2026-09-13T14:46:27.1850753Z ##[group]Operating System
+2026-09-13T14:46:27.1851422Z Ubuntu
+2026-09-13T14:46:27.1852025Z 24.04.5
+2026-09-13T14:46:27.1852578Z LTS
+2026-09-13T14:46:27.1853154Z ##[endgroup]
+2026-09-13T14:46:27.1853787Z ##[group]Runner Image
+2026-09-13T14:46:27.1854431Z Image: ubuntu-24.04
+2026-09-13T14:46:27.1855009Z Version: 20260907.300.1
+2026-09-13T14:46:27.1856210Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-13T14:46:27.1858184Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-13T14:46:27.1859183Z ##[endgroup]
+2026-09-13T14:46:27.1860475Z ##[group]GITHUB_TOKEN Permissions
+2026-09-13T14:46:27.1862668Z Contents: read
+2026-09-13T14:46:27.1863306Z Metadata: read
+2026-09-13T14:46:27.1864055Z Packages: read
+2026-09-13T14:46:27.1864639Z ##[endgroup]
+2026-09-13T14:46:27.1866806Z Secret source: Actions
+2026-09-13T14:46:27.1868038Z Cache mode: write
+2026-09-13T14:46:27.1868787Z Prepare workflow directory
+2026-09-13T14:46:27.2321201Z Prepare all required actions
+2026-09-13T14:46:27.2369359Z Getting action download info
+2026-09-13T14:46:27.5543167Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-09-13T14:46:27.6836330Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-09-13T14:46:27.7659360Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-09-13T14:46:27.9806197Z Complete job name: golden-set

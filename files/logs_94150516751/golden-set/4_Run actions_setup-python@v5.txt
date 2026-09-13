@@ -1,0 +1,36 @@
+﻿2026-09-13T14:46:51.7013376Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-13T14:46:51.7015218Z ##[group]Run actions/setup-python@v5
+2026-09-13T14:46:51.7015497Z with:
+2026-09-13T14:46:51.7015707Z   python-version: 3.12
+2026-09-13T14:46:51.7015931Z   cache: pip
+2026-09-13T14:46:51.7016206Z   cache-dependency-path: caseiq-fastapi/requirements.txt
+2026-09-13T14:46:51.7016553Z   check-latest: false
+2026-09-13T14:46:51.7019074Z   token: ***
+2026-09-13T14:46:51.7019291Z   update-environment: true
+2026-09-13T14:46:51.7019535Z   allow-prereleases: false
+2026-09-13T14:46:51.7019761Z   freethreaded: false
+2026-09-13T14:46:51.7019978Z env:
+2026-09-13T14:46:51.7020260Z   SECRET_KEY: ci-nightly-eval-not-a-real-secret-32-chars-min
+2026-09-13T14:46:51.7020625Z   POSTGRES_HOST: localhost
+2026-09-13T14:46:51.7020912Z   POSTGRES_PORT: 5434
+2026-09-13T14:46:51.7021147Z   POSTGRES_USER: postgres
+2026-09-13T14:46:51.7021392Z   POSTGRES_PASSWORD: postgres
+2026-09-13T14:46:51.7021638Z   POSTGRES_DB: caseiq_eval
+2026-09-13T14:46:51.7022080Z   EVAL_DB_URL: ***localhost:5434/caseiq_eval
+2026-09-13T14:46:51.7022401Z ##[endgroup]
+2026-09-13T14:46:51.8322405Z ##[group]Installed versions
+2026-09-13T14:46:51.8399119Z (node:2745) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-13T14:46:51.8399843Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-13T14:46:51.8400638Z Successfully set up CPython (3.12.14)
+2026-09-13T14:46:51.8401331Z ##[endgroup]
+2026-09-13T14:46:51.8722531Z [command]/opt/hostedtoolcache/Python/3.12.14/x64/bin/pip cache dir
+2026-09-13T14:46:52.1365000Z /home/runner/.cache/pip
+2026-09-13T14:46:52.3427276Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-6348da7ac824b89c5758f5618e7a2fb79163274de3e4e2021b5dbfda744f2441
+2026-09-13T14:46:52.3533414Z (node:2745) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-13T14:46:53.5553881Z Received 37748736 of 216461570 (17.4%), 36.0 MBs/sec
+2026-09-13T14:46:54.5560863Z Received 212267266 of 216461570 (98.1%), 101.2 MBs/sec
+2026-09-13T14:46:54.6578045Z Received 216461570 of 216461570 (100.0%), 98.2 MBs/sec
+2026-09-13T14:46:54.6578913Z Cache Size: ~206 MB (216461570 B)
+2026-09-13T14:46:54.6614910Z [command]/usr/bin/tar -xf /home/runner/work/_temp/89f568f7-7b02-467b-9437-663d534b2e1a/cache.tzst -P -C /home/runner/work/CaseIQ/CaseIQ --use-compress-program unzstd
+2026-09-13T14:46:54.9942746Z Cache restored successfully
+2026-09-13T14:46:55.0049013Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.12.14-pip-6348da7ac824b89c5758f5618e7a2fb79163274de3e4e2021b5dbfda744f2441

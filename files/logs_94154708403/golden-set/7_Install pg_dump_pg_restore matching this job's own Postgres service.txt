@@ -1,0 +1,121 @@
+﻿2026-09-13T15:21:02.8581302Z ##[group]Run scripts/ci_install_matching_pg_client.sh "$EVAL_DB_URL"
+2026-09-13T15:21:02.8581844Z [36;1mscripts/ci_install_matching_pg_client.sh "$EVAL_DB_URL"[0m
+2026-09-13T15:21:02.8620344Z shell: /usr/bin/bash -e {0}
+2026-09-13T15:21:02.8620623Z env:
+2026-09-13T15:21:02.8620920Z   SECRET_KEY: ci-nightly-eval-not-a-real-secret-32-chars-min
+2026-09-13T15:21:02.8621293Z   POSTGRES_HOST: localhost
+2026-09-13T15:21:02.8621532Z   POSTGRES_PORT: 5434
+2026-09-13T15:21:02.8621757Z   POSTGRES_USER: postgres
+2026-09-13T15:21:02.8621996Z   POSTGRES_PASSWORD: postgres
+2026-09-13T15:21:02.8622238Z   POSTGRES_DB: caseiq_eval
+2026-09-13T15:21:02.8622732Z   EVAL_DB_URL: ***localhost:5434/caseiq_eval
+2026-09-13T15:21:02.8623116Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:21:02.8623562Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-09-13T15:21:02.8623996Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:21:02.8624385Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:21:02.8624805Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-09-13T15:21:02.8625187Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-09-13T15:21:02.8625510Z ##[endgroup]
+2026-09-13T15:21:02.9371919Z target server is Postgres 17 -- installing postgresql-client-17
+2026-09-13T15:21:03.9589053Z Reading package lists...
+2026-09-13T15:21:04.1788610Z Building dependency tree...
+2026-09-13T15:21:04.1799718Z Reading state information...
+2026-09-13T15:21:04.3788153Z postgresql-common is already the newest version (293.pgdg24.04+1).
+2026-09-13T15:21:04.3788945Z postgresql-common set to manually installed.
+2026-09-13T15:21:04.3789787Z 0 upgraded, 0 newly installed, 0 to remove and 1 not upgraded.
+2026-09-13T15:21:04.3984420Z This script will enable the PostgreSQL APT repository on apt.postgresql.org on
+2026-09-13T15:21:04.3985325Z your system. The distribution codename used will be noble-pgdg.
+2026-09-13T15:21:04.3985630Z 
+2026-09-13T15:21:04.3985973Z Using keyring /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+2026-09-13T15:21:04.3986429Z Writing /etc/apt/sources.list.d/pgdg.sources ...
+2026-09-13T15:21:04.4006757Z 
+2026-09-13T15:21:04.4007140Z Running apt-get update ...
+2026-09-13T15:21:04.4907533Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-09-13T15:21:04.5315316Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-09-13T15:21:04.5327310Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-09-13T15:21:04.5363473Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-09-13T15:21:04.5384673Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-09-13T15:21:04.5471246Z Get:6 https://dl.google.com/linux/chrome-stable/deb stable InRelease [2548 B]
+2026-09-13T15:21:04.5492876Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-09-13T15:21:04.6614304Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1263 kB]
+2026-09-13T15:21:04.6781131Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [292 kB]
+2026-09-13T15:21:04.6800417Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [181 kB]
+2026-09-13T15:21:04.6803454Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1690 kB]
+2026-09-13T15:21:04.6902900Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+2026-09-13T15:21:04.6950291Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1544 kB]
+2026-09-13T15:21:04.7016982Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [354 kB]
+2026-09-13T15:21:04.7042576Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+2026-09-13T15:21:04.7066574Z Get:16 https://apt.postgresql.org/pub/repos/apt noble-pgdg InRelease [189 kB]
+2026-09-13T15:21:04.7283050Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5772 B]
+2026-09-13T15:21:04.7291895Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+2026-09-13T15:21:04.8240889Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1006 kB]
+2026-09-13T15:21:04.8293747Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [213 kB]
+2026-09-13T15:21:04.8310876Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.4 kB]
+2026-09-13T15:21:04.8322156Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1206 kB]
+2026-09-13T15:21:04.8385560Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+2026-09-13T15:21:04.8399918Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1445 kB]
+2026-09-13T15:21:04.8442599Z Get:26 https://dl.google.com/linux/chrome-stable/deb stable/main amd64 Packages [1408 B]
+2026-09-13T15:21:04.8477117Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [336 kB]
+2026-09-13T15:21:04.8797148Z Get:27 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [463 kB]
+2026-09-13T15:21:04.8858598Z Get:28 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [414 kB]
+2026-09-13T15:21:04.9375311Z Get:29 https://apt.postgresql.org/pub/repos/apt noble-pgdg/main amd64 Packages [825 kB]
+2026-09-13T15:21:08.9794972Z Fetched 12.3 MB in 1s (8904 kB/s)
+2026-09-13T15:21:09.7956933Z Reading package lists...
+2026-09-13T15:21:09.8065665Z 
+2026-09-13T15:21:09.8066397Z You can now start installing packages from apt.postgresql.org.
+2026-09-13T15:21:09.8067122Z 
+2026-09-13T15:21:09.8067530Z Have a look at https://wiki.postgresql.org/wiki/Apt for more information;
+2026-09-13T15:21:09.8068646Z most notably the FAQ at https://wiki.postgresql.org/wiki/Apt/FAQ
+2026-09-13T15:21:09.8282200Z Reading package lists...
+2026-09-13T15:21:09.9955152Z Building dependency tree...
+2026-09-13T15:21:09.9963187Z Reading state information...
+2026-09-13T15:21:10.1386421Z Suggested packages:
+2026-09-13T15:21:10.1387291Z   postgresql-17 postgresql-doc-17
+2026-09-13T15:21:10.1555866Z The following NEW packages will be installed:
+2026-09-13T15:21:10.1572917Z   postgresql-client-17
+2026-09-13T15:21:10.1937642Z 0 upgraded, 1 newly installed, 0 to remove and 50 not upgraded.
+2026-09-13T15:21:10.1938342Z Need to get 2053 kB of archives.
+2026-09-13T15:21:10.1938819Z After this operation, 10.0 MB of additional disk space will be used.
+2026-09-13T15:21:10.1940356Z Get:1 https://apt.postgresql.org/pub/repos/apt noble-pgdg/main amd64 postgresql-client-17 amd64 17.11-1.pgdg24.04+2 [2053 kB]
+2026-09-13T15:21:10.4671618Z Fetched 2053 kB in 0s (37.3 MB/s)
+2026-09-13T15:21:10.4893420Z Selecting previously unselected package postgresql-client-17.
+2026-09-13T15:21:10.5246363Z (Reading database ... 
+2026-09-13T15:21:10.5247076Z (Reading database ... 5%
+2026-09-13T15:21:10.5247647Z (Reading database ... 10%
+2026-09-13T15:21:10.5248008Z (Reading database ... 15%
+2026-09-13T15:21:10.5248305Z (Reading database ... 20%
+2026-09-13T15:21:10.5248600Z (Reading database ... 25%
+2026-09-13T15:21:10.5248903Z (Reading database ... 30%
+2026-09-13T15:21:10.5249680Z (Reading database ... 35%
+2026-09-13T15:21:10.5250003Z (Reading database ... 40%
+2026-09-13T15:21:10.5250283Z (Reading database ... 45%
+2026-09-13T15:21:10.5250545Z (Reading database ... 50%
+2026-09-13T15:21:10.5301751Z (Reading database ... 55%
+2026-09-13T15:21:10.6696082Z (Reading database ... 60%
+2026-09-13T15:21:10.8286652Z (Reading database ... 65%
+2026-09-13T15:21:11.0301170Z (Reading database ... 70%
+2026-09-13T15:21:11.1710890Z (Reading database ... 75%
+2026-09-13T15:21:11.2913065Z (Reading database ... 80%
+2026-09-13T15:21:11.4717981Z (Reading database ... 85%
+2026-09-13T15:21:11.5761382Z (Reading database ... 90%
+2026-09-13T15:21:11.7371569Z (Reading database ... 95%
+2026-09-13T15:21:11.7372190Z (Reading database ... 100%
+2026-09-13T15:21:11.7372759Z (Reading database ... 201818 files and directories currently installed.)
+2026-09-13T15:21:11.7415877Z Preparing to unpack .../postgresql-client-17_17.11-1.pgdg24.04+2_amd64.deb ...
+2026-09-13T15:21:11.7441832Z Unpacking postgresql-client-17 (17.11-1.pgdg24.04+2) ...
+2026-09-13T15:21:11.9546462Z Setting up postgresql-client-17 (17.11-1.pgdg24.04+2) ...
+2026-09-13T15:21:12.3037268Z update-alternatives: using /usr/share/postgresql/17/man/man1/psql.1.gz to provide /usr/share/man/man1/psql.1.gz (psql.1.gz) in auto mode
+2026-09-13T15:21:12.3311178Z Processing triggers for postgresql-common (293.pgdg24.04+1) ...
+2026-09-13T15:21:12.4458892Z Building PostgreSQL dictionaries from installed myspell/hunspell packages...
+2026-09-13T15:21:12.4495791Z   en_us
+2026-09-13T15:21:12.4805415Z Removing obsolete dictionary files:
+2026-09-13T15:21:13.1539177Z 
+2026-09-13T15:21:13.1539710Z Running kernel seems to be up-to-date.
+2026-09-13T15:21:13.1541277Z 
+2026-09-13T15:21:13.1541435Z No services need to be restarted.
+2026-09-13T15:21:13.1541659Z 
+2026-09-13T15:21:13.1541786Z No containers need to be restarted.
+2026-09-13T15:21:13.1542005Z 
+2026-09-13T15:21:13.1542156Z No user sessions are running outdated binaries.
+2026-09-13T15:21:13.1542423Z 
+2026-09-13T15:21:13.1542674Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
