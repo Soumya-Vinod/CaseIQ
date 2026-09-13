@@ -14,6 +14,8 @@ Upsert rule, per section:
     new version: close the old one (valid_to = new valid_from) and insert
     version_no+1.
 """
+# no-op
+
 from __future__ import annotations
 
 import asyncio
