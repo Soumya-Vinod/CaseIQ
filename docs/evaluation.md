@@ -3815,3 +3815,56 @@ the same key afterward. Not yet verified end to end on a real runner -- that nee
 runs (one to populate the cache, one to confirm the second actually skips ingestion), which only
 GitHub Actions itself can prove; a cache that's never been observed to hit is just a slower first
 run with extra steps.
+
+## `test_health.py`'s hidden Neon dependency -- invisible because passing was never the signal that could have caught it (2026-09-12/13)
+
+Flagged directly, not found by review: `tests/test_health.py`'s `with TestClient(app) as client:` drives
+the app's real ASGI lifespan on `__enter__`, which calls `assert_embedding_config_matches_corpus`
+through `app.main`'s own `from app.db.base import SessionLocal` -- the real global engine, bound to
+whatever `settings.DATABASE_URL` actually resolves to. Nothing in this test overrode that. Same shape
+as `tests/integration/test_ratelimit.py`'s own discovery a day earlier (this file, "'Self-contained'
+integration tests were writing to production Neon, undetected") -- in fact that file's own `client`
+fixture docstring names this exact test as the one it found the gap in but didn't fix, out of scope.
+
+**Checked every other independent `SessionLocal` import in the codebase before patching, not just the
+one found first** -- the same question that file's fixture had to answer the hard way, where two
+believed-complete overrides turned out to be missing a third: `app.middleware.request_context.
+SessionLocal` is never reached (gated by `_is_audited`, which requires the path to start with `/api/`,
+and `/health` is registered directly on `app`, outside `API_V1_PREFIX`); `app.tasks.worker.SessionLocal`
+runs only inside a separate `arq` worker process this test never starts. Exactly one reference --
+`app.main.SessionLocal` -- was ever actually reached, confirmed by reading each call site, not assumed
+from the import list alone.
+
+**The reason this was invisible isn't that nobody looked, it's that the one signal available --
+whether the test passed -- couldn't distinguish the two cases that mattered.**
+`assert_embedding_config_matches_corpus`'s own empty-corpus branch (a fresh DB with no embedded rows
+yet logs a skip and returns) is correct and necessary for its real job -- but it means an empty local
+Postgres container and a fully-populated, correctly-configured Neon corpus produce the IDENTICAL
+outcome from this test's point of view: no exception, test green. A dev machine with `DATABASE_URL_RAW`
+pointed at real Neon in `.env` and a CI runner whose job-level `POSTGRES_*` vars point at an empty local
+container both passed, for entirely unrelated reasons, and neither passing result carried any
+information about which one had actually happened. Checking whether the test passed was never going to
+surface this -- only checking whether it connected to anything at all could, which is exactly what
+surfaced it: read the code path, not the test result.
+
+**Fixed by patching `app.main.SessionLocal` to a fake session with no real connection anywhere** --
+local or Neon -- whose `execute()` deterministically returns no rows, hitting the same empty-corpus
+skip branch on purpose instead of by environmental accident. Verified empirically, not just by reading
+the fix: ran both the old and new version of the test against a deliberately unreachable address
+(`10.255.255.1`, nothing listening). The old version hung past a 25-second timeout -- direct proof it
+was attempting a real connection, not a hypothetical one. The new version passed in 3.4 seconds.
+
+**Follow-on, the same day**: patching the DB down to the empty-corpus branch closed the hidden
+dependency but left `assert_embedding_config_matches_corpus` itself with zero direct test coverage
+anywhere -- the function that closed HEADLINE RESULT 1 was only ever exercised end-to-end against a
+real corpus (this project's own dev machine and Render deploys), never unit-tested against controlled
+inputs. Four tests added directly against the function (`tests/test_embeddings.py`), each a fake
+session returning a controlled row, no real DB: identity match (passes), model-identity mismatch with
+identical dimension (raises -- the exact HEADLINE RESULT 1 shape, since `LocalEmbedder` and
+`LocalOnnxEmbedder` can both be 384-dim), dimension mismatch (raises -- the function's other branch,
+untested until now), and the empty-corpus skip itself (returns cleanly), exercised directly instead of
+only incidentally through the fake `test_health.py` now depends on. The two raise cases assert on the
+exception MESSAGE, not just its type -- a guard that raised `EmbeddingConfigMismatch("")` would still
+satisfy `pytest.raises(EmbeddingConfigMismatch)`, and the entire value of this guard's message is naming
+both the stored and the running identity so whoever hits it at 3am knows what to change, not just that
+something disagreed.
