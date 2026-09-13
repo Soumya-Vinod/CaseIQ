@@ -1,0 +1,71 @@
+﻿2026-09-13T13:09:30.1994259Z Print service container logs: 04938345ccbd432e8e80969c4377aac5_pgvectorpgvectorpg17_7a3349
+2026-09-13T13:09:30.1999188Z ##[command]/usr/bin/docker logs --details ac9dcc9e7a5817e2bd6eede31c959a25a54c27d4a0518ce06cd8a7eb7d21190f
+2026-09-13T13:09:30.2124860Z  The files belonging to this database system will be owned by user "postgres".
+2026-09-13T13:09:30.2126066Z  This user must also own the server process.
+2026-09-13T13:09:30.2126622Z  
+2026-09-13T13:09:30.2127114Z  The database cluster will be initialized with locale "en_US.utf8".
+2026-09-13T13:09:30.2127883Z  The default database encoding has accordingly been set to "UTF8".
+2026-09-13T13:09:30.2128649Z  The default text search configuration will be set to "english".
+2026-09-13T13:09:30.2129146Z  
+2026-09-13T13:09:30.2129351Z  Data page checksums are disabled.
+2026-09-13T13:09:30.2129610Z  
+2026-09-13T13:09:30.2129914Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2026-09-13T13:09:30.2130318Z  creating subdirectories ... ok
+2026-09-13T13:09:30.2130703Z  selecting dynamic shared memory implementation ... posix
+2026-09-13T13:09:30.2131066Z  selecting default "max_connections" ... 100
+2026-09-13T13:09:30.2131378Z  selecting default "shared_buffers" ... 128MB
+2026-09-13T13:09:30.2131684Z  selecting default time zone ... Etc/UTC
+2026-09-13T13:09:30.2132205Z  creating configuration files ... ok
+2026-09-13T13:09:30.2132481Z  running bootstrap script ... ok
+2026-09-13T13:09:30.2132784Z  performing post-bootstrap initialization ... ok
+2026-09-13T13:09:30.2133094Z  syncing data to disk ... ok
+2026-09-13T13:09:30.2133331Z  
+2026-09-13T13:09:30.2133497Z  
+2026-09-13T13:09:30.2133732Z  Success. You can now start the database server using:
+2026-09-13T13:09:30.2134045Z  
+2026-09-13T13:09:30.2134297Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2026-09-13T13:09:30.2134920Z  
+2026-09-13T13:09:30.2135684Z  waiting for server to start....2026-09-13 13:08:18.513 UTC [48] LOG:  starting PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-09-13T13:09:30.2136693Z  2026-09-13 13:08:18.514 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-09-13T13:09:30.2137287Z  2026-09-13 13:08:18.516 UTC [51] LOG:  database system was shut down at 2026-09-13 13:08:18 UTC
+2026-09-13T13:09:30.2137824Z  2026-09-13 13:08:18.520 UTC [48] LOG:  database system is ready to accept connections
+2026-09-13T13:09:30.2138217Z   done
+2026-09-13T13:09:30.2138401Z  server started
+2026-09-13T13:09:30.2138604Z  CREATE DATABASE
+2026-09-13T13:09:30.2138796Z  
+2026-09-13T13:09:30.2138968Z  
+2026-09-13T13:09:30.2139279Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2026-09-13T13:09:30.2139675Z  
+2026-09-13T13:09:30.2140179Z  waiting for server to shut down...2026-09-13 13:08:18.698 UTC [48] LOG:  received fast shutdown request
+2026-09-13T13:09:30.2140914Z  .2026-09-13 13:08:18.698 UTC [48] LOG:  aborting any active transactions
+2026-09-13T13:09:30.2141690Z  2026-09-13 13:08:18.701 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+2026-09-13T13:09:30.2142252Z  2026-09-13 13:08:18.701 UTC [49] LOG:  shutting down
+2026-09-13T13:09:30.2142643Z  2026-09-13 13:08:18.701 UTC [49] LOG:  checkpoint starting: shutdown immediate
+2026-09-13T13:09:30.2143917Z  2026-09-13 13:08:18.718 UTC [49] LOG:  checkpoint complete: wrote 921 buffers (5.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.012 s, sync=0.002 s, total=0.018 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4238 kB, estimate=4238 kB; lsn=0/190A9C8, redo lsn=0/190A9C8
+2026-09-13T13:09:30.2146790Z  initdb: warning: enabling "trust" authentication for local connections
+2026-09-13T13:09:30.2148038Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2026-09-13T13:09:30.2149801Z  2026-09-13 13:08:18.821 UTC [1] LOG:  starting PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-09-13T13:09:30.2151375Z  2026-09-13 13:08:18.822 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-09-13T13:09:30.2152193Z  2026-09-13 13:08:18.822 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-09-13T13:09:30.2153088Z  2026-09-13 13:08:18.823 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-09-13T13:09:30.2154058Z  2026-09-13 13:08:18.825 UTC [64] LOG:  database system was shut down at 2026-09-13 13:08:18 UTC
+2026-09-13T13:09:30.2155671Z  2026-09-13 13:08:18.830 UTC [1] LOG:  database system is ready to accept connections
+2026-09-13T13:09:30.2156182Z  2026-09-13 13:08:27.925 UTC [75] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2156603Z  2026-09-13 13:08:38.000 UTC [83] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2157016Z  2026-09-13 13:08:48.070 UTC [91] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2157470Z  2026-09-13 13:08:58.135 UTC [100] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2157917Z  2026-09-13 13:09:08.206 UTC [108] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2158332Z  2026-09-13 13:09:18.272 UTC [117] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2158891Z  2026-09-13 13:09:28.365 UTC [131] FATAL:  role "root" does not exist
+2026-09-13T13:09:30.2159299Z  2026-09-13 13:08:18.725 UTC [48] LOG:  database system is shut down
+2026-09-13T13:09:30.2159626Z   done
+2026-09-13T13:09:30.2159817Z  server stopped
+2026-09-13T13:09:30.2160011Z  
+2026-09-13T13:09:30.2160251Z  PostgreSQL init process complete; ready for start up.
+2026-09-13T13:09:30.2160565Z  
+2026-09-13T13:09:30.2165984Z Stop and remove container: 04938345ccbd432e8e80969c4377aac5_pgvectorpgvectorpg17_7a3349
+2026-09-13T13:09:30.2170718Z ##[command]/usr/bin/docker rm --force ac9dcc9e7a5817e2bd6eede31c959a25a54c27d4a0518ce06cd8a7eb7d21190f
+2026-09-13T13:09:31.7204390Z ac9dcc9e7a5817e2bd6eede31c959a25a54c27d4a0518ce06cd8a7eb7d21190f
+2026-09-13T13:09:31.7229064Z Remove container network: github_network_cdfdc43928694f3d8ab2d02e82dd4c59
+2026-09-13T13:09:31.7233685Z ##[command]/usr/bin/docker network rm github_network_cdfdc43928694f3d8ab2d02e82dd4c59
+2026-09-13T13:09:31.8258132Z github_network_cdfdc43928694f3d8ab2d02e82dd4c59
