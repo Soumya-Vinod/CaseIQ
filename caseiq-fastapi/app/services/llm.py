@@ -227,7 +227,7 @@ class LLMService:
         return self._keys
 
     async def _call(self, messages: list[dict], *, temperature: float | None = None,
-                    max_tokens: int = 3000) -> str:
+                    max_tokens: int = 3000, extra_body: dict | None = None) -> str:
         # FIXED 2026-09-06, found under concurrency testing: any Groq-side
         # failure (rate limit, timeout, connection, 5xx -- groq.APIError is
         # the base of that whole family) was falling through uncaught into
@@ -268,6 +268,19 @@ class LLMService:
                     messages=messages,
                     temperature=settings.GROQ_TEMPERATURE if temperature is None else temperature,
                     max_tokens=max_tokens,
+                    # Passthrough for params this SDK version (0.13.1) doesn't
+                    # have a typed kwarg for yet -- e.g. `reasoning_effort`,
+                    # needed for callers of a reasoning model (GROQ_MODEL is
+                    # openai/gpt-oss-120b) where the default effort can burn
+                    # the entire max_tokens budget on hidden reasoning tokens
+                    # and return finish_reason="length" with ZERO visible
+                    # content. Found live, not guessed: scripts/
+                    # fidelity_battery.py's judge calls returned empty
+                    # content 4/4 attempts on two different cases before this
+                    # was diagnosed by reading the raw response's own
+                    # finish_reason and completion_tokens_details, not by
+                    # changing the prompt and hoping (see docs/evaluation.md).
+                    extra_body=extra_body or {},
                 )
                 logger.info("groq_call_served", key=key.label)
                 return resp.choices[0].message.content.strip()

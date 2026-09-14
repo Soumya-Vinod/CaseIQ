@@ -3957,3 +3957,201 @@ isn't guaranteed identical to a dev machine's. Run against the real workflow:
      runner state).
 
 Both directions confirmed in the actual governing environment, not extrapolated from the local check.
+
+## Answer-fidelity battery: calibrated before the full run, not assumed working (2026-09-13)
+
+Retrieval is well-measured (Recall@5, out-of-scope catch, the domain-classifier gate). What the LLM
+does with what it retrieves was only ever checked for citation EXISTENCE and RETRIEVAL-MEMBERSHIP
+(C5) -- never whether the claim attached to a correct citation is actually true of that section's
+text. `scripts/fidelity_battery.py` closes that gap: a 20-case set (`docs/fidelity_battery_cases.json`),
+each case generated for real, then judged by a second Groq call given the FULL section text (not the
+300-char snippet the generator itself saw), never gating anything (see below for why). Calibrated
+against 8 cases -- run twice each -- before trusting it on the rest, per the same standing rule this
+file keeps re-learning: prove a mechanism fires correctly before trusting what it reports.
+
+**Two real infrastructure bugs, found by actually running it, not by reasoning about the design**:
+a single DB session held open across the whole run got dropped by Neon mid-run, after a slow Groq
+call created a multi-minute gap in an idle connection -- fixed with a fresh session per case, opened
+only for retrieval, closed before any Groq call. And an unhandled `JSONDecodeError` when the judge
+returned malformed output took down a run one case in -- fixed the same way `process_query` already
+handles its own JSON-parse failures (degrade, don't crash), plus made every run resumable (results
+written after every case, already-completed case IDs skipped on restart) so a crash never re-spends
+Groq calls on work already done.
+
+**The judge caught two real, verifiable content errors, consistently, across both runs of each** --
+the strongest evidence it works, not a contrived probe: for murder, the model claimed BNS 103 "fits
+the definition of murder," when 103 (title: "Punishment for murder") only prescribes the sentence --
+the definition is a different section (BNS 100/101), also retrieved but not cited. For theft, the
+model claimed IPC 379 "defines the offence of theft and its penalty" -- 379 only punishes theft; IPC
+378 defines it, and 378 wasn't even in this case's retrieved set, so the definitional claim was
+supplied from outside the evidence entirely. Verified against the real section text by hand, both
+times, not just accepted because the judge said so. **Added as a seventh failure mode**,
+`definition_vs_punishment_conflation` -- systematic enough (two-for-two, unprompted) to name and count
+on its own rather than leave folded into the generic `right_section_wrong_claim` bucket. Murder,
+theft, and criminal breach of trust (IPC 405/406, the same clean split) are now explicitly tagged for
+it; cheating is tagged too but noted as a messier example, since IPC 420 defines and punishes its own
+aggravated form in one section rather than splitting cleanly like the other three.
+
+**Flip rate: 1 of 11 comparable verdict items across the 4 fully-judged cases (~9%)**, on a genuinely
+defensible borderline call (whether omitting dowry death's causation clause is `paraphrase_drift` or
+still `faithful`) -- not the judge contradicting itself arbitrarily. Confirms report-only was the
+right call for this battery, the same conclusion reached, for the same reason, before this run: with
+N in the low tens rather than the golden set's 44, and two non-deterministic steps (generation,
+temperature 0.1; judging, temperature 0) stacked, a single flip like this one would move a hard
+threshold by several points on its own.
+
+**A disqualifying failure, found and fixed properly, not guessed at**: two calibration cases
+(criminal intimidation, rape) returned a completely empty judge response, 4 attempts each (2 runs x 1
+retry). Diagnosed by reading the raw response's own `finish_reason` and `usage.completion_tokens_
+details` directly -- not by changing the prompt and hoping, the exact mistake that cost two round
+trips on the pg_dump incident earlier in this file. Both showed `finish_reason="length"` with
+`reasoning_tokens=1498` of a 1500 cap: `GROQ_MODEL` (`openai/gpt-oss-120b`) is a reasoning model that
+can spend its entire token budget on HIDDEN reasoning before ever writing the visible answer, leaving
+zero content -- confirmed the same failure hits a case with no plausible content-sensitivity
+(criminal intimidation) exactly as it hits one that does (rape), ruling out a content-filter
+explanation before it could be assumed. Fixed with `reasoning_effort="low"` (passed via `extra_body`,
+since the installed SDK has no typed kwarg for it yet) -- verified directly: reasoning_tokens dropped
+1498 -> 452, `finish_reason` became `"stop"`, real content both times. Wired into `LLMService._call`
+itself (a small, backward-compatible `extra_body` passthrough) rather than duplicated in the harness,
+so any other caller needing this has it too.
+
+**Reported as its own fact, never as silence**: an empty judge response now records as
+`judge_no_response` in the results, distinct from both a real verdict and from "no citations to
+judge" -- a battery that goes quiet on the cases it failed to judge is the exact vacuous-pass shape
+this file keeps finding in other layers (HEADLINE RESULTS 1-6), just one level up, in the judge
+instead of the generator. The harness prints an explicit scored/no-citations/no-response count at
+the end of every run so this can't be missed by skimming per-case output.
+
+**Phrasing sensitivity in retrieval, found designing the judicial-status case, not measured
+on purpose**: "Is consensual sex between adults of the same gender a crime in India?" retrieves
+BNSS 208, CrPC 188/198/198A, BNS 1/111 -- not IPC 377 at all. "Is unnatural sexual intercourse
+between consenting adults a crime?" retrieves IPC 377 directly, WITH its `[JUDICIAL NOTE: read down
+by Navtej Singh Johar]` annotation. Same underlying question, different surface wording, different
+retrieval outcome entirely -- confirmed live against the real corpus before either query was
+committed to the case file, not assumed from one probe. `docs/golden_set.json`'s 44 pairs can't
+surface this: it holds exactly one phrasing per concept, by design, so a query that would retrieve
+correctly under one wording and miss under another never gets compared against itself. Worth its own
+measurement eventually (the same query, several paraphrases, checked for retrieval agreement) --
+scoped here as a finding, not built, since it's a different question from what this battery measures.
+The adultery case couldn't be reworded the same way -- IPC 497 (struck down, Joseph Shine v. UOI)
+never appeared in top-6 across six different phrasings tried, both at design time and after,
+suggesting it's genuinely unreachable via semantic search on this corpus rather than a wording
+problem. Relabelled from `judicial_status` to `unsupported_addition` on that basis: the model
+correctly returned an empty `laws_applicable` rather than citing IPC 497 from pretraining, which is
+real evidence against that failure mode, just not the one the case was built to test.
+
+**A pre-existing detector bug, found using `scan_free_text_for_citations` in anger for the first
+time**: it flagged `[('BNS', '2023')]` on the murder case -- a false positive, reading the literal
+phrase "BNS 2023" (the act's own name) as "citing BNS section 2023" when it appears without a
+section number nearby. Worth knowing when reading this column in the full run's output: an entry
+naming a bare year is this bug, not a real free-text citation drift.
+
+Full battery (20 cases) pending, run after these fixes.
+
+## Corpus completeness: a parser boundary failure, not "two empty sections" (2026-09-14)
+
+Wrong framing, corrected before it stuck: the fidelity battery's IPC 376AB finding (task 1, above)
+looked like "a section with empty text" -- checked directly, it isn't. IPC 376AB, IPC 174A, and BNS
+255 all retrieve fine and cite fine because they exist as real rows; each one's REAL body text is
+sitting, verbatim, inside the PRECEDING section's row instead (IPC 376A, IPC 174, BNS 254
+respectively). A parser boundary failure -- an amendment-bracket marker (`1[376AB.`, `4[174A .`) or
+a stray leading em-dash (`255.—`) glued directly to the section number -- breaks section-boundary
+detection, and everything from the operative clause to the closing `]` gets appended to the section
+before it instead of starting a new row.
+
+**The over-long half is the more dangerous half, and nothing was looking for it.** A title-only stub
+at least LOOKS wrong if anyone happens to read it. IPC 376A and IPC 174 look completely normal --
+correct citation, real retrieved text, no error -- while actually containing a DIFFERENT offence's
+full operative text and punishment clause under their own section number. This is exactly the shape
+the answer-fidelity battery exists to catch (a citation whose claim isn't true of that section), and
+it couldn't have caught this specific instance, because the swallowed text WAS present in the
+retrieved evidence -- just filed under someone else's citation. Only found here because task 1's
+audit went looking at raw section_text directly, corpus-wide, rather than through any retrieval or
+generation path.
+
+**One of the three was already known; two weren't.** `scripts/ingest_sections.py`'s own
+`KNOWN_TRUNCATION_EXCEPTIONS` already listed BNS 255 -- flagged by the ingestion-time completeness
+gate and explicitly deferred (`docs/m1-verification.md`, "BNS 255 empty capture -- flagged HIGHER
+priority than the other three... reveals a gap in the gate itself"). That entry already named the
+exact reason correctly: `_is_title_echo()` structurally cannot fire for any `GazetteParser`-based act
+(BNS/BNSS/BSA), because `section_title` is never set there. IPC 376AB and 174A were never caught by
+anything, for a related but distinct reason: `_is_title_echo()` compares the FULL `section_text`
+(which includes the leading "376AB. " number prefix) against the bare `section_title` (which
+doesn't) -- the two never match even for a genuine echo, so the one check that should have caught
+these on a `LegacyParser`-based act missed them on a technicality. Same underlying defect class
+across all three, two different reasons the existing gate couldn't see either instance.
+
+**Fixed at the row level** (both directions, all three pairs), text recovered from the tracked source
+PDFs and verified against them directly, not reconstructed or guessed:
+
+| Neighbour (was carrying two sections' text) | Stub (was carrying none) |
+|---|---|
+| IPC 376A: 1,156 → 576 chars | IPC 376AB: 62 → 578 chars |
+| IPC 174: 1,932 → 1,311 chars | IPC 174A: 85 → 611 chars |
+| BNS 254: 1,481 → 754 chars | BNS 255: 119 → 723 chars |
+
+All 6 rows re-embedded after the text change -- vectors follow text, not left stale pointing at the
+old (wrong) content. `255` removed from `KNOWN_TRUNCATION_EXCEPTIONS` (`scripts/ingest_sections.py`)
+now that it's fixed at the source rather than allowlisted around, per that dict's own stated
+discipline.
+
+### The residual unknown, checked, not just fixed around
+
+Every one of these three produced a placeholder row under its own correct number -- which is exactly
+what made them findable by a length audit. A section fully absorbed into a neighbour with NO stub
+row at all would be invisible to that same audit: nothing short exists to find. Checked directly,
+not assumed clean: compared each act's own actual section-number set (`section_versions`) against
+the act's own "ARRANGEMENT OF SECTIONS" table of contents (`app.legal_corpus.parsing.toc`, the same
+extractor `validate.py`'s ingestion-time gate already trusts for its `missing` check). BNS, CrPC:
+0 numbers in the ToC with no row at all. IPC: 11 (`13, 15, 16, 59, 61, 138A, 164, 226, 478, 480,
+490`) -- checked each one directly against the source PDF, and every single one is recorded in the
+ToC itself as `[Repealed.]` or `[Omitted.]` with nothing else, genuinely void in law, correctly
+carrying no row. Zero real instances of "silently absorbed, no trace at all." BNSS and BSA have no
+extractable ToC at all (their Gazette originals never had one to begin with -- `parsing/toc.py`'s
+own long-documented limitation), so this specific check structurally cannot cover those two acts;
+not treated as clean, reported as unchecked.
+
+### Standing check, added to the nightly, not left as a one-time audit
+
+`scripts/ci_check_section_completeness.py`, wired into `nightly-eval.yml` right after the embedding
+pre-flight, runs on whatever corpus that night's job actually has -- cache-restored or freshly
+ingested -- every night, not only when a fresh ingest happens to occur. Two signals, both keyed off
+each act's own ToC (not a separately-tracked title field, so -- unlike `_is_title_echo()` -- it works
+for BNS/BNSS-family acts too, ToC-availability permitting):
+  1. **Title-echo**: an accepted section's body matches its own ToC line almost exactly, no
+     operative text beyond the title.
+  2. **Embedded neighbour**: a section's body contains a DIFFERENT number's ToC line verbatim --
+     the corpus-side symptom of the same merge, named directly rather than inferred.
+
+**Tuned against real false positives, not shipped on the first pass.** A first version used a
+generic "digit-period-capital-letter" shape plus a keyword-absence heuristic for "looks like a
+title": 35 findings against the live (pre-fix) corpus, 33 of them ordinary citation numbers,
+footnote markers, and legitimately short-but-complete sections that simply don't use the exact
+operative words the heuristic looked for. Rebuilt to compare against each section's OWN real ToC
+line instead of a generic shape: 3 findings, all three the real ones, zero false positives across
+the whole corpus. One more real bug found tuning this: the ToC line captured for the LAST entry on a
+page bled that page's trailing page number and the next page's own repeated "SECTIONS" header onto
+the end of the line (BNS 255's ToC entry came back as "...forfeiture. 11 sections" -- "11" being the
+page number) -- stripped with a narrow, specific pattern rather than loosened generally. Signal 2 is
+confirmed a bonus, not the load-bearing half: it correctly named IPC 376A and IPC 174 as the rows
+holding the absorbed text, but missed BNS 254 because that section's own page break injects a literal
+page number mid-sentence into the extracted text, breaking a verbatim match -- left as a known,
+narrow gap in signal 2 alone, since signal 1 already caught BNS 255 directly without needing to know
+where the text went. One exception slot (`KNOWN_COMPLETENESS_EXCEPTIONS`, in the check itself)
+carried forward empty, not deleted -- the same allowlist-with-a-reason discipline
+`KNOWN_TRUNCATION_EXCEPTIONS` already established, so the next confirmed instance has a place to go
+with a documented reason, and anything undocumented still fails the gate.
+
+## `scan_free_text_for_citations`: the "BNS 2023" false positive, fixed (2026-09-14)
+
+Root cause: `_CITATION_RE`'s act-year group (`2023`/`1860`/`1973`) is optional, so on a bare "BNS
+2023" with nothing recognisable after it, the engine backtracks to skip that group and lets "2023"
+itself satisfy the (mandatory) section-number group instead -- reading the act's own name as "cites
+section 2023". No section number in this corpus is ever 4 digits (checked directly during the
+corpus-completeness audit above: the highest real numbers are in the low 500s, BNSS/IPC) -- tightened
+the section-number group from `\d{1,4}` to `\d{1,3}`, which excludes every 4-digit number
+structurally, not just the three specific year tokens already named in the regex, so a stray
+"2024"-style date mention can't produce the same false positive either. Verified directly against
+the exact false-positive strings observed in the battery ("...defined in BNS 2023 and penalised in
+IPC 1860." now returns an empty set) and against a real citation ("...prescribed in BNS Section
+103." still correctly returns `{('BNS', '103')}`).

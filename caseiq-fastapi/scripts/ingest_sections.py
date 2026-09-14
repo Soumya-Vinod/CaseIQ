@@ -79,7 +79,10 @@ DEFAULTS = {
 # one of these should remove it from this list, not just leave the gate
 # silenced for it.
 KNOWN_TRUNCATION_EXCEPTIONS: dict[str, frozenset[str]] = {
-    "BNS": frozenset({"44", "229", "255", "335", "337"}),
+    # "255" removed 2026-09-14: fixed at the row level (parser boundary
+    # failure merged it into BNS 254 -- see docs/evaluation.md's
+    # corpus-completeness entry), not allowlisted around anymore.
+    "BNS": frozenset({"44", "229", "335", "337"}),
     "BNSS": frozenset({"17", "39", "112", "120", "141", "151", "162", "164", "261", "265",
                         "298", "329", "391", "410", "432", "453", "531"}),
     "BSA": frozenset({"31", "41", "49", "68", "83", "84", "93", "96", "125", "137", "163", "168"}),

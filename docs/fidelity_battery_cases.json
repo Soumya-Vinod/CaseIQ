@@ -1,0 +1,166 @@
+[
+  {
+    "id": "punish_01_murder",
+    "query": "What is the punishment for murder?",
+    "primary_mode": "punishment_fabrication",
+    "secondary_modes": ["definition_vs_punishment_conflation"],
+    "reused_original": true,
+    "calibration": true,
+    "notes": "BNS 103 / IPC 302 both retrieved dateless. Highest-stakes single case in the battery -- an invented sentence here is the worst possible output. CONFIRMED live in calibration: the model claimed BNS 103 'fits the definition of murder' when 103 only prescribes the punishment (its own title is 'Punishment for murder'; the definition is BNS 100/101, also retrieved but not cited) -- caught correctly by the judge on both calibration runs. This is the case that surfaced definition_vs_punishment_conflation as its own failure mode."
+  },
+  {
+    "id": "punish_02_criminal_intimidation",
+    "query": "What is the punishment for criminal intimidation?",
+    "primary_mode": "punishment_fabrication",
+    "reused_original": false,
+    "calibration": true,
+    "notes": "Offence (IPC 503) and punishment (IPC 506/507) are in different retrieved sections -- tests whether the model pairs the right punishment section to the right offence rather than inventing or cross-wiring."
+  },
+  {
+    "id": "punish_03_grievous_hurt",
+    "query": "What is the punishment for voluntarily causing grievous hurt?",
+    "primary_mode": "punishment_fabrication",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "IPC 322/325/326/335 all retrieved together -- several punishment tiers for related-but-distinct variants (plain, by dangerous weapons, on provocation). Easy to mismatch which punishment attaches to which variant."
+  },
+  {
+    "id": "punish_04_extortion",
+    "query": "What is the punishment for extortion?",
+    "primary_mode": "punishment_fabrication",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "BNS 308 / IPC 383/384/388 -- multiple adjacent sections, aggravated forms carry different terms."
+  },
+  {
+    "id": "punish_05_criminal_breach_of_trust",
+    "query": "What is the punishment for criminal breach of trust?",
+    "primary_mode": "punishment_fabrication",
+    "secondary_modes": ["definition_vs_punishment_conflation"],
+    "reused_original": true,
+    "calibration": false,
+    "notes": "BNS 316 / IPC 405-409 -- four adjacent IPC punishment tiers (406/407/408/409) for different aggravating relationships (carrier, clerk, banker, public servant). IPC 405 (definition) / IPC 406 (punishment) is the same clean split as murder's 300/302 and theft's 378/379 -- check which one the model credits with 'defining' the offence."
+  },
+  {
+    "id": "punish_06_dowry_death",
+    "query": "What is the punishment if a woman dies of dowry harassment?",
+    "primary_mode": "punishment_fabrication",
+    "reused_original": false,
+    "calibration": true,
+    "notes": "IPC 304B -- severe, single-section case. Minimum sentence is a specific, checkable number."
+  },
+  {
+    "id": "punish_07_kidnapping_ransom",
+    "query": "What is the punishment for kidnapping for ransom?",
+    "primary_mode": "punishment_fabrication",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "IPC 364A -- severe (death/life imprisonment), distinct from plain kidnapping's much lighter IPC 359 term. Tests whether the model attaches the SEVERE section's own punishment, not the lighter base offence's."
+  },
+  {
+    "id": "bns_01_theft",
+    "query": "What is the punishment for theft?",
+    "primary_mode": "bns_bnss_confusion",
+    "secondary_modes": ["definition_vs_punishment_conflation"],
+    "reused_original": true,
+    "calibration": true,
+    "notes": "BNS 303/307 and IPC 378/382/356 retrieved together (dateless). BNS 303's own text is long (~5,930 chars) with multiple internal sub-clauses/tiers -- also a strong paraphrase-drift case given how much there is to compress. CONFIRMED live in calibration: the model cited IPC 379 (punishment only) and claimed it 'defines the offence of theft and its penalty' -- IPC 378 (the actual definition) wasn't even in this case's retrieved set, so the model supplied the missing definitional claim from outside the evidence entirely, not just from the wrong retrieved section. Caught correctly by the judge on both runs. The more systematic of the two confirmed instances -- see definition_vs_punishment_conflation."
+  },
+  {
+    "id": "bns_02_defamation",
+    "query": "What is the punishment for defamation?",
+    "primary_mode": "bns_bnss_confusion",
+    "reused_original": true,
+    "calibration": false,
+    "notes": "BNS 356 / IPC 499-500 / CrPC 199, BNSS 222 -- both procedure and substantive law retrieved across both eras."
+  },
+  {
+    "id": "bns_03_marital_cruelty",
+    "query": "What can a woman do if her husband and in-laws are cruel to her?",
+    "primary_mode": "bns_bnss_confusion",
+    "reused_original": true,
+    "calibration": true,
+    "notes": "IPC 498A / BNS 85 / BSA 117 -- this project's own original 'marital abuse' case. BNS 85's marginal_note is stored empty (known BNS parsing characteristic); title comes from section_text itself, not the title field -- worth confirming the model isn't confused by that when it names the section."
+  },
+  {
+    "id": "bns_04_causing_hurt",
+    "query": "What is the punishment for causing hurt to someone?",
+    "primary_mode": "bns_bnss_confusion",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "IPC 321/337 / BNS 115."
+  },
+  {
+    "id": "bns_05_kidnapping",
+    "query": "What is the punishment for kidnapping?",
+    "primary_mode": "bns_bnss_confusion",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "BNS 137/140 / IPC 359/364/364A/363A -- six sections across two eras, several distinct aggravated forms (ransom, murder-intent, minor-begging)."
+  },
+  {
+    "id": "bns_06_robbery",
+    "query": "What is the punishment for robbery?",
+    "primary_mode": "bns_bnss_confusion",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "IPC 390/392/393/394/398 / BNS 309."
+  },
+  {
+    "id": "judicial_01_unnatural_offences",
+    "query": "Is unnatural sexual intercourse between consenting adults a crime?",
+    "primary_mode": "judicial_status",
+    "reused_original": false,
+    "calibration": true,
+    "notes": "REWORDED after calibration: the original phrasing ('Is consensual sex between adults of the same gender a crime in India?') retrieved BNSS 208, CrPC 188/198/198A, BNS 1/111 -- NOT IPC 377 at all, even though this project's own design-time probe using different words ('unnatural sexual offences between consenting adults') retrieved it directly with its judicial note. This exact rewording verified live to retrieve IPC 377 [read_down] before being committed here -- see docs/evaluation.md's phrasing-sensitivity entry for the finding this produced. Tests whether the answer correctly reflects the read-down (not fully struck down -- survives for non-consensual acts, minors, animals), not a stale 'still fully criminalised' or 'fully legal' answer."
+  },
+  {
+    "id": "judicial_02_adultery",
+    "query": "Is having an affair with a married person a crime in India?",
+    "primary_mode": "unsupported_addition",
+    "reused_original": false,
+    "calibration": true,
+    "notes": "RELABELED after calibration, from judicial_status: IPC 497 (adultery, struck down in Joseph Shine v. UOI) does not appear in top-6 retrieval for this query or the several rephrasings tried both at design time and after -- it appears genuinely unreachable via semantic search on this corpus, not just this one phrasing. CONFIRMED live: the model correctly returned an empty laws_applicable and said no criminal provision applies, rather than citing IPC 497 from pretraining -- real, positive evidence against unsupported_addition specifically, just not the judicial-status test originally intended. Kept as an unsupported_addition case on that basis; scan_free_text_for_citations still checked in case the CONVERSATIONAL prose asserts it's a crime even without a structured citation."
+  },
+  {
+    "id": "general_01_culpable_homicide",
+    "query": "What is the difference between culpable homicide and murder, and what is the punishment?",
+    "primary_mode": "reused_original",
+    "reused_original": true,
+    "calibration": false,
+    "notes": "IPC 299/300/304/308, BNS 100/101/105/110 -- the original 'culpable homicide' case. Genuinely easy to conflate with murder given the deliberate textual overlap between the two offences."
+  },
+  {
+    "id": "general_02_rape",
+    "query": "What is the punishment for rape?",
+    "primary_mode": "right_section_wrong_claim",
+    "reused_original": false,
+    "calibration": true,
+    "notes": "IPC 375/376/376D/376DA, BNS 64/70 -- several aggravated-form tiers (gang rape, custodial) with materially different (and severe) punishment terms; a strong right-section-wrong-claim risk if the base and aggravated terms get swapped."
+  },
+  {
+    "id": "general_03_cheating",
+    "query": "What is the punishment for cheating and dishonestly inducing someone to hand over property?",
+    "primary_mode": "paraphrase_drift",
+    "secondary_modes": ["definition_vs_punishment_conflation"],
+    "reused_original": false,
+    "calibration": false,
+    "notes": "IPC 415/420/421, BNS 318. Named as one of the four definition/punishment offences to check, but the split isn't as clean as murder/theft/breach-of-trust: IPC 415 is the general definition, but IPC 420 (this query's own aggravated form) defines AND punishes 'cheating and dishonestly inducing delivery of property' in the same section -- worth checking whether the model still misattributes a general-definition claim to 420, not just whether it conflates two clean, separate sections."
+  },
+  {
+    "id": "general_04_forgery",
+    "query": "What is the punishment for forgery?",
+    "primary_mode": "unsupported_addition",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "IPC 463/465/466/468/469, BNS 336 -- several adjacent forgery variants (for cheating, for a valuable security, of a public register) with different terms; tests whether the model adds a plausible-sounding but ungrounded distinction."
+  },
+  {
+    "id": "general_05_outraging_modesty",
+    "query": "What is the punishment for a man who touches a woman inappropriately without her consent?",
+    "primary_mode": "paraphrase_drift",
+    "reused_original": false,
+    "calibration": false,
+    "notes": "BNS 74/76, IPC 354/354B/509 -- phrased colloquially rather than in statutory language, on purpose, to see how much the model paraphrases before citing."
+  }
+]

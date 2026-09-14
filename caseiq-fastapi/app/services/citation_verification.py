@@ -78,8 +78,19 @@ async def _section_exists(db: AsyncSession, act_code: str, section: str, as_of) 
 
 _CITATION_RE = re.compile(
     r"\b(BNS|BNSS|BSA|IPC|CrPC)\b(?:\s+(?:2023|1860|1973|Sanhita,?\s*2023|Adhiniyam,?\s*2023))?"
-    r"\s*(?:Section|§|s\.)?\s*(\d{1,4}[A-Z]{0,3})\b",
+    r"\s*(?:Section|§|s\.)?\s*(\d{1,3}[A-Z]{0,3})\b",
 )
+# FOUND live (fidelity battery, docs/evaluation.md): the year-group above is
+# optional, so on plain "BNS 2023" with nothing recognisable after it, the
+# engine backtracks to skip that group and lets "2023" itself satisfy the
+# section-number group instead -- a false positive reading the act's own
+# name as "cites section 2023". No real section number in this corpus is
+# ever 4 digits (checked directly: max section numbers observed are in the
+# low 500s for BNSS/IPC, all well under 1000 -- see docs/evaluation.md's
+# corpus-completeness audit) -- 1,3 instead of 1,4 excludes every 4-digit
+# number structurally, not just the three specific year tokens already
+# named above, so a stray "2024"-style date mention can't produce the same
+# false positive either.
 
 
 def scan_free_text_for_citations(structured_data: dict, conversational_summary: str) -> set[tuple[str, str]]:

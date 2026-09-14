@@ -1,0 +1,1668 @@
+[
+  {
+    "id": "punish_01_murder",
+    "query": "What is the punishment for murder?",
+    "primary_mode": "punishment_fabrication",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "302",
+        "similarity": 0.7719
+      },
+      {
+        "act": "IPC",
+        "section": "303",
+        "similarity": 0.7015
+      },
+      {
+        "act": "BNS",
+        "section": "103",
+        "similarity": 0.7451
+      },
+      {
+        "act": "BNS",
+        "section": "104",
+        "similarity": 0.6665
+      },
+      {
+        "act": "IPC",
+        "section": "304",
+        "similarity": 0.6603
+      },
+      {
+        "act": "BNS",
+        "section": "105",
+        "similarity": 0.6858
+      }
+    ],
+    "conversational_summary": "Murder is a very serious criminal offence under Indian law. The law prescribes the harshest punishments, including death or life imprisonment, and also allows a fine. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "The act of intentionally causing the death of another person constitutes murder, which is a grave criminal offence under the BNS 2023.",
+      "severity": "critical",
+      "severity_reason": "Murder carries the maximum possible penalties, including death or life imprisonment.",
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "title": "Murder",
+          "why_applies": "The conduct described fits the definition of murder under BNS Section 103."
+        }
+      ],
+      "punishments": [
+        {
+          "offence": "Murder",
+          "imprisonment": "Death or imprisonment for life",
+          "fine": "Liable to fine as determined by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Seek immediate legal counsel",
+          "details": "Contact a qualified criminal defence lawyer to understand your rights and obligations.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Preserve any evidence",
+          "details": "Do not destroy or tamper with any physical or digital evidence related to the incident.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 3,
+          "action": "Cooperate with law enforcement",
+          "details": "Provide truthful information if approached by police, while exercising your right to remain silent until your lawyer is present.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "Prepare a statement with your lawyer",
+          "details": "Ensure any statements made to authorities are reviewed by counsel to protect your legal position.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Arrange bail if applicable",
+          "details": "Discuss with your lawyer the possibility of applying for bail, considering the seriousness of the charge.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 6,
+          "action": "Notify family or trusted persons",
+          "details": "Inform a close family member or trusted person about the situation for support.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 7,
+          "action": "Maintain confidentiality",
+          "details": "Avoid discussing case details publicly or on social media to prevent prejudice to the investigation.",
+          "urgency": "immediate"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "Contact a lawyer and consider surrendering to police if advised",
+          "consequence": "Failure may lead to additional charges such as evasion of law enforcement"
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may be represented by a lawyer of your choice at all stages of the criminal proceeding."
+        },
+        {
+          "right": "Right to remain silent",
+          "explanation": "You are not obligated to answer police questions without your lawyer present."
+        },
+        {
+          "right": "Right to be informed of charges",
+          "explanation": "You must be formally informed of the specific accusations against you."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Cooperate with lawful police procedures",
+          "Seek and follow advice from a qualified criminal lawyer",
+          "Preserve all evidence and documentation"
+        ],
+        "donts": [
+          "Do not tamper with or destroy evidence",
+          "Do not make false statements to authorities",
+          "Do not flee or hide from law enforcement"
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 1,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [
+      [
+        "BNS",
+        "2023"
+      ]
+    ],
+    "full_sections_for_judge": [
+      {
+        "act": "BNS",
+        "section": "103",
+        "section_text": "103. Punishment for murder.—(1) Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine. (2) When a group of five or more persons acting in concert commits murder on the ground of race, caste or community, sex, place of birth, language, personal belief or any other similar ground each member of such group shall be punished with death or with imprisonment for life, and shall also be liable to fine.",
+        "marginal_note": "",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Murder",
+          "stated_imprisonment": "Death or imprisonment for life",
+          "stated_fine": "Liable to fine as determined by the court",
+          "verdict": "grounded",
+          "reasoning": "Section 103 states: \"Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine.\""
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "verdict": "right_section_wrong_claim",
+          "reasoning": "Section 103 deals only with punishment for murder; it does not define murder, yet the assistant claims it provides the definition."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [
+        {
+          "offence": "Murder",
+          "stated_imprisonment": "Death or imprisonment for life",
+          "stated_fine": "Liable to fine as determined by the court",
+          "verdict": "grounded",
+          "reasoning": "Section 103 states: \"Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine.\""
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "verdict": "right_section_wrong_claim",
+          "reasoning": "Section 103 only prescribes punishment for murder; it does not provide a definition, yet the assistant claims it defines murder."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "punish_06_dowry_death",
+    "query": "What is the punishment if a woman dies of dowry harassment?",
+    "primary_mode": "punishment_fabrication",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "304B",
+        "similarity": 0.7529
+      },
+      {
+        "act": "IPC",
+        "section": "498A",
+        "similarity": 0.6258
+      },
+      {
+        "act": "BNS",
+        "section": "80",
+        "similarity": 0.7509
+      },
+      {
+        "act": "IPC",
+        "section": "376A",
+        "similarity": 0.501
+      },
+      {
+        "act": "IPC",
+        "section": "354A",
+        "similarity": 0.4965
+      },
+      {
+        "act": "BNSS",
+        "section": "531",
+        "similarity": null
+      }
+    ],
+    "conversational_summary": "I understand you want to know the punishment for a dowry death. The law defines the offence, but the specific penalty details are not provided in the sections I have. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "The death of a woman caused by dowry harassment falls under the dowry death provisions in Indian criminal law.",
+      "severity": "critical",
+      "severity_reason": "Dowry death is a grave criminal offence with severe social and legal consequences.",
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "304B",
+          "title": "Dowry death",
+          "why_applies": "Defines dowry death when a woman dies within seven years of marriage after being subjected to cruelty or harassment related to dowry."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "80",
+          "title": "Dowry death",
+          "why_applies": "Repeats the definition of dowry death similar to IPC 304B."
+        }
+      ],
+      "punishments": [],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Report the incident to the nearest police station",
+          "details": "Provide all available information, including marriage details, nature of harassment, and circumstances of death.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Ensure a medical post‑mortem is conducted",
+          "details": "A forensic examination is essential to establish cause of death and link to dowry harassment.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 3,
+          "action": "Preserve any evidence of dowry demands",
+          "details": "Collect documents, messages, receipts, or witnesses that show dowry harassment.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "Seek legal counsel",
+          "details": "Engage a lawyer experienced in criminal law to protect your interests and guide the investigation.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Co‑operate with investigating officers",
+          "details": "Provide truthful statements and any additional evidence as requested.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "File the FIR and request a post‑mortem",
+          "consequence": "Delays may hinder evidence collection and affect the investigation."
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may be represented by a lawyer of your choice at all stages of the investigation and trial."
+        },
+        {
+          "right": "Right to be informed of the charges",
+          "explanation": "You must be told the specific sections under which you are being investigated."
+        },
+        {
+          "right": "Right against self‑incrimination",
+          "explanation": "You are not compelled to incriminate yourself during police questioning."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Report the matter promptly to police.",
+          "Preserve all documentary and electronic evidence.",
+          "Cooperate fully with forensic and investigative procedures."
+        ],
+        "donts": [
+          "Do not tamper with or destroy any evidence.",
+          "Avoid giving false statements to authorities.",
+          "Do not delay seeking legal advice."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 2,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "IPC",
+        "section": "304B",
+        "section_text": "304B. Dowry death.—(1) Where the death of a woman is caused by any burns or bodily injury or occurs otherwise than under normal circumstances within seven years of her marriage and it is shown that soon before her death she was subjected to cruelty or harassment by her husband or any relative of her husband for, or in connection with, any demand for dowry, such death shall be called “dowry death”, and such husband or relative shall be deemed to have caused her death. Explanation.—For the purposes of this sub-section, “dowry” shall have the same meaning as in section 2 of the Dowry Prohibition Act, 1961 (28 of 1961). (2) Whoever commits dowry death shall be punished with imprisonment for a term which shall not be less than seven years but which may extend to imprisonment for life.]",
+        "marginal_note": "Dowry death.—(1) Where the death of a woman is caused by any burns or bodily injury or",
+        "judicial_status": null
+      },
+      {
+        "act": "BNS",
+        "section": "80",
+        "section_text": "Of offences relating to marriage 80. Dowry death.—(1) Where the death of a woman is caused by any burns or bodily injury or occurs otherwise than under normal circumstances within seven years of her marriage and it is shown that soon before her death she was subjected to cruelty or harassment by her husband or any relative of her husband for, or in connection with, any demand for dowry, such death shall be called “dowry death”, and such husband or relative shall be deemed to have caused her death. Explanation.—For the purposes of this sub-section, “dowry” shall have the same meaning as in section 2 of the Dowry Prohibition Act, 1961 (28 of 1961). (2) Whoever commits dowry death shall be punished with imprisonment for a term which shall not be less than seven years but which may extend to imprisonment for life.",
+        "marginal_note": "",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "304B",
+          "verdict": "paraphrase_drift",
+          "reasoning": "The claim mentions death within seven years after cruelty/harassment, but omits the required causation element (death caused by burns, bodily injury or otherwise not under normal circumstances) present in the section."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "80",
+          "verdict": "faithful",
+          "reasoning": "The claim correctly states that the provision repeats the definition of dowry death as in IPC 304B."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "304B",
+          "verdict": "faithful",
+          "reasoning": "The claim restates the section's definition of dowry death accurately."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "80",
+          "verdict": "faithful",
+          "reasoning": "The claim correctly mirrors the identical definition provided in the BNS Section 80 text."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "bns_03_marital_cruelty",
+    "query": "What can a woman do if her husband and in-laws are cruel to her?",
+    "primary_mode": "bns_bnss_confusion",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "498A",
+        "similarity": 0.4829
+      },
+      {
+        "act": "BNS",
+        "section": "2",
+        "similarity": null
+      },
+      {
+        "act": "BNS",
+        "section": "85",
+        "similarity": 0.4387
+      },
+      {
+        "act": "BNSS",
+        "section": "531",
+        "similarity": null
+      },
+      {
+        "act": "IPC",
+        "section": "498",
+        "similarity": 0.3117
+      },
+      {
+        "act": "IPC",
+        "section": "376",
+        "similarity": null
+      }
+    ],
+    "conversational_summary": "I'm sorry to hear about the situation you're facing. The law treats cruelty by a husband or his relatives as a serious criminal offense, and there are clear steps you can take to seek protection and justice. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "A woman is experiencing cruelty from her husband and his relatives, which is punishable under criminal law in India.",
+      "severity": "high",
+      "severity_reason": "Cruelty by a husband or his relatives is a serious criminal offense punishable with imprisonment.",
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "85",
+          "title": "Husband or relative of husband of a woman subjecting her to cruelty",
+          "why_applies": "Specifically criminalizes cruelty by husband or his relatives toward a woman."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "498A",
+          "title": "Husband or relative of husband of a woman subjecting her to cruelty",
+          "why_applies": "Provides the same offense and punishment for cruelty by husband or his relatives."
+        }
+      ],
+      "punishments": [
+        {
+          "offence": "Cruelty by husband or relative of husband",
+          "imprisonment": "Up to 3 years",
+          "fine": "As determined by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "File an FIR with the police",
+          "details": "Report the cruelty under BNS Sec. 85 / IPC Sec. 498A, providing all relevant details.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Preserve evidence",
+          "details": "Collect any messages, photographs, medical reports, or witness statements that document the cruelty.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 3,
+          "action": "Seek legal counsel",
+          "details": "Engage a lawyer experienced in criminal law to guide you through the process.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "Request protection",
+          "details": "Ask the police or magistrate for immediate protection measures (e.g., police protection, restraining order).",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Follow up with investigating officer",
+          "details": "Ensure the investigation proceeds and provide any additional information as required.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 6,
+          "action": "Attend court hearings",
+          "details": "Appear before the magistrate when summoned and cooperate with the legal process.",
+          "urgency": "as_scheduled"
+        },
+        {
+          "step": 7,
+          "action": "Access support services",
+          "details": "Reach out to women’s welfare NGOs or helplines for emotional and practical assistance.",
+          "urgency": "as_needed"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "File the FIR with the police",
+          "consequence": "Delays may affect the investigation and the ability to obtain immediate protection."
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to lodge an FIR",
+          "explanation": "You can approach any police station to report cruelty without needing prior permission."
+        },
+        {
+          "right": "Right to protection",
+          "explanation": "The police and courts can order protective measures to ensure your safety."
+        },
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may be represented by a lawyer of your choice at all stages of the proceeding."
+        },
+        {
+          "right": "Right to a fair trial",
+          "explanation": "The accused will be tried according to due process, and you have the right to be heard."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Do file an FIR promptly.",
+          "Do keep all evidence safe and organized.",
+          "Do seek professional legal advice.",
+          "Do inform trusted family members or friends about your situation."
+        ],
+        "donts": [
+          "Don't confront the husband or in‑laws alone.",
+          "Don't destroy or tamper with any evidence.",
+          "Don't delay reporting the cruelty.",
+          "Don't ignore medical or psychological help if needed."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 2,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "BNS",
+        "section": "85",
+        "section_text": "85. Husband or relative of husband of a woman subjecting her to cruelty.—Whoever, being the husband or the relative of the husband of a woman, subjects such woman to cruelty shall be punished with imprisonment for a term which may extend to three years and shall also be liable to fine.",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "498A",
+        "section_text": "498A. Husband or relative of husband of a woman subjecting her to cruelty.—Whoever, being the husband or the relative of the husband of a woman, subjects such woman to cruelty shall be punished with imprisonment for a term which may extend to three years and shall also be liable to fine. 114 Explanation.—For the purposes of this section, “cruelty” means— (a) any wilful conduct which is of such a nature as is likely to drive the woman to commit suicide or to cause grave injury or danger to life, limb or health (whether mental or physical) of the woman; or (b) harassment of the woman where such harassment is with a view to coercing her or any person related to her to meet any unlawful demand for any property or valuable security or is on account of failure by her or any person related to her to meet such demand.]",
+        "marginal_note": "Husband or relative of husband of a woman subjecting her to cruelty.—Whoever, being",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Cruelty by husband or relative of husband",
+          "stated_imprisonment": "Up to 3 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "Both BNS Sec.85 and IPC Sec.498A state: \"shall be punished with imprisonment for a term which may extend to three years and shall also be liable to fine\"."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "85",
+          "verdict": "faithful",
+          "reasoning": "The claim that it criminalizes cruelty by husband or his relatives matches the section text."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "498A",
+          "verdict": "faithful",
+          "reasoning": "The claim that it provides the same offence and punishment aligns with the section text."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [
+        {
+          "offence": "Cruelty by husband or relative of husband",
+          "stated_imprisonment": "Up to 3 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "Both BNS Sec.85 and IPC Sec.498A state punishment \"imprisonment for a term which may extend to three years and shall also be liable to fine\"."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "85",
+          "verdict": "faithful",
+          "reasoning": "The claim that it criminalizes cruelty by husband or his relatives toward a woman accurately reflects the section's text."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "498A",
+          "verdict": "faithful",
+          "reasoning": "The claim that it provides the same offense and punishment matches the section, which mirrors BNS 85 and adds an explanation of \"cruelty\"."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "judicial_02_adultery",
+    "query": "Is having an affair with a married person a crime in India?",
+    "primary_mode": "judicial_status",
+    "retrieved_sections": [
+      {
+        "act": "BNSS",
+        "section": "359",
+        "similarity": 0.5185
+      },
+      {
+        "act": "CrPC",
+        "section": "198",
+        "similarity": 0.6583
+      },
+      {
+        "act": "IPC",
+        "section": "495",
+        "similarity": 0.5589
+      },
+      {
+        "act": "CrPC",
+        "section": "167",
+        "similarity": null
+      },
+      {
+        "act": "CrPC",
+        "section": "196",
+        "similarity": 0.5562
+      },
+      {
+        "act": "CrPC",
+        "section": "320",
+        "similarity": null
+      }
+    ],
+    "conversational_summary": "Having an affair with a married person is not defined as a criminal offence under the statutes we have. The law does not criminalize consensual relationships between adults, though related matters like bigamy may be covered. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "The act of having an affair is not specifically punishable under the criminal statutes provided, so it does not constitute a crime on its own.",
+      "severity": "low",
+      "severity_reason": "No criminal provision directly addresses consensual extramarital relationships.",
+      "laws_applicable": [],
+      "punishments": [],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Consult a qualified lawyer",
+          "details": "Obtain professional legal advice to understand any potential civil implications.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Consider counseling or mediation",
+          "details": "Seek professional counseling for personal and relational issues.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 3,
+          "action": "Maintain documentation",
+          "details": "Keep records of any communications that could be relevant if disputes arise.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "Protect personal privacy",
+          "details": "Ensure personal data and communications are secure to avoid misuse.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 5,
+          "action": "Avoid harassment or intimidation",
+          "details": "Do not engage in any threatening behavior toward the spouse or other parties.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 6,
+          "action": "Seek emotional support",
+          "details": "Talk to trusted friends or mental health professionals if needed.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 7,
+          "action": "Review any contractual or employment policies",
+          "details": "Check if your workplace has specific codes of conduct that might be relevant.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [],
+      "your_rights": [
+        {
+          "right": "Right to legal counsel",
+          "explanation": "You may consult a lawyer at any time to understand your position."
+        },
+        {
+          "right": "Right to privacy",
+          "explanation": "Your personal communications are protected from unlawful intrusion."
+        },
+        {
+          "right": "Right to be free from harassment",
+          "explanation": "Any threatening or harassing behavior is prohibited under criminal law."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Seek qualified legal advice",
+          "Maintain respectful communication",
+          "Protect your personal data"
+        ],
+        "donts": [
+          "Engage in harassment or intimidation",
+          "Disclose private information without consent",
+          "Assume the relationship is legally protected if it involves illegal acts like bigamy"
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 0,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [],
+    "judge_verdict": null
+  },
+  {
+    "id": "punish_02_criminal_intimidation",
+    "query": "What is the punishment for criminal intimidation?",
+    "primary_mode": "punishment_fabrication",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "506",
+        "similarity": 0.8604
+      },
+      {
+        "act": "BNS",
+        "section": "351",
+        "similarity": 0.7172
+      },
+      {
+        "act": "IPC",
+        "section": "507",
+        "similarity": 0.7469
+      },
+      {
+        "act": "CrPC",
+        "section": "356",
+        "similarity": null
+      },
+      {
+        "act": "IPC",
+        "section": "503",
+        "similarity": 0.7251
+      },
+      {
+        "act": "CrPC",
+        "section": "260",
+        "similarity": null
+      }
+    ],
+    "conversational_summary": "I understand you want to know the legal consequences for criminal intimidation. Under Indian law, this offence carries specific punishments and procedural rules. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "Criminal intimidation involves threatening another person with injury to their person, reputation, or property, with the intent to cause alarm. It is a punishable offence under the Indian Penal Code and is also defined in the BNS Act.",
+      "severity": "medium",
+      "severity_reason": "The offence carries imprisonment and/or fine, reflecting its seriousness but is not among the gravest offences.",
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "351",
+          "title": "Criminal intimidation (definition)",
+          "why_applies": "Defines the act of threatening another, which is the basis of the offence."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "title": "Punishment for criminal intimidation",
+          "why_applies": "Specifies the penalty for committing criminal intimidation."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "507",
+          "title": "Criminal intimidation by an anonymous communication",
+          "why_applies": "Applies when the threat is made anonymously or the perpetrator conceals identity."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "260",
+          "title": "Power to try summarily",
+          "why_applies": "Allows certain magistrates to try the offence of criminal intimidation summarily."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "356",
+          "title": "Order for notifying address of previously convicted offender",
+          "why_applies": "Relevant when the offender has a prior conviction under section 506."
+        }
+      ],
+      "punishments": [
+        {
+          "offence": "Criminal intimidation (IPC 506)",
+          "imprisonment": "Up to 2 years",
+          "fine": "Fine as determined by the court, or both imprisonment and fine"
+        },
+        {
+          "offence": "Criminal intimidation by anonymous communication (IPC 507)",
+          "imprisonment": "Up to 2 years",
+          "fine": "Fine as determined by the court, or both imprisonment and fine"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Report the threat to the nearest police station",
+          "details": "Provide a written statement, any messages, recordings, or witnesses.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Preserve all evidence",
+          "details": "Do not delete messages, emails, or any physical evidence; keep originals safe.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 3,
+          "action": "Seek legal counsel",
+          "details": "Engage a lawyer experienced in criminal law to guide you through the process.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "If the threat is anonymous, inform the police of any steps you took to conceal identity",
+          "details": "This helps the investigating officer apply IPC 507 provisions.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Consider filing a written complaint (FIR) if the police are reluctant",
+          "details": "Under the law, you have the right to have an FIR registered for criminal intimidation.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "File an FIR or written complaint with the police",
+          "consequence": "Delays may affect the investigation and the ability to secure a summons of the accused."
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to lodge a police complaint (FIR)",
+          "explanation": "You can approach any police station to report criminal intimidation."
+        },
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may be represented by a lawyer at every stage of the investigation and trial."
+        },
+        {
+          "right": "Right to protection",
+          "explanation": "If you fear further threats, you can request police protection under relevant provisions."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Do report the threat promptly to police.",
+          "Do keep all communications and evidence intact.",
+          "Do seek professional legal advice."
+        ],
+        "donts": [
+          "Don't confront the alleged intimidator on your own.",
+          "Don't destroy or alter any evidence.",
+          "Don't delay filing the complaint."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 5,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "BNS",
+        "section": "351",
+        "section_text": "OF CRIMINAL INTIMIDATION, INSULT, ANNOYANCE, DEFAMATION, ETC. 351. Criminal intimidation.—(1) Whoever threatens another by any means, with any injury to his person, reputation or property, or to the person or reputation of any one in whom that person is interested, with intent to cause alarm to that person, or to cause that person to do any act which he is not legally bound to do, or to omit to do any act which that person is legally entitled to do, as the means of avoiding the execution of such threat, commits criminal intimidation. Explanation.—A threat to injure the reputation of any deceased person in whom the person threatened is interested, is within this section. Illustration. A, for the purpose of inducing B to resist from prosecuting a civil suit, threatens to burn B’s house. A is guilty of criminal intimidation. (2) Whoever commits the offence of criminal intimidation shall be punished with imprisonment of either description for a term which may extend to two years, or with fine, or with both. (3) Whoever commits the offence of criminal intimidation by threatening to cause death or grievous hurt, or to cause the destruction of any property by fire, or to cause an offence punishable with death or 106 imprisonment for life, or with imprisonment for a term which may extend to seven years, or to impute unchastity to a woman, shall be punished with imprisonment of either description for a term which may extend to seven years, or with fine, or with both. (4) Whoever commits the offence of criminal intimidation by an anonymous communication, or having taken precaution to conceal the name or abode of the person from whom the threat comes, shall be punished with imprisonment of either description for a term which may extend to two years, in addition to the punishment provided for the offence under sub-section (1).",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "506",
+        "section_text": "506. Punishment for criminal intimidation.—Whoever commits the offence of criminal intimidation shall be punished with imprisonment of either description for a term which may extend to two years, or with fine, or with both; If threat be to cause death or grievous hurt, etc.—and if the threat be to cause death or grievous hurt, or to cause the destruction of any property by fire, or to cause an offence punishable with death or imprisonment for life], or with imprisonment for a term which may extend to seven years, or to impute unchastity to a woman, shall be punished with imprisonment of either description for a term which may extend to seven years, or with fine, or with both.",
+        "marginal_note": "Punishment for criminal intimidation.—Whoever commits the offence of criminal",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "507",
+        "section_text": "507. Criminal intimidation by an anonymous communication.—Whoever commits the offence of criminal intimidation by an anonymous communication, or having taken precaution to conceal the name or abode of the person from whom the threat comes, shall be punished with imprisonment of either description for a term which may extend to two years, in addition to the punishment provided for the offence by the last preceding section.",
+        "marginal_note": "Criminal intimidation by an anonymous communication.—Whoever commits the offence of",
+        "judicial_status": null
+      },
+      {
+        "act": "CrPC",
+        "section": "260",
+        "section_text": "260. Power to try summarily.—(1) Notwithstanding anything contained in this Code— (a) any Chief Judicial Magistrate; (b) any Metropolitan Magistrate; (c) any Magistrate of the first class specially empowered in this behalf by the High Court, may, if he thinks fit, try in a summary way all or any of the following offences:— (i) offences not punishable with death, imprisonment for life or imprisonment for a term exceeding two years; (ii) theft, under section 379, section 380 or section 381 of the Indian Penal Code (45 of 1860), where the value of the property stolen does not exceed 1[two thousand rupees]; (iii) receiving or retaining stolen property, under section 411 of the Indian Penal Code (45 of 1860), where 120 the value of the property does not exceed 1[two thousand rupees]; (iv) assisting in the concealment or disposal of stolen property, under section 414 of the Indian Penal Code (45 of 1860), where the value of such property does not exceed 1[two thousand rupees]; (v) offences under sections 454 and 456 of the Indian Penal Code (45 of 1860); (vi) insult with intent to provoke a breach of the peace, under section 504, and 1[criminal intimidation punishable with imprisionment for a term which may extend to two years, or with fine, or with both], under section 506 of the Indian Penal Code (45 of 1860); (vii) abetment of any of the foregoing offences; (viii) an attempt to commit any of the foregoing offences, when such attempt is an offence; (ix) any offence constituted by an act in respect of which a complaint may be made under section 20 of the Cattle-trespass Act, 1871 (1 of 1871). (2) When, in the course of a summary trial it appears to the Magistrate that the nature of the case is such that it is undesirable to try it summarily, the Magistrate shall recall any witnesses who may have been examined and proceed to re-hear the case in the manner provided by this Code.",
+        "marginal_note": "Power to try summarily.—(1) Notwithstanding anything contained in this Code—",
+        "judicial_status": null
+      },
+      {
+        "act": "CrPC",
+        "section": "356",
+        "section_text": "356. Order for notifying address of previously convicted offender.—(1) When any person, having been convicted by a Court in India of an offence punishable under section 215, section 489A, section 489B, section 489C or section 489D 1[or section 506 (in so far as it relates to criminal intimidation punishable with imprisonment for a term which may extend to seven years, or with fine, or with both)] of the Indian Penal Code (45 of 1860), or of any offence punishable under Chapter XII 1[or Chapter XVI] or Chapter XVII of that Code, with imprisonment for a term of three years, or upwards, is again convicted of any offence punishable under any of those sections or Chapters with imprisonment for a term of three years or upwards by any Court other than that of a Magistrate of the second class, such Court may, if it thinks fit, at the time of passing a sentence of imprisonment on such person, also order that his residence and any change of, or absence from, such residence after release be notified as hereinafter provided for a term not exceeding five years from the date of the expiration of such sentence. (2) The provisions of sub-section (1) with reference to the offences named therein, apply also to criminal conspiracies to commit such offences and to the abatement of such offences and attempts to commit them. (3) If such conviction is set aside on appeal or otherwise, such order shall become void. (4) An order under this section may also be made by an Appellate Court or by the High Court or Court of Session when exercising its powers of revision. (5) The State Government may, by notification, make rules to carry out the provisions of this section relating to the notification of residence or change of, or absence from, residence by released convicts. (6) Such rules may provide for punishment for the breach thereof and any person charged with a breach of any such rule may be tried by a Magistrate of competent jurisdiction in the district in which the place last notified by him as his place of residence is situated.",
+        "marginal_note": "Order for notifying address of previously convicted offender.—(1) When any person, having been",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Criminal intimidation (IPC 506)",
+          "stated_imprisonment": "Up to 2 years",
+          "stated_fine": "Fine as determined by the court, or both imprisonment and fine",
+          "verdict": "grounded",
+          "reasoning": "Section 506 states imprisonment up to two years, or fine, or both."
+        },
+        {
+          "offence": "Criminal intimidation by anonymous communication (IPC 507)",
+          "stated_imprisonment": "Up to 2 years",
+          "stated_fine": "Fine as determined by the court, or both imprisonment and fine",
+          "verdict": "not_grounded",
+          "reasoning": "Section 507 mentions imprisonment up to two years in addition to the punishment under 506, but does not mention a fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "351",
+          "verdict": "faithful",
+          "reasoning": "The section defines criminal intimidation, matching the assistant's claim."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "verdict": "faithful",
+          "reasoning": "The section provides the punishment for criminal intimidation, as described."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "507",
+          "verdict": "faithful",
+          "reasoning": "The section defines intimidation by anonymous communication and its punishment, matching the claim."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "260",
+          "verdict": "faithful",
+          "reasoning": "The section allows summary trial of criminal intimidation, as stated."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "356",
+          "verdict": "faithful",
+          "reasoning": "The section refers to prior convictions under section 506, aligning with the assistant's note."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [
+        {
+          "offence": "Criminal intimidation (IPC 506)",
+          "stated_imprisonment": "Up to 2 years",
+          "stated_fine": "Fine as determined by the court, or both imprisonment and fine",
+          "verdict": "grounded",
+          "reasoning": "Section 506 states imprisonment up to two years, or fine, or both."
+        },
+        {
+          "offence": "Criminal intimidation by anonymous communication (IPC 507)",
+          "stated_imprisonment": "Up to 2 years",
+          "stated_fine": "Fine as determined by the court, or both imprisonment and fine",
+          "verdict": "not_grounded",
+          "reasoning": "Section 507 only adds imprisonment up to two years in addition to the punishment under 506; it does not mention a fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "351",
+          "verdict": "faithful",
+          "reasoning": "The section defines criminal intimidation, matching the assistant's claim."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "verdict": "faithful",
+          "reasoning": "The section prescribes the penalty for criminal intimidation, as described."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "507",
+          "verdict": "faithful",
+          "reasoning": "The section defines intimidation by anonymous communication, aligning with the claim."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "260",
+          "verdict": "faithful",
+          "reasoning": "Section 260 lists criminal intimidation (under 506) among offences that may be tried summarily."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "356",
+          "verdict": "faithful",
+          "reasoning": "Section 356 references prior conviction under section 506, matching the assistant's note."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "bns_01_theft",
+    "query": "What is the punishment for theft?",
+    "primary_mode": "bns_bnss_confusion",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "379",
+        "similarity": 0.724
+      },
+      {
+        "act": "BNS",
+        "section": "307",
+        "similarity": 0.7646
+      },
+      {
+        "act": "IPC",
+        "section": "382",
+        "similarity": 0.7032
+      },
+      {
+        "act": "IPC",
+        "section": "401",
+        "similarity": 0.6536
+      },
+      {
+        "act": "BNS",
+        "section": "134",
+        "similarity": 0.6855
+      },
+      {
+        "act": "BNS",
+        "section": "313",
+        "similarity": 0.6362
+      }
+    ],
+    "conversational_summary": "Sure, I can explain what the law says about theft. The Indian Penal Code outlines the punishment for this offence. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "Theft is a criminal offence involving the unlawful taking of property belonging to another person. It is punishable under the Indian Penal Code.",
+      "severity": "medium",
+      "severity_reason": "Theft involves loss of property and is punishable by imprisonment, reflecting its seriousness.",
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "title": "Punishment for theft",
+          "why_applies": "Specifies the penalty for anyone who commits theft."
+        }
+      ],
+      "punishments": [
+        {
+          "offence": "Theft",
+          "imprisonment": "Up to 3 years",
+          "fine": "As decided by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Consult a qualified criminal defence lawyer",
+          "details": "Obtain legal advice promptly to understand your position and protect your rights.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Do not make any statements to police without your lawyer present",
+          "details": "You have the right to remain silent until counsel is available.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 3,
+          "action": "Gather any evidence that supports your innocence",
+          "details": "Collect documents, receipts, or witness contacts that may prove you did not commit theft.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "If arrested, request to be produced before a magistrate",
+          "details": "Ensure the legal process is followed and your detention is reviewed.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Prepare a written account of events",
+          "details": "Document your version of facts clearly for your lawyer and the court.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 6,
+          "action": "Cooperate with lawful investigation while protecting your rights",
+          "details": "Attend any required police or forensic procedures with counsel present.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 7,
+          "action": "Attend all court hearings as scheduled",
+          "details": "Failure to appear can lead to additional legal consequences.",
+          "urgency": "as_scheduled"
+        }
+      ],
+      "critical_deadlines": [],
+      "your_rights": [
+        {
+          "right": "Right to legal counsel",
+          "explanation": "You may engage a lawyer at any stage of the investigation or trial."
+        },
+        {
+          "right": "Right to remain silent",
+          "explanation": "You are not obliged to answer police questions without your lawyer present."
+        },
+        {
+          "right": "Right to be produced before a magistrate",
+          "explanation": "If detained, you must be presented before a judicial officer within the time prescribed by law."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Seek immediate legal advice.",
+          "Preserve any evidence that may support your defence.",
+          "Cooperate with lawful procedures while exercising your rights."
+        ],
+        "donts": [
+          "Do not give statements to police without a lawyer.",
+          "Do not tamper with or destroy potential evidence.",
+          "Do not ignore court notices or summons."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 1,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "IPC",
+        "section": "379",
+        "section_text": "379. Punishment for theft.—Whoever commits theft shall be punished with imprisonment of either description for a term which may extend to three years, or with fine, or with both. STATE AMENDMENT Gujarat.— In the Indian Penal Code, 1860 (XLV of 1860), after section 379, the following sections shall be inserted, namely:—",
+        "marginal_note": "Punishment for theft.—Whoever commits theft shall be punished with imprisonment of either",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Theft",
+          "stated_imprisonment": "Up to 3 years",
+          "stated_fine": "As decided by the court",
+          "verdict": "grounded",
+          "reasoning": "Section 379 states imprisonment may extend to three years, or fine, or both."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "verdict": "faithful",
+          "reasoning": "The claim that the section specifies the penalty for theft accurately reflects the text."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [
+        {
+          "offence": "Theft",
+          "stated_imprisonment": "Up to 3 years",
+          "stated_fine": "As decided by the court",
+          "verdict": "grounded",
+          "reasoning": "Section 379 states imprisonment may extend to three years, or fine, or both."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "verdict": "faithful",
+          "reasoning": "The claim that the section specifies the penalty for theft accurately reflects the text."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "judicial_01_unnatural_offences",
+    "query": "Is unnatural sexual intercourse between consenting adults a crime?",
+    "primary_mode": "judicial_status",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "377",
+        "similarity": 0.5886
+      },
+      {
+        "act": "BNS",
+        "section": "63",
+        "similarity": 0.5416
+      },
+      {
+        "act": "BNS",
+        "section": "67",
+        "similarity": 0.5288
+      },
+      {
+        "act": "BSA",
+        "section": "48",
+        "similarity": 0.5264
+      },
+      {
+        "act": "BNS",
+        "section": "68",
+        "similarity": 0.514
+      },
+      {
+        "act": "IPC",
+        "section": "376B",
+        "similarity": 0.5088
+      }
+    ],
+    "conversational_summary": "I understand you're asking whether consensual sexual activity that is considered 'unnatural' under the law is a crime for adults. The law has been read down for consensual adult conduct, so it is not criminal. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "Section 377 of the IPC criminalises 'unnatural' sexual acts, but the Supreme Court has read it down for consensual sexual conduct between adults, meaning such conduct is not an offence.",
+      "severity": "low",
+      "severity_reason": "The conduct is not punishable when it involves consenting adults.",
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "377",
+          "title": "Unnatural offences",
+          "why_applies": "Section 377 originally criminalised 'unnatural' intercourse, but the Supreme Court's reading down (Navtej Singh Johar v. Union of India) excludes consensual adult conduct from the offence."
+        }
+      ],
+      "punishments": [
+        {
+          "offence": "Unnatural intercourse (non‑consensual, involving minors or animals)",
+          "imprisonment": "Life imprisonment or up to 10 years",
+          "fine": "As determined by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "If you are facing any accusation, seek legal counsel immediately.",
+          "details": "A lawyer can advise on the applicability of Section 377 and protect your rights.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Gather any relevant communication or evidence showing consent.",
+          "details": "Documenting consent can be helpful if the matter escalates.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 3,
+          "action": "Avoid discussing the matter publicly or on social media.",
+          "details": "Public statements can be misconstrued and may affect any legal proceedings.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 4,
+          "action": "If approached by law enforcement, exercise your right to remain silent until counsel is present.",
+          "details": "You are not obligated to answer questions without a lawyer.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 5,
+          "action": "Stay informed about the legal position of Section 377.",
+          "details": "Understanding that consensual adult conduct is exempt helps you respond appropriately.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "Contact a lawyer if you are detained or questioned by police.",
+          "consequence": "Failure to obtain counsel may affect your defence."
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Presumption of innocence",
+          "explanation": "You are considered innocent until proven guilty under the law."
+        },
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may have a lawyer present during any police interrogation."
+        },
+        {
+          "right": "Right against self‑incrimination",
+          "explanation": "You can choose not to answer questions that may incriminate you."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Consult a qualified attorney promptly.",
+          "Maintain records that demonstrate mutual consent."
+        ],
+        "donts": [
+          "Do not make any statements to police without a lawyer.",
+          "Do not share details of the private act publicly."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 1,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "IPC",
+        "section": "377",
+        "section_text": "377. Unnatural offences.—Whoever voluntarily has carnal intercourse against the order of nature with any man, woman or animal, shall be punished with 1[imprisonment for life], or with imprisonment of either description for a term which may extend to ten years, and shall also be liable to fine. Explanation.—Penetration is sufficient to constitute the carnal intercourse necessary to the offence described in this section.",
+        "marginal_note": "Unnatural offences.—Whoever voluntarily has carnal intercourse against the order of nature",
+        "judicial_status": {
+          "status": "read_down",
+          "case_name": "Navtej Singh Johar v. Union of India",
+          "citation": "AIR 2018 SC 4321",
+          "scope_note": "Section 377 read down insofar as it criminalised consensual sexual conduct between adults (5-judge bench; violative of Articles 14, 19, 21). The provision survives for non-consensual acts and acts involving minors or animals -- it was NOT struck down in its entirety."
+        }
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Unnatural intercourse (non‑consensual, involving minors or animals)",
+          "stated_imprisonment": "Life imprisonment or up to 10 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "Section 377 states punishment with life imprisonment or imprisonment up to ten years and liability to fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "377",
+          "verdict": "faithful",
+          "reasoning": "The claim correctly reflects the judicial note that the Supreme Court read down the provision for consensual adult conduct."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [
+        {
+          "offence": "Unnatural intercourse (non‑consensual, involving minors or animals)",
+          "stated_imprisonment": "Life imprisonment or up to 10 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "Section 377 states punishment with imprisonment for life or up to ten years and liability to fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "377",
+          "verdict": "faithful",
+          "reasoning": "The claim correctly restates that the Supreme Court read down the provision for consensual adult conduct, matching the judicial note."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "general_02_rape",
+    "query": "What is the punishment for rape?",
+    "primary_mode": "right_section_wrong_claim",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "376",
+        "similarity": 0.7255
+      },
+      {
+        "act": "IPC",
+        "section": "376DB",
+        "similarity": 0.7302
+      },
+      {
+        "act": "BNS",
+        "section": "65",
+        "similarity": 0.7468
+      },
+      {
+        "act": "IPC",
+        "section": "376DA",
+        "similarity": 0.7239
+      },
+      {
+        "act": "IPC",
+        "section": "376AB",
+        "similarity": 0.6548
+      },
+      {
+        "act": "BNS",
+        "section": "64",
+        "similarity": 0.7173
+      }
+    ],
+    "conversational_summary": "I understand you want to know the legal consequences for rape under Indian law. The statutes prescribe severe imprisonment terms and fines for this serious offence. See the detailed breakdown for applicable laws, steps, and your rights.",
+    "structured_data": {
+      "situation_overview": "Rape is a criminal offence punishable under the Indian Penal Code and the Bharatiya Nagrik Suraksha Act (BNS) with rigorous imprisonment and possible fines. The law distinguishes between general rape and aggravated forms involving minors.",
+      "severity": "critical",
+      "severity_reason": "Rape is among the gravest offences with mandatory long-term imprisonment.",
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "64",
+          "title": "Punishment for rape",
+          "why_applies": "Defines the punishment for the general offence of rape."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "65",
+          "title": "Punishment for rape in certain cases (woman under sixteen)",
+          "why_applies": "Specifies enhanced punishment when the victim is under sixteen years of age."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "376",
+          "title": "Punishment for rape",
+          "why_applies": "Provides the baseline punishment for rape under the Indian Penal Code."
+        }
+      ],
+      "punishments": [
+        {
+          "offence": "Rape (general)",
+          "imprisonment": "Minimum 10 years, may extend to life imprisonment",
+          "fine": "As determined by the court"
+        },
+        {
+          "offence": "Rape of a woman under sixteen",
+          "imprisonment": "Minimum 20 years, may extend to life imprisonment",
+          "fine": "As determined by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Report the incident to the nearest police station",
+          "details": "File an FIR as soon as possible; the law mandates prompt reporting.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Seek medical examination at a government hospital",
+          "details": "Obtain a medico‑legal report and necessary treatment; evidence collection is time‑sensitive.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 3,
+          "action": "Preserve any evidence",
+          "details": "Do not wash clothes, clean the scene, or discard any items that may be relevant.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 4,
+          "action": "Engage a qualified lawyer",
+          "details": "Legal counsel will guide you through the investigation and trial process.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Inform a trusted family member or friend",
+          "details": "Ensure you have support and someone aware of the case progress.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 6,
+          "action": "Avoid discussing the case on social media",
+          "details": "Public statements can affect the investigation and trial.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 7,
+          "action": "Keep copies of all documents",
+          "details": "Maintain records of medical reports, FIR copy, and correspondence with authorities.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "Medical examination and collection of forensic evidence",
+          "consequence": "Delay may compromise evidence and affect prosecution"
+        },
+        {
+          "deadline": "48 hours",
+          "what": "Filing of FIR (if not done immediately)",
+          "consequence": "Late filing can lead to procedural complications"
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may engage a lawyer of your choice at any stage of the investigation or trial."
+        },
+        {
+          "right": "Right to a medical examination",
+          "explanation": "You are entitled to a free medico‑legal examination at a government facility."
+        },
+        {
+          "right": "Right to privacy and protection of identity",
+          "explanation": "The law mandates that the victim's identity be kept confidential."
+        },
+        {
+          "right": "Right to be informed of the case status",
+          "explanation": "You can request updates from the investigating officer or court."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Report the crime promptly to police.",
+          "Seek immediate medical care and forensic examination.",
+          "Preserve any physical evidence.",
+          "Consult a qualified lawyer."
+        ],
+        "donts": [
+          "Do not destroy or alter any evidence.",
+          "Do not discuss details of the case publicly or on social media.",
+          "Do not delay seeking medical attention."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 3,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "BNS",
+        "section": "64",
+        "section_text": "64. Punishment for rape.—(1) Whoever, except in the cases provided for in sub-section (2), commits rape, shall be punished with rigorous imprisonment of either description for a term which shall not be less than ten years, but which may extend to imprisonment for life, and shall also be liable to fine. (2) Whoever,— (a) being a police officer, commits rape,— (i) within the limits of the police station to which such police officer is appointed; or (ii) in the premises of any station house; or (iii) on a woman in such police officer’s custody or in the custody of a police officer subordinate to such police officer; or (b) being a public servant, commits rape on a woman in such public servant’s custody or in the custody of a public servant subordinate to such public servant; or (c) being a member of the armed forces deployed in an area by the Central Government or a State Government commits rape in such area; or (d) being on the management or on the staff of a jail, remand home or other place of custody established by or under any law for the time being in force or of a women’s or children’s institution, commits rape on any inmate of such jail, remand home, place or institution; or (e) being on the management or on the staff of a hospital, commits rape on a woman in that hospital; or (f) being a relative, guardian or teacher of, or a person in a position of trust or authority towards the woman, commits rape on such woman; or (g) commits rape during communal or sectarian violence; or (h) commits rape on a woman knowing her to be pregnant; or (i) commits rape, on a woman incapable of giving consent; or (j) being in a position of control or dominance over a woman, commits rape on such woman; or (k) commits rape on a woman suffering from mental or physical disability; or (l) while committing rape causes grievous bodily harm or maims or disfigures or endangers the life of a woman; or (m) commits rape repeatedly on the same woman, shall be punished with rigorous imprisonment for a term which shall not be less than ten years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person’s natural life, and shall also be liable to fine. Explanation.—For the purposes of this sub-section,— (a) “armed forces” means the naval, army and air forces and includes any member of the Armed Forces constituted under any law for the time being in force, including the paramilitary forces and any auxiliary forces that are under the control of the Central Government or the State Government; 37 (b) “hospital” means the precincts of the hospital and includes the precincts of any institution for the reception and treatment of persons during convalescence or of persons requiring medical attention or rehabilitation; (c) “police officer” shall have the same meaning as assigned to the expression “police” under the Police Act, 1861 (5 of 1861); (d) “women’s or children’s institution” means an institution, whether called an orphanage or a home for neglected women or children or a widow’s home or an institution called by any other name, which is established and maintained for the reception and care of women or children.",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "BNS",
+        "section": "65",
+        "section_text": "65. Punishment for rape in certain cases.—(1) Whoever, commits rape on a woman under sixteen years of age shall be punished with rigorous imprisonment for a term which shall not be less than twenty years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person’s natural life, and shall also be liable to fine: Provided that such fine shall be just and reasonable to meet the medical expenses and rehabilitation of the victim: Provided further that any fine imposed under this sub-section shall be paid to the victim. (2) Whoever, commits rape on a woman under twelve years of age shall be punished with rigorous imprisonment for a term which shall not be less than twenty years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person’s natural life, and with fine or with death: Provided that such fine shall be just and reasonable to meet the medical expenses and rehabilitation of the victim: Provided further that any fine imposed under this sub-section shall be paid to the victim.",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "376",
+        "section_text": "376. Punishment for rape.—(1) Whoever, except in the cases provided for in sub-section (2), commits rape, shall be punished with rigorous imprisonment of either description for a term which 3[shall not be less than ten years, but which may extend to imprisonment for life, and shall also be liable to fine]. (2) Whoever,— (a) being a police officer, commits rape— (i) within the limits of the police station to which such police officer is appointed; or (ii) in the premises of any station house; or also be liable to fine” (w.e.f. 21-4-2018). 90 (iii) on a woman in such police officer's custody or in the custody of a police officer subordinate to such police officer; or (b) being a public servant, commits rape on a woman in such public servant's custody or in the custody of a public servant subordinate to such public servant; or (c) being a member of the armed forces deployed in an area by the Central or a State Government commits rape in such area; or (d) being on the management or on the staff of a jail, remand home or other place of custody established by or under any law for the time being in force or of a women's or children's institution, commits rape on any inmate of such jail, remand home, place or institution; or (e) being on the management or on the staff of a hospital, commits rape on a woman in that hospital; or (f) being a relative, guardian or teacher of, or a person in a position of trust or authority towards the woman, commits rape on such woman; or (g) commits rape during communal or sectarian violence; or (h) commits rape on a woman knowing her to be pregnant; or 1* * * * * (j) commits rape, on a woman incapable of giving consent; or (k) being in a position of control or dominance over a woman, commits rape on such woman; or (l) commits rape on a woman suffering from mental or physical disability; or (m) while committing rape causes grievous bodily harm or maims or disfigures or endangers the life of a woman; or (n) commits rape repeatedly on the same woman, shall be punished with rigorous imprisonment for a term which shall not be less than ten years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person's natural life, and shall also be liable to fine. Explanation.—For the purposes of this sub-section,— (a) “armed forces” means the naval, military and air forces and includes any member of the Armed Forces constituted under any law for the time being in force, including the paramilitary forces and any auxiliary forces that are under the control of the Central Government or the State Government; (b) “hospital” means the precincts of the hospital and includes the precincts of any institution for the reception and treatment of persons during convalescence or of persons requiring medical attention or rehabilitation; (c) “police officer” shall have the same meaning as assigned to the expression “police” under the Police Act, 1861 (5 of 1861); (d) “women's or children's institution” means an institution, whether called an orphanage or a home for neglected women or children or a widow's home or an institution called by any other name, which is established and maintained for the reception and care of women or children. (3) Whoever, commits rape on a woman under sixteen years of age shall be punished with rigorous imprisonment for a term which shall not be less than twenty years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person's natural life, and shall also be liable to fine: Provided that such fine shall be just and reasonable to meet the medical expenses and rehabilitation of the victim: 91 Provided further that any fine imposed under this sub-section shall be paid to the victim.]",
+        "marginal_note": "Punishment for rape.—(1) Whoever, except in the cases provided for in sub-section (2),",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Rape (general)",
+          "stated_imprisonment": "Minimum 10 years, may extend to life imprisonment",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "BNS Section 64 states imprisonment not less than ten years, may extend to life, and liable to fine."
+        },
+        {
+          "offence": "Rape of a woman under sixteen",
+          "stated_imprisonment": "Minimum 20 years, may extend to life imprisonment",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "BNS Section 65(1) states imprisonment not less than twenty years, may extend to life, and liable to fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "64",
+          "verdict": "definition_vs_punishment_conflation",
+          "reasoning": "Section 64 only prescribes punishment; the claim says it defines the offence."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "65",
+          "verdict": "faithful",
+          "reasoning": "The claim correctly restates that the section specifies enhanced punishment for victims under sixteen."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "376",
+          "verdict": "faithful",
+          "reasoning": "The claim accurately reflects that the section provides the baseline punishment for rape."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    },
+    "judge_verdict_rerun": {
+      "punishment_verdicts": [
+        {
+          "offence": "Rape (general)",
+          "stated_imprisonment": "Minimum 10 years, may extend to life imprisonment",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "BNS Section 64 states rigorous imprisonment not less than ten years, may extend to life, and liable to fine."
+        },
+        {
+          "offence": "Rape of a woman under sixteen",
+          "stated_imprisonment": "Minimum 20 years, may extend to life imprisonment",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "BNS Section 65(1) states rigorous imprisonment not less than twenty years, may extend to life, and liable to fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "64",
+          "verdict": "definition_vs_punishment_conflation",
+          "reasoning": "Section 64 only prescribes punishment; the claim that it 'defines the punishment for the general offence' conflates definition with punishment."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "65",
+          "verdict": "faithful",
+          "reasoning": "Section 65 indeed specifies enhanced punishment for rape of a woman under sixteen."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "376",
+          "verdict": "faithful",
+          "reasoning": "Section 376 provides the baseline punishment for rape, matching the claim."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  }
+]

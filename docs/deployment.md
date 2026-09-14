@@ -452,3 +452,37 @@ number here would flatten a real behavioural difference into a misleadingly tidy
 ids diverge), not a same-org relabeling. Still framed as failover plus headroom, not a fix for the
 underlying tier limit -- sustained load well beyond what two keys' combined budget covers will
 still queue and eventually 503, honestly, same as before, just at a higher combined ceiling.
+
+## A second, harder ceiling under the TPM one: 200,000 tokens per day (2026-09-14)
+
+Found running the answer-fidelity battery (`docs/evaluation.md`), not anticipated -- the TPM math
+above governs *concurrency*, but this account also has a **daily** token budget, hit twice for
+real: `Rate limit reached for model openai/gpt-oss-120b in organization org_01khtyvsk0ffks2p3ce8952p10
+... on tokens per day (TPD): Limit 200000, Used 192747, Requested 7945`, and again ~13 minutes
+later at `Used 198403, Requested 2096` after only one more case had run. Two things confirmed
+directly from those two data points, not assumed from the error text alone: it's the same
+per-organization scoping the TPM limit already has (same `org_...` id, same wording), and it
+behaves as a rolling window, not a fixed once-a-day reset -- usage partially cleared in that
+13-minute gap (enough for one more case to run) rather than staying pinned until midnight.
+
+**What this actually caps, in real usage terms**: at ~2,886 tokens per query (the measured,
+post-trim `/legal/query` cost from the concurrency-ceiling entry above -- system prompt + RAG
+context + completion, for a new-topic query), 200,000 TPD is **~69 queries per day for the entire
+account**, before counting a single eval or development call. (Close to, not identical to, the
+"~65" back-of-envelope figure this was first flagged with -- 200000/2886 -- the gap is just which
+query-cost baseline is used; either way it's the same order of magnitude and the same conclusion.)
+This is a HARDER real-world limit than the TPM concurrency ceiling for this project's actual
+traffic shape: a small legal-awareness tool is far more likely to see 70 spread-out queries over a
+day than 3 genuinely concurrent ones, so this is the number that actually governs "how much real
+usage can this account serve today," not the TPM figure the failover work above was built around.
+
+**Eval and development spend competes directly with that same 69-query budget, on the same key.**
+The answer-fidelity battery alone -- 20 cases, ~2,886 tokens (generation) + ~2,000 tokens (judge)
+each -- is close to **100,000 tokens per full run, roughly half a day's entire production
+allowance**, before any manual dev-machine testing on top. Both real 429s above were hit *by this
+eval work itself*, not by production traffic. `GROQ_API_KEY_2` is not the fix for this the way it
+is for TPM concurrency -- it's scoped for production failover, kept deliberately separate from
+eval/dev spend (see `docs/evaluation.md`'s fidelity-battery entry) -- so this ceiling is currently
+shared, unmitigated, between real users and every eval run against the same account. Worth a real
+decision at some point (a dedicated eval-only key/org, scheduling eval runs for genuinely idle
+hours, or accepting the shared budget) rather than continuing to discover it by hitting it.

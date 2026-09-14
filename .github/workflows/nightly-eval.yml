@@ -179,6 +179,19 @@ jobs:
         # inputs were ever wrong, this is what would catch it.
         run: python -m scripts.ci_preflight_embedding_check
 
+      - name: Pre-flight -- corpus completeness (no title-only or absorbed sections)
+        # FOUND live (docs/evaluation.md, corpus-completeness audit): IPC
+        # 376AB, IPC 174A, and BNS 255 all retrieve fine, cite fine, and
+        # contain nothing -- a parser boundary failure silently merged each
+        # into the PRECEDING section's row instead. Recall@5 cannot see this
+        # (the section IS retrieved); neither can the ingestion-time
+        # completeness check (ends_mid_sentence/near_cap/shorter_than_toc_
+        # entry all pass -- each stub ends cleanly on its own title's final
+        # period). This runs on whatever corpus this job actually has --
+        # restored from cache or freshly ingested -- every night, not just
+        # at ingestion time, so a cache-hit night still gets checked.
+        run: python -m scripts.ci_check_section_completeness
+
       - name: Golden set (Recall@5, out-of-scope catch, false positives)
         # Thresholds are today's real measured baseline, not aspirational
         # numbers -- see docs/evaluation.md for how each was arrived at.

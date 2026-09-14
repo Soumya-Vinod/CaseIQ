@@ -507,7 +507,7 @@
       "question": "Can a public university expel a student for their political opinions?",
       "would_abstain": false,
       "caught_by": null,
-      "top_similarity": 0.3168,
+      "top_similarity": 0.451,
       "domain": "constitutional",
       "split": "heldout",
       "adversarial": false
