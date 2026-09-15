@@ -1,0 +1,324 @@
+{
+  "before": [
+    {
+      "conflation_detected": true,
+      "detections": [
+        {
+          "act": "BNS",
+          "section": "103",
+          "real_title": "Punishment for murder",
+          "why_applies": "Section 103 defines the offence of murder and prescribes its punishment."
+        }
+      ],
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "title": "Murder",
+          "why_applies": "Section 103 defines the offence of murder and prescribes its punishment."
+        }
+      ],
+      "situation_overview": "Murder involves unlawfully causing the death of another person with intent. It is classified as a grave criminal offence with severe punishments.",
+      "case_id": "punish_01_murder",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "title": "Punishment for murder",
+          "why_applies": "The query asks about the punishment for murder, which is covered by BNS Section 103."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "104",
+          "title": "Punishment for murder by life-convict",
+          "why_applies": "Specifies the punishment when the offender is already serving a life sentence, relevant to murder cases."
+        }
+      ],
+      "situation_overview": "Murder is a serious criminal offence under Indian law, attracting the highest level of punishment. The law prescribes either death or life imprisonment, along with a possible fine.",
+      "case_id": "punish_01_murder",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "405",
+          "title": "Criminal breach of trust",
+          "why_applies": "Defines the offence of misappropriating property entrusted to a person."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "406",
+          "title": "Punishment for criminal breach of trust",
+          "why_applies": "Specifies the penalty for committing criminal breach of trust."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "316",
+          "title": "Criminal breach of trust",
+          "why_applies": "Provides the modern definition of the offence under the BNS Act."
+        }
+      ],
+      "situation_overview": "Criminal breach of trust is an offence where a person entrusted with property dishonestly misappropriates or uses it against legal directions. The law prescribes imprisonment and/or fine as punishment.",
+      "case_id": "punish_05_criminal_breach_of_trust",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "406",
+          "title": "Punishment for criminal breach of trust",
+          "why_applies": "Specifies the punishment for criminal breach of trust."
+        }
+      ],
+      "situation_overview": "A person entrusted with property has dishonestly misappropriated or used it against legal directions, constituting criminal breach of trust.",
+      "case_id": "punish_05_criminal_breach_of_trust",
+      "rep": 2
+    },
+    {
+      "conflation_detected": true,
+      "detections": [
+        {
+          "act": "IPC",
+          "section": "379",
+          "real_title": "Punishment for theft.—Whoever commits theft shall be punished with imprisonment of either",
+          "why_applies": "The conduct of taking another's property without consent falls squarely within the definition of theft under this section."
+        }
+      ],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "title": "Punishment for theft",
+          "why_applies": "The conduct of taking another's property without consent falls squarely within the definition of theft under this section."
+        }
+      ],
+      "situation_overview": "Theft is defined as the dishonest taking of property belonging to another without consent. It is a punishable criminal offence under the Indian Penal Code. The law prescribes imprisonment, a fine, or both for those convicted.",
+      "case_id": "bns_01_theft",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "title": "Punishment for theft",
+          "why_applies": "Section 379 directly defines the punishment for the offence of theft."
+        }
+      ],
+      "situation_overview": "The act of taking someone else's property without consent constitutes theft, which is a punishable criminal offence under the Indian Penal Code.",
+      "case_id": "bns_01_theft",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "Cheating and dishonestly inducing another person to deliver property is a criminal act under Indian law. It involves deception to obtain property and is punishable under the relevant statutes.",
+      "case_id": "general_03_cheating",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "Cheating and dishonest inducement to deliver property is a criminal offence under Indian law, involving fraud and the wrongful acquisition of another's property.",
+      "case_id": "general_03_cheating",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "The death of a woman caused by dowry harassment is classified as a dowry death under the criminal statutes. It is treated as a serious criminal offence.",
+      "case_id": "punish_06_dowry_death",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "A death of a woman caused by dowry harassment falls under the offence of dowry death, which is a criminal matter under the relevant statutes. The law presumes involvement of the husband or his relatives if cruelty related to dowry is shown.",
+      "case_id": "punish_06_dowry_death",
+      "rep": 2
+    }
+  ],
+  "after": [
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "title": "Murder",
+          "why_applies": "Specifies the punishment for the offence of murder."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "302",
+          "title": "Murder",
+          "why_applies": "Provides the punishment for murder under the Indian Penal Code."
+        }
+      ],
+      "situation_overview": "Intentionally causing the death of another person constitutes murder, which is punishable under the BNS 2023 and IPC 1860 statutes.",
+      "case_id": "punish_01_murder",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "103",
+          "title": "Murder",
+          "why_applies": "Specifies the punishment for the offence of murder."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "302",
+          "title": "Murder",
+          "why_applies": "Specifies the punishment for the offence of murder."
+        }
+      ],
+      "situation_overview": "Murder is a serious criminal offence that involves unlawfully causing the death of another person. The law prescribes the highest level of punishment, including death or life imprisonment, reflecting the severity of the act.",
+      "case_id": "punish_01_murder",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "316",
+          "title": "Criminal breach of trust",
+          "why_applies": "Defines the offence of criminal breach of trust."
+        },
+        {
+          "act": "IPC",
+          "section": "405",
+          "title": "Criminal breach of trust",
+          "why_applies": "Provides the general definition of the offence."
+        },
+        {
+          "act": "IPC",
+          "section": "406",
+          "title": "Punishment for criminal breach of trust",
+          "why_applies": "Specifies the punishment for the basic offence."
+        },
+        {
+          "act": "IPC",
+          "section": "407",
+          "title": "Criminal breach of trust by carrier, etc.",
+          "why_applies": "Sets higher punishment when the offender is a carrier, wharfinger or warehouse-keeper."
+        },
+        {
+          "act": "IPC",
+          "section": "408",
+          "title": "Criminal breach of trust by clerk or servant",
+          "why_applies": "Applies when the offender is a clerk or servant entrusted with property."
+        }
+      ],
+      "situation_overview": "Criminal breach of trust is a punishable offence when a person entrusted with property dishonestly misappropriates or converts it for personal use. The law distinguishes the basic offence and heightened penalties for certain categories like carriers or agents.",
+      "case_id": "punish_05_criminal_breach_of_trust",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": null,
+      "case_id": "punish_05_criminal_breach_of_trust",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "title": "Punishment for theft",
+          "why_applies": "Specifies the punishment for the offence of theft."
+        }
+      ],
+      "situation_overview": "Theft involves taking someone else's property dishonestly. Under the Indian Penal Code, it is a punishable criminal offence.",
+      "case_id": "bns_01_theft",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "379",
+          "title": "Punishment for theft",
+          "why_applies": "Section 379 prescribes the penalty for anyone who commits theft."
+        }
+      ],
+      "situation_overview": "Theft involves taking someone else's property dishonestly. Under the Indian Penal Code, it is a punishable criminal act.",
+      "case_id": "bns_01_theft",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "Cheating and dishonestly inducing another person to deliver property is a criminal offence under Indian law.",
+      "case_id": "general_03_cheating",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "420",
+          "title": "Cheating and dishonestly inducing delivery of property",
+          "why_applies": "Defines the offence of cheating and dishonest inducement of property."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "415",
+          "title": "Cheating",
+          "why_applies": "Provides the broader definition of cheating which underlies section 420."
+        }
+      ],
+      "situation_overview": "The act of cheating and dishonestly inducing another person to deliver property is a criminal offence under Indian law.",
+      "case_id": "general_03_cheating",
+      "rep": 2
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "A death of a woman caused by dowry harassment is classified as a dowry death under criminal law. It is treated as a grave offense punishable under the relevant statutes.",
+      "case_id": "punish_06_dowry_death",
+      "rep": 1
+    },
+    {
+      "conflation_detected": false,
+      "detections": [],
+      "laws_applicable": [],
+      "situation_overview": "A woman's death linked to dowry harassment is treated as a criminal offence under the dowry death provisions. The law presumes culpability when cruelty or harassment is shown before the death.",
+      "case_id": "punish_06_dowry_death",
+      "rep": 2
+    }
+  ]
+}

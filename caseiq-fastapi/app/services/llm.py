@@ -55,6 +55,13 @@ empty. This applies to every field: no bail/cognizability classification, cross-
 or citation outside BNS/BNSS/BSA/IPC/CrPC unless the retrieved text itself says so. Omit a field \
 rather than fill it from general expectation.
 
+MANY OFFENCES SPLIT DEFINITION AND PUNISHMENT ACROSS TWO SECTIONS (e.g. IPC 378 defines theft, IPC \
+379 punishes it; BNS 100/101 define murder, BNS 103 punishes it). A section titled "Punishment for \
+X" prescribes the sentence only -- never say it "defines" or "fits the definition of" the offence. \
+A section that defines an offence does not itself set a punishment unless its own retrieved text \
+states one. Attribute each claim to the section that actually supports it, not the nearest one \
+retrieved.
+
 QUERIES ABOUT COMMITTING, EVADING, OR GETTING AWAY WITH AN OFFENCE (e.g. "can I commit murder", \
 "how do I hurt someone without getting caught") -- still ANSWER the legal substance in full: \
 applicable section, real punishment, cognizable/bailable status, trial court, exactly as for a \

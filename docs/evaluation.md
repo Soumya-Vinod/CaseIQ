@@ -4218,7 +4218,31 @@ imprisonment for life") rather than open phrasing, to raise how often the claim 
 field is read by name and optional, the object already survived a field-removal cycle once
 (2026-09-02) -- new fields are additive and safe, confirmed, not assumed.
 
-**Not yet applied to production**: migration `0012_punishment_verification` is written and reviewed
-but `alembic upgrade head` has not been run against the live database -- purely additive (one new,
-empty table, no existing data touched) but still a production schema change, held for the same
-explicit go-ahead the row-level corpus fix got, not run silently.
+**Applied to production and verified live (2026-09-14)**: migration `0012_punishment_verification` run
+against the real Neon database with explicit go-ahead (a new, empty table -- no existing rows touched,
+so the backup-first precedent that gated the earlier row-level corpus fix was deliberately waived for
+this one, not relaxed as a general rule). Verified directly, not assumed: the app booted against the
+new schema (`/health` returned real embedding config from production), a real `/legal/query` call for
+"What is the punishment for criminal breach of trust?" ran the full path end to end, and the stats
+table showed `{total: 1, suppressed_mismatch: 0, unverifiable: 0, grounded: 1}` -- consistent with the
+response (a single, correct "Up to 3 years" claim for IPC 406) and the server log (no suppression
+line). **Inconclusive by design, stated plainly rather than stretched into a positive result**: this
+one query didn't happen to reproduce the 408/409 fabrication -- the model simply didn't attempt a
+punishment claim for either section this time. The GROUNDED path is now confirmed live; the MISMATCH
+path remains proven only in the 16 unit tests (including the real 408/409 fabrication cases), not yet
+observed firing against real traffic. Not re-queried to chase it further, per the same reasoning as
+the golden set's own report-only calibration: one honest "didn't reproduce" beats fishing for a
+different answer.
+
+**The gap that leaves, closed with a synthetic test, not left as an open question**: a real production
+counter sitting at 0 for weeks is consistent with either the prompt fix working or the branch being
+silently broken (a renamed column, a normalize_act mismatch), and the two look identical from outside.
+`tests/integration/test_punishment_verification.py` closes it by forcing the exact, already-confirmed
+IPC 408 fabrication through `verify_punishments()` itself -- the real production function (DB fetch +
+parser + comparison + counters), not just the pure parser functions `test_punishment_clause.py` already
+covered -- against a real seeded row, asserting the suppression actually fires and the fabricated line
+never reaches `result["punishments"]`. Also covers the GROUNDED, UNVERIFIABLE-claim, and
+UNVERIFIABLE-missing-section cases, so the test can't pass by suppressing everything. Wired into
+`nightly-eval.yml` as its own pre-flight step (a separate `caseiq_integration_test` database, same
+Postgres service, no conflict with that job's `caseiq_eval` corpus) so the branch is proven to still
+fire on a schedule, independent of whether real traffic ever exercises it that day.

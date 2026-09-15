@@ -192,6 +192,25 @@ jobs:
         # at ingestion time, so a cache-hit night still gets checked.
         run: python -m scripts.ci_check_section_completeness
 
+      - name: Pre-flight -- punishment-suppression branch can still fire
+        # Why this runs HERE, nightly, not just once in backend-ci.yml on
+        # push: punishments_suppressed_mismatch on the real production
+        # stats table can sit at 0 for weeks two ways that look identical
+        # from the outside -- the prompt fix genuinely working, or the
+        # branch silently broken (a renamed column, a normalize_act
+        # mismatch, a changed counters shape) with nothing left to exercise
+        # it. Production traffic isn't obligated to reproduce a real
+        # fabrication on demand to prove the branch still works (confirmed
+        # live 2026-09-14: a real query didn't happen to fabricate that
+        # day -- inconclusive, not negative). This test forces the exact,
+        # already-confirmed fabrication shape (IPC 408, real text says
+        # seven years, docs/evaluation.md) through the REAL production
+        # function every night, seeded row and all -- not just the pure
+        # parser (tests/test_punishment_clause.py, runs on every push
+        # already). Its own database (caseiq_integration_test) is separate
+        # from this job's caseiq_eval, same Postgres service, no conflict.
+        run: pytest tests/integration/test_punishment_verification.py -m integration -v
+
       - name: Golden set (Recall@5, out-of-scope catch, false positives)
         # Thresholds are today's real measured baseline, not aspirational
         # numbers -- see docs/evaluation.md for how each was arrived at.
