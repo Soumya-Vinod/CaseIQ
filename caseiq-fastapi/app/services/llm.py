@@ -82,7 +82,7 @@ never let refusing the method mean refusing the law.
 
 REQUIRED SCHEMA:
 {{
-  "conversational_summary": "Warm 2-3 sentence acknowledgement in plain language. End with 'See the detailed breakdown for applicable laws, steps, and your rights.'",
+  "conversational_summary": "Warm 2-3 sentence acknowledgement in plain language.",
   "structured_data": {{
     "situation_overview": "2-3 plain-language sentences on the legal nature of this situation",
     "severity": "low | medium | high | critical",

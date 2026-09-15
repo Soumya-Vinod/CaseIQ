@@ -10,6 +10,7 @@ from app.legal_corpus.parsing.punishment_clause import (
     claim_consistent_with_clause,
     extract_claim_terms,
     extract_punishment_clauses,
+    smart_snippet,
 )
 
 IPC_408 = (
@@ -34,6 +35,23 @@ IPC_379 = (
 BNS_103 = (
     "103. Punishment for murder.—(1) Whoever commits murder shall be punished with death or "
     "imprisonment for life, and shall also be liable to fine."
+)
+# The real bug case (docs/evaluation.md, "confident overview, empty
+# laws_applicable"): the punishment is sub-section (2), which starts at
+# character 344 -- past the OLD 300-char cutoff entirely. The generator saw
+# an offence with no sentence attached to it, for every query about this
+# section's punishment, always -- not a rare or stochastic failure.
+IPC_304B = (
+    "304B. Dowry death.—(1) Where the death of a woman is caused by any burns or bodily injury "
+    "or occurs otherwise than under normal circumstances within seven years of her marriage and "
+    "it is shown that soon before her death she was subjected to cruelty or harassment by her "
+    "husband or any relative of her husband for, or in connection with, any demand for dowry, "
+    "such death shall be called “dowry death”, and such husband or relative shall be "
+    "deemed to have caused her death. Explanation.—For the purposes of this sub-section, "
+    "“dowry” shall have the same meaning as in section 2 of the Dowry Prohibition Act, "
+    "1961 (28 of 1961). (2) Whoever commits dowry death shall be punished with imprisonment for "
+    "a term which shall not be less than seven years but which may extend to imprisonment for "
+    "life."
 )
 
 
@@ -150,3 +168,64 @@ class TestClaimConsistentWithClause:
         statute = extract_punishment_clauses(IPC_409)[0]  # max_years=10, life=True
         claim = extract_claim_terms("Up to 10 years")
         assert claim_consistent_with_clause(claim, statute) is True
+
+
+class TestSmartSnippet:
+    def test_real_dowry_death_snippet_now_contains_its_own_punishment(self):
+        # The actual bug: the old fixed [:300] slice cut IPC 304B off before
+        # sub-section (2) (the punishment) ever began.
+        old_snippet = IPC_304B[:300]
+        assert extract_punishment_clauses(old_snippet) == []
+
+        snippet, capped = smart_snippet(IPC_304B)
+        assert capped is False
+        assert len(snippet) > 300
+        clauses = extract_punishment_clauses(snippet)
+        assert len(clauses) == 1
+        assert clauses[0].min_years == 7 and clauses[0].life is True
+
+    def test_section_whose_clause_already_fits_is_unchanged(self):
+        # IPC 379's punishment is well within the first 300 chars -- must
+        # come back byte-identical to the plain slice, not "extended" to
+        # something that happens to be the same length.
+        snippet, capped = smart_snippet(IPC_379)
+        assert snippet == IPC_379[:300]
+        assert capped is False
+
+    def test_text_with_no_clause_at_all_is_unaffected(self):
+        # Real cross-referential text, same fixture as
+        # test_unrecognised_text_returns_empty_not_a_guess above -- nothing
+        # to extend for, must behave exactly like the plain slice it
+        # replaces.
+        text = (
+            "227. Violation of condition of remission of punishment.—Whoever, having accepted "
+            "any conditional remission of punishment, knowingly violates any condition on which "
+            "such remission was granted, shall be punished with the punishment to which he was "
+            "originally sentenced."
+        )
+        snippet, capped = smart_snippet(text)
+        assert snippet == text[:300]
+        assert capped is False
+
+    def test_clause_past_the_ceiling_is_capped_and_flagged(self):
+        # Synthetic but realistic: a long preamble pushes the real clause
+        # past `ceiling`. Must stop AT the ceiling (a bounded worst case,
+        # not unbounded) and report capped=True so the caller logs it --
+        # this section is back in the original failure mode, and that must
+        # be visible, never silent.
+        padding = "This section concerns a related but separate matter. " * 40  # ~2,240 chars
+        text = f"999. Test section.—{padding}Whoever does this shall be punished with imprisonment for a term which may extend to five years."
+        assert len(text) > 2000
+
+        snippet, capped = smart_snippet(text, base=300, ceiling=1500)
+        assert capped is True
+        assert len(snippet) == 1500
+        # The clause itself is past the cap -- correctly unrecoverable from
+        # this snippet, exactly the original failure mode reproduced on
+        # purpose so the test proves the cap actually bites.
+        assert extract_punishment_clauses(snippet) == []
+
+    def test_capped_snippet_never_exceeds_ceiling_even_when_base_is_larger(self):
+        snippet, capped = smart_snippet(IPC_304B, base=300, ceiling=50)
+        assert capped is True
+        assert len(snippet) == 50

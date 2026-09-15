@@ -27,6 +27,8 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.logging import logger
+from app.legal_corpus.parsing.punishment_clause import smart_snippet
 from app.models.corpus import Act, JudicialStatus, SectionVersion
 from app.models.offence_attributes import OffenceAttributes
 from app.services.domain_classifier import in_scope_probability, DOMAIN_GATE_THRESHOLD
@@ -684,11 +686,28 @@ async def keyword_search(
 
 def _serialise(sv: SectionVersion, act_code: str, similarity: float | None, as_of: date,
                judicial_status: dict | None, *, lexical_hit: bool = False) -> dict:
+    # FIXED 2026-09-15 (docs/evaluation.md, "confident overview, empty
+    # laws_applicable"): a plain `section_text[:300]` cut the punishment
+    # clause off entirely for 519/2155 sections (24% of the corpus) -- the
+    # generator was never shown a number to cite, for every query touching
+    # one of those sections, not occasionally. `smart_snippet` extends only
+    # as far as the first detected punishment clause, only when one exists
+    # past 300, capped at DEFAULT_SNIPPET_CEILING so one section's worst
+    # case can't blow up a prompt's token budget. A capped section is back
+    # in the ORIGINAL failure mode for that one section specifically -- must
+    # be visible, not a silent revert, which is exactly why this logs
+    # instead of just accepting the cap.
+    snippet, capped = smart_snippet(sv.section_text)
+    if capped:
+        logger.warning(
+            "rag_snippet_capped_at_ceiling", act=act_code, section=sv.section_number,
+            ceiling=len(snippet), full_length=len(sv.section_text),
+        )
     return {
         "act": act_code,
         "section": sv.section_number,
         "title": sv.marginal_note,
-        "snippet": sv.section_text[:300],
+        "snippet": snippet,
         "category": sv.category,
         "similarity": similarity,  # None for keyword fallback -- honest about provenance
         "version_no": sv.version_no,

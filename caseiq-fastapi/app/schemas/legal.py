@@ -157,6 +157,19 @@ class QueryOut(BaseModel):
     # docs/evaluation.md for the incident this whole field replaces
     # ("1516" / "1800-111-222", both fabricated, both wrong).
     helplines: list[HelplineOut] = []
+    # FIXED 2026-09-15 (docs/evaluation.md, "confident overview, empty
+    # laws_applicable"): whether `structured_data.laws_applicable` survived
+    # citation verification, computed once in app.api.v1.legal and exposed
+    # explicitly rather than left for the frontend to re-derive from array
+    # emptiness. True on the abstention/incident-date short-circuit paths too
+    # (nothing to be ungrounded about -- those render through their own
+    # distinct `abstained`/`needs_incident_date` path regardless of this
+    # field). False is the signal that matters: a real generation happened
+    # but nothing in it could be confirmed against the retrieved corpus --
+    # severity/confidence are suppressed accordingly at the same point this
+    # is computed; see app.api.v1.legal's handling right after
+    # verify_citations.
+    citations_grounded: bool = True
 
 
 class ConversationTurnOut(BaseModel):

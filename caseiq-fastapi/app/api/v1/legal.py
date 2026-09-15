@@ -16,11 +16,11 @@ from app.models.corpus import CorpusVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
 from app.schemas.legal import QueryIn, QueryOut, SituationIn
 from app.services.citation_verification import (
-    NOTE_CITATIONS_STRIPPED,
     record_stats,
     scan_free_text_for_citations,
     verify_citations,
 )
+from app.services.grounding import apply_grounding_check
 from app.services.helplines import select_helplines
 from app.services.llm import llm_service
 from app.services.punishment_verification import (
@@ -96,6 +96,27 @@ _SKIPPED_DATE_NOTE = (
     " (No incident date was given, so this searched across both the pre-2024 (IPC/CrPC) and "
     "current (BNS/BNSS) regimes.)"
 )
+
+# FIXED 2026-09-15 (docs/evaluation.md, "confident overview, empty
+# laws_applicable"): this used to be a fixed instruction inside
+# app.services.llm._STRUCTURED_PROMPT's own schema example -- the model was
+# told to end EVERY conversational_summary with this sentence, regardless of
+# whether structured_data ended up with anything in it. Real observed
+# instance: a summary promising "see the detailed breakdown" for a response
+# whose every structured_data list was empty. Appended here instead,
+# deterministically, only when there is actually something to see --
+# computed from the SAME post-verification structured_data the frontend's
+# own hasWhatApplies/hasWhatToDo checks use (AnswerBriefing.tsx), so backend
+# and frontend agree about when this promise is true.
+_DETAILED_BREAKDOWN_NOTE = " See the detailed breakdown for applicable laws, steps, and your rights."
+
+
+def _has_detailed_breakdown(structured: dict) -> bool:
+    dos_donts = structured.get("dos_and_donts") or {}
+    return any(structured.get(k) for k in (
+        "laws_applicable", "punishments", "immediate_steps", "critical_deadlines", "your_rights",
+    )) or bool(dos_donts.get("dos")) or bool(dos_donts.get("donts"))
+
 
 router = APIRouter(prefix="/legal", tags=["Legal Query"])
 
@@ -330,6 +351,11 @@ async def process_query(
         is_abstention(sections) or civil_scope_mismatch
         or has_ambiguous_top_hit(sections) or has_classifier_flag(sections)
     ) and not touches_violence_or_harm(payload.query)
+    # Default True -- QueryOut's own field docstring: nothing to be
+    # "ungrounded" about on the abstained/incident-date-prompt short-circuit
+    # paths, which render through their own distinct UI regardless of this
+    # field. Only the real-generation branch below can set this False.
+    citations_grounded = True
     if abstained:
         # No fabricated citations alongside a refusal -- see is_abstention's
         # docstring for exactly what counts as "not enough evidence".
@@ -381,9 +407,25 @@ async def process_query(
         result["structured_data"], citation_counters = await verify_citations(
             db, result["structured_data"], sections, as_of,
         )
-        if had_laws and not result["structured_data"].get("laws_applicable"):
-            result["conversational_summary"] += NOTE_CITATIONS_STRIPPED
         await record_stats(db, citation_counters)
+
+        # FOUND (docs/evaluation.md, "confident overview, empty
+        # laws_applicable"): the model can write a confident, unhedged
+        # situation_overview -- "classified as dowry death... critical...
+        # severe legal implications" -- while laws_applicable stays empty,
+        # most often because the retrieved section's punishment clause sat
+        # past the old RAG snippet's fixed cutoff (see
+        # app.services.retrieval's smart_snippet fix). apply_grounding_check
+        # covers both this and the sibling case above (cited-then-stripped):
+        # whichever fired, nothing survived verification, so severity is
+        # suppressed and confidence_score is reset -- see its own docstring.
+        (
+            result["structured_data"], result["conversational_summary"],
+            result["confidence_score"], citations_grounded,
+        ) = await apply_grounding_check(
+            db, result["structured_data"], result["conversational_summary"],
+            result["confidence_score"], had_laws=had_laws,
+        )
 
         # Deterministic, no LLM: does a stated imprisonment term actually
         # match the cited section's own text (docs/evaluation.md, the IPC
@@ -400,6 +442,9 @@ async def process_query(
             db, result["structured_data"], as_of,
         )
         await record_punishment_stats(db, punishment_counters)
+
+        if _has_detailed_breakdown(result["structured_data"]):
+            result["conversational_summary"] += _DETAILED_BREAKDOWN_NOTE
 
         free_text_citations = scan_free_text_for_citations(
             result["structured_data"], result["conversational_summary"],
@@ -466,6 +511,7 @@ async def process_query(
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,
+        citations_grounded=citations_grounded,
         # FIXED 2026-09-06 (checklist item 4): the abstention path used to
         # show the full five-number table unconditionally -- noise, not
         # help, per instruction ("we show all five on every abstention...

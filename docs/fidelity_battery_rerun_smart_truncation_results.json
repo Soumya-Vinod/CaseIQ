@@ -1,0 +1,984 @@
+[
+  {
+    "id": "punish_02_criminal_intimidation",
+    "query": "What is the punishment for criminal intimidation?",
+    "primary_mode": "punishment_fabrication",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "506",
+        "similarity": 0.8604
+      },
+      {
+        "act": "BNS",
+        "section": "351",
+        "similarity": 0.7172
+      },
+      {
+        "act": "IPC",
+        "section": "507",
+        "similarity": 0.7469
+      },
+      {
+        "act": "CrPC",
+        "section": "356",
+        "similarity": null
+      },
+      {
+        "act": "IPC",
+        "section": "503",
+        "similarity": 0.7251
+      },
+      {
+        "act": "CrPC",
+        "section": "260",
+        "similarity": null
+      }
+    ],
+    "conversational_summary": "Sure, I can explain what the law says about criminal intimidation and the punishments involved.",
+    "structured_data": {
+      "situation_overview": "Criminal intimidation is an offence under BNS Section 351 and IPC Section 506 (and related sections). It involves threatening another person with injury to person, reputation or property, with intent to cause alarm or compel a certain act.",
+      "severity": "medium",
+      "severity_reason": "Punishment can range up to seven years imprisonment for aggravated threats.",
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "351",
+          "title": "Criminal intimidation",
+          "why_applies": "Defines the offence of criminal intimidation and prescribes its basic punishment."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "title": "Punishment for criminal intimidation",
+          "why_applies": "Specifies the punishment, including higher term when the threat is to cause death, grievous hurt or similar serious harm."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "507",
+          "title": "Criminal intimidation by an anonymous communication",
+          "why_applies": "Adds an extra penalty when the intimidation is made anonymously or with concealment of identity."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "260",
+          "title": "Power to try summarily",
+          "why_applies": "Allows certain criminal intimidation offences (punishable up to two years) to be tried summarily by a magistrate."
+        }
+      ],
+      "punishments": [
+        {
+          "act": "BNS 2023",
+          "section": "351",
+          "offence": "Criminal intimidation",
+          "imprisonment": "Up to 2 years",
+          "fine": "As determined by the court"
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "offence": "Criminal intimidation (general)",
+          "imprisonment": "Up to 2 years",
+          "fine": "As determined by the court"
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "offence": "Criminal intimidation (aggravated threat of death, grievous hurt, etc.)",
+          "imprisonment": "Up to 7 years",
+          "fine": "As determined by the court"
+        },
+        {
+          "act": "IPC 1860",
+          "section": "507",
+          "offence": "Criminal intimidation by anonymous communication",
+          "imprisonment": "Up to 2 years in addition to the punishment under Section 506",
+          "fine": "As determined by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "File a First Information Report (FIR) with the police",
+          "details": "Provide details of the threat, any messages, dates, and witnesses.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Preserve all evidence",
+          "details": "Save screenshots, recordings, letters, or any communication that contains the threat.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 3,
+          "action": "Seek legal counsel",
+          "details": "Engage a lawyer experienced in criminal law to guide you through the process.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "Inform close family or trusted persons",
+          "details": "Ensure your safety and have support while the case proceeds.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Avoid any retaliatory threats or actions",
+          "details": "Retaliation may expose you to additional criminal liability.",
+          "urgency": "immediate"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "File the FIR to ensure the complaint is recorded promptly",
+          "consequence": "Delays may affect investigation and evidence preservation"
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to protection",
+          "explanation": "The police must take steps to protect you from further intimidation once a complaint is lodged."
+        },
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may be represented by a lawyer at every stage of the criminal proceeding."
+        },
+        {
+          "right": "Right to be informed of the case status",
+          "explanation": "You can request updates on the investigation and any court proceedings."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Report the threat to police without delay.",
+          "Keep copies of all threatening communications.",
+          "Cooperate with investigators and provide truthful statements."
+        ],
+        "donts": [
+          "Do not issue further threats or retaliate.",
+          "Do not destroy or alter any evidence.",
+          "Do not discuss the case publicly in a way that could prejudice the investigation."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 4,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "BNS",
+        "section": "351",
+        "section_text": "OF CRIMINAL INTIMIDATION, INSULT, ANNOYANCE, DEFAMATION, ETC. 351. Criminal intimidation.—(1) Whoever threatens another by any means, with any injury to his person, reputation or property, or to the person or reputation of any one in whom that person is interested, with intent to cause alarm to that person, or to cause that person to do any act which he is not legally bound to do, or to omit to do any act which that person is legally entitled to do, as the means of avoiding the execution of such threat, commits criminal intimidation. Explanation.—A threat to injure the reputation of any deceased person in whom the person threatened is interested, is within this section. Illustration. A, for the purpose of inducing B to resist from prosecuting a civil suit, threatens to burn B’s house. A is guilty of criminal intimidation. (2) Whoever commits the offence of criminal intimidation shall be punished with imprisonment of either description for a term which may extend to two years, or with fine, or with both. (3) Whoever commits the offence of criminal intimidation by threatening to cause death or grievous hurt, or to cause the destruction of any property by fire, or to cause an offence punishable with death or 106 imprisonment for life, or with imprisonment for a term which may extend to seven years, or to impute unchastity to a woman, shall be punished with imprisonment of either description for a term which may extend to seven years, or with fine, or with both. (4) Whoever commits the offence of criminal intimidation by an anonymous communication, or having taken precaution to conceal the name or abode of the person from whom the threat comes, shall be punished with imprisonment of either description for a term which may extend to two years, in addition to the punishment provided for the offence under sub-section (1).",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "506",
+        "section_text": "506. Punishment for criminal intimidation.—Whoever commits the offence of criminal intimidation shall be punished with imprisonment of either description for a term which may extend to two years, or with fine, or with both; If threat be to cause death or grievous hurt, etc.—and if the threat be to cause death or grievous hurt, or to cause the destruction of any property by fire, or to cause an offence punishable with death or imprisonment for life], or with imprisonment for a term which may extend to seven years, or to impute unchastity to a woman, shall be punished with imprisonment of either description for a term which may extend to seven years, or with fine, or with both.",
+        "marginal_note": "Punishment for criminal intimidation.—Whoever commits the offence of criminal",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "507",
+        "section_text": "507. Criminal intimidation by an anonymous communication.—Whoever commits the offence of criminal intimidation by an anonymous communication, or having taken precaution to conceal the name or abode of the person from whom the threat comes, shall be punished with imprisonment of either description for a term which may extend to two years, in addition to the punishment provided for the offence by the last preceding section.",
+        "marginal_note": "Criminal intimidation by an anonymous communication.—Whoever commits the offence of",
+        "judicial_status": null
+      },
+      {
+        "act": "CrPC",
+        "section": "260",
+        "section_text": "260. Power to try summarily.—(1) Notwithstanding anything contained in this Code— (a) any Chief Judicial Magistrate; (b) any Metropolitan Magistrate; (c) any Magistrate of the first class specially empowered in this behalf by the High Court, may, if he thinks fit, try in a summary way all or any of the following offences:— (i) offences not punishable with death, imprisonment for life or imprisonment for a term exceeding two years; (ii) theft, under section 379, section 380 or section 381 of the Indian Penal Code (45 of 1860), where the value of the property stolen does not exceed 1[two thousand rupees]; (iii) receiving or retaining stolen property, under section 411 of the Indian Penal Code (45 of 1860), where 120 the value of the property does not exceed 1[two thousand rupees]; (iv) assisting in the concealment or disposal of stolen property, under section 414 of the Indian Penal Code (45 of 1860), where the value of such property does not exceed 1[two thousand rupees]; (v) offences under sections 454 and 456 of the Indian Penal Code (45 of 1860); (vi) insult with intent to provoke a breach of the peace, under section 504, and 1[criminal intimidation punishable with imprisionment for a term which may extend to two years, or with fine, or with both], under section 506 of the Indian Penal Code (45 of 1860); (vii) abetment of any of the foregoing offences; (viii) an attempt to commit any of the foregoing offences, when such attempt is an offence; (ix) any offence constituted by an act in respect of which a complaint may be made under section 20 of the Cattle-trespass Act, 1871 (1 of 1871). (2) When, in the course of a summary trial it appears to the Magistrate that the nature of the case is such that it is undesirable to try it summarily, the Magistrate shall recall any witnesses who may have been examined and proceed to re-hear the case in the manner provided by this Code.",
+        "marginal_note": "Power to try summarily.—(1) Notwithstanding anything contained in this Code—",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Criminal intimidation",
+          "stated_imprisonment": "Up to 2 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "BNS 351(2) states imprisonment may extend to two years, or fine, or both."
+        },
+        {
+          "offence": "Criminal intimidation (general)",
+          "stated_imprisonment": "Up to 2 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "IPC 506 prescribes imprisonment up to two years, or fine, or both."
+        },
+        {
+          "offence": "Criminal intimidation (aggravated threat of death, grievous hurt, etc.)",
+          "stated_imprisonment": "Up to 7 years",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "IPC 506 includes a provision for imprisonment up to seven years for aggravated threats."
+        },
+        {
+          "offence": "Criminal intimidation by anonymous communication",
+          "stated_imprisonment": "Up to 2 years in addition to the punishment under Section 506",
+          "stated_fine": "As determined by the court",
+          "verdict": "grounded",
+          "reasoning": "IPC 507 states imprisonment up to two years in addition to the punishment provided for the offence by the preceding section."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "351",
+          "verdict": "faithful",
+          "reasoning": "The section defines criminal intimidation and sets the basic punishment, matching the assistant's claim."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "506",
+          "verdict": "faithful",
+          "reasoning": "Section 506 specifies the punishment, including the higher term for threats of death or grievous hurt, as described."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "507",
+          "verdict": "faithful",
+          "reasoning": "Section 507 adds an extra penalty for anonymous communication, exactly as the assistant states."
+        },
+        {
+          "act": "CrPC 1973",
+          "section": "260",
+          "verdict": "faithful",
+          "reasoning": "Section 260 allows summary trial of criminal intimidation offences punishable up to two years, aligning with the claim."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "punish_05_criminal_breach_of_trust",
+    "query": "What is the punishment for criminal breach of trust?",
+    "primary_mode": "punishment_fabrication",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "406",
+        "similarity": 0.9154
+      },
+      {
+        "act": "IPC",
+        "section": "409",
+        "similarity": 0.7665
+      },
+      {
+        "act": "BNS",
+        "section": "316",
+        "similarity": 0.721
+      },
+      {
+        "act": "IPC",
+        "section": "407",
+        "similarity": 0.7228
+      },
+      {
+        "act": "IPC",
+        "section": "408",
+        "similarity": 0.6991
+      },
+      {
+        "act": "IPC",
+        "section": "405",
+        "similarity": 0.7252
+      }
+    ],
+    "conversational_summary": "Sure, I can explain what Indian law says about the punishment for criminal breach of trust.",
+    "structured_data": {
+      "situation_overview": "Criminal breach of trust is an offence where a person entrusted with property dishonestly misappropriates or uses it against legal directions. The law prescribes imprisonment and/or fines depending on the role of the offender.",
+      "severity": "medium",
+      "severity_reason": "The offence involves loss of property and breach of fiduciary duty, but punishments are generally up to several years, not capital.",
+      "laws_applicable": [
+        {
+          "act": "IPC",
+          "section": "406",
+          "title": "Punishment for criminal breach of trust",
+          "why_applies": "Provides the general punishment for anyone who commits criminal breach of trust."
+        },
+        {
+          "act": "IPC",
+          "section": "409",
+          "title": "Criminal breach of trust by public servant, banker, merchant or agent",
+          "why_applies": "Specifies higher punishment when the offender is a public servant, banker, merchant, factor, broker, attorney or agent."
+        },
+        {
+          "act": "IPC",
+          "section": "407",
+          "title": "Criminal breach of trust by carrier, etc.",
+          "why_applies": "Applies when the offender is a carrier, wharfinger or warehouse-keeper entrusted with property."
+        },
+        {
+          "act": "IPC",
+          "section": "408",
+          "title": "Criminal breach of trust by clerk or servant",
+          "why_applies": "Applies when the offender is a clerk or servant entrusted with property."
+        },
+        {
+          "act": "BNS",
+          "section": "316",
+          "title": "Criminal breach of trust (definition)",
+          "why_applies": "Defines the offence and includes specific employer‑related situations, though it does not prescribe punishment."
+        }
+      ],
+      "punishments": [
+        {
+          "act": "IPC",
+          "section": "406",
+          "offence": "Criminal breach of trust (general)",
+          "imprisonment": "Up to 3 years",
+          "fine": "May be imposed"
+        },
+        {
+          "act": "IPC",
+          "section": "409",
+          "offence": "Criminal breach of trust by public servant, banker, merchant or agent",
+          "imprisonment": "Life imprisonment, or Up to 10 years",
+          "fine": "May be imposed"
+        },
+        {
+          "act": "IPC",
+          "section": "407",
+          "offence": "Criminal breach of trust by carrier, etc.",
+          "imprisonment": "Up to 7 years",
+          "fine": "May be imposed"
+        },
+        {
+          "act": "IPC",
+          "section": "408",
+          "offence": "Criminal breach of trust by clerk or servant",
+          "imprisonment": "Up to 7 years",
+          "fine": "May be imposed"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Consult a qualified criminal lawyer",
+          "details": "Obtain legal advice to understand rights and possible defenses.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Preserve all relevant documents and records",
+          "details": "Keep contracts, receipts, bank statements, and any communication related to the entrusted property.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 3,
+          "action": "If you are the victim, consider filing an FIR",
+          "details": "Report the misappropriation to the police with supporting evidence.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "If you are the accused, cooperate with the investigation",
+          "details": "Provide truthful statements and avoid destroying any evidence.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Assess any contractual or statutory obligations",
+          "details": "Check employment contracts, agency agreements, or statutory duties that may affect liability.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "File an FIR if you are the aggrieved party",
+          "consequence": "Delays may affect the investigation and evidence preservation"
+        },
+        {
+          "deadline": "Within 7 days",
+          "what": "Engage legal representation",
+          "consequence": "Early counsel can help protect your rights and prepare a defence"
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to legal counsel",
+          "explanation": "You may be represented by a lawyer at all stages of the criminal process."
+        },
+        {
+          "right": "Right to be presumed innocent until proven guilty",
+          "explanation": "The burden of proof lies on the prosecution."
+        },
+        {
+          "right": "Right against self‑incrimination",
+          "explanation": "You are not compelled to incriminate yourself during police questioning."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Do seek immediate legal advice.",
+          "Do retain all documents related to the entrusted property.",
+          "Do cooperate with lawful police inquiries."
+        ],
+        "donts": [
+          "Do not destroy or tamper with any evidence.",
+          "Do not make false statements to authorities.",
+          "Do not delay reporting the offence if you are the victim."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 5,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "IPC",
+        "section": "406",
+        "section_text": "406. Punishment for criminal breach of trust.—Whoever commits criminal breach of trust shall be punished with imprisonment of either description for a term which may extend to three years, or with fine, or with both.",
+        "marginal_note": "Punishment for criminal breach of trust.—Whoever commits criminal breach of trust shall be",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "409",
+        "section_text": "409. Criminal breach of trust by public servant, or by banker, merchant or agent.—Whoever, being in any manner entrusted with property, or with any dominion over property in his capacity of a public servant or in the way of his business as a banker, merchant, factor, broker, attorney or agent, commits criminal breach of trust in respect of that property, shall be punished with 1[imprisonment for life], or with imprisonment of either description for a term which may extend to ten years, and shall also be liable to fine. Of the Receiving of Stolen Property",
+        "marginal_note": "Criminal breach of trust by public servant, or by banker, merchant or agent.—Whoever,",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "407",
+        "section_text": "407. Criminal breach of trust by carrier, etc.—Whoever, being entrusted with property as a carrier, wharfinger or warehouse-keeper, commits criminal breach of trust in respect of such property, shall be punished with imprisonment of either description for a term which may extend to seven years, and shall also be liable to fine.",
+        "marginal_note": "Criminal breach of trust by carrier, etc.—Whoever, being entrusted with property as a carrier,",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "408",
+        "section_text": "408. Criminal breach of trust by clerk or servant.—Whoever, being a clerk or servant or employed as a clerk or servant, and being in any manner entrusted in such capacity with property, or with any dominion over property, commits criminal breach of trust in respect of that property, shall be punished with imprisonment of either description for a term which may extend to seven years, and shall also be liable to fine.",
+        "marginal_note": "Criminal breach of trust by clerk or servant.—Whoever, being a clerk or servant or employed",
+        "judicial_status": null
+      },
+      {
+        "act": "BNS",
+        "section": "316",
+        "section_text": "316. Criminal breach of trust.—(1) Whoever, being in any manner entrusted with property, or with any dominion over property, dishonestly misappropriates or converts to his own use that property, or dishonestly uses or disposes of that property in violation of any direction of law prescribing the mode in which such trust is to be discharged, or of any legal contract, express or implied, which he has made touching the discharge of such trust, or wilfully suffers any other person so to do, commits criminal breach of trust. 93 Explanation 1.—A person, being an employer of an establishment whether exempted under section 17 of the Employees’ Provident Funds and Miscellaneous Provisions Act, 1952 (19 of 1952) or not who deducts the employee’s contribution from the wages payable to the employee for credit to a Provident Fund or Family Pension Fund established by any law for the time being in force, shall be deemed to have been entrusted with the amount of the contribution so deducted by him and if he makes default in the payment of such contribution to the said Fund in violation of the said law, shall be deemed to have dishonestly used the amount of the said contribution in violation of a direction of law as aforesaid. Explanation 2.—A person, being an employer, who deducts the employees’ contribution from the wages payable to the employee for credit to the Employees’ State Insurance Fund held and administered by the Employees’ State Insurance Corporation established under the Employees’ State Insurance Act, 1948 (34 of 1948) shall be deemed to have been entrusted with the amount of the contribution so deducted by him and if he makes default in the payment of such contribution to the said Fund in violation of the said Act, shall be deemed to have dishonestly used the amount of the said contribution in violation of a direction of law as aforesaid. Illustrations. (a) A, being executor to the will of a deceased person, dishonestly disobeys the law which directs him to divide the effects according to the will, and appropriates them to his own use. A has committed criminal breach of trust. (b) A is a warehouse-keeper Z going on a journey, entrusts his furniture to A, under a contract that it shall be returned on payment of a stipulated sum for warehouse room. A dishonestly sells the goods. A has committed criminal breach of trust. (c) A, residing in Kolkata, is agent for Z, residing at Delhi. There is an express or implied contract between A and Z, that all sums remitted by Z to A shall be invested by A, according to Z’s direction. Z remits one lakh of rupees to A, with directions to A to invest the same in Company’s paper. A dishonestly disobeys the directions and employs the money in his own business. A has committed criminal breach of trust. (d) But if A, in illustration (c), not dishonestly but in good faith, believing that it will be more for Z’s advantage to hold shares in the Bank of Bengal, disobeys Z’s directions, and buys shares in the Bank of Bengal, for Z, instead of buying Company’s paper, here, though Z should suffer loss, and should be entitled to bring a civil action against A, on account of that loss, yet A, not having acted dishonestly, has not committed criminal breach of trust. (e) A, a revenue-officer, is entrusted with public money and is either directed by law, or bound by a contract, express or implied, with the Government, to pay into a certain treasury all the public money which he holds. A dishonestly appropriates the money. A has committed criminal breach of trust. (f) A, a carrier, is entrusted by Z with property to be carried by land or by water. A dishonestly misappropriates the property. A has committed criminal breach of trust. (2) Whoever commits criminal breach of trust shall be punished with imprisonment of either description for a term which may extend to five years, or with fine, or with both. (3) Whoever, being entrusted with property as a carrier, wharfinger or warehouse-keeper, commits criminal breach of trust in respect of such property, shall be punished with imprisonment of either description for a term which may extend to seven years, and shall also be liable to fine. (4) Whoever, being a clerk or servant or employed as a clerk or servant, and being in any manner entrusted in such capacity with property, or with any dominion over property, commits criminal breach of trust in respect of that property, shall be punished with imprisonment of either description for a term which may extend to seven years, and shall also be liable to fine. (5) Whoever, being in any manner entrusted with property, or with any dominion over property in his capacity of a public servant or in the way of his business as a banker, merchant, factor, broker, attorney or agent commits criminal breach of trust in respect of that property, shall be punished with imprisonment 94 for life, or with imprisonment of either description for a term which may extend to ten years, and shall also be liable to fine.",
+        "marginal_note": "",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Criminal breach of trust (general)",
+          "stated_imprisonment": "Up to 3 years",
+          "stated_fine": "May be imposed",
+          "verdict": "grounded",
+          "reasoning": "Section 406 states imprisonment up to three years, or fine, or both."
+        },
+        {
+          "offence": "Criminal breach of trust by public servant, banker, merchant or agent",
+          "stated_imprisonment": "Life imprisonment, or Up to 10 years",
+          "stated_fine": "May be imposed",
+          "verdict": "grounded",
+          "reasoning": "Section 409 provides life imprisonment or up to ten years and also a fine."
+        },
+        {
+          "offence": "Criminal breach of trust by carrier, etc.",
+          "stated_imprisonment": "Up to 7 years",
+          "stated_fine": "May be imposed",
+          "verdict": "grounded",
+          "reasoning": "Section 407 prescribes imprisonment up to seven years and also a fine."
+        },
+        {
+          "offence": "Criminal breach of trust by clerk or servant",
+          "stated_imprisonment": "Up to 7 years",
+          "stated_fine": "May be imposed",
+          "verdict": "grounded",
+          "reasoning": "Section 408 prescribes imprisonment up to seven years and also a fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "IPC",
+          "section": "406",
+          "verdict": "faithful",
+          "reasoning": "Why_applies correctly restates that the section gives the general punishment for anyone committing criminal breach of trust."
+        },
+        {
+          "act": "IPC",
+          "section": "409",
+          "verdict": "faithful",
+          "reasoning": "Why_applies accurately notes the higher punishment for public servants, bankers, merchants, etc., matching the section text."
+        },
+        {
+          "act": "IPC",
+          "section": "407",
+          "verdict": "faithful",
+          "reasoning": "Why_applies correctly links the section to carriers, wharfingers or warehouse‑keepers."
+        },
+        {
+          "act": "IPC",
+          "section": "408",
+          "verdict": "faithful",
+          "reasoning": "Why_applies correctly links the section to clerks or servants."
+        },
+        {
+          "act": "BNS",
+          "section": "316",
+          "verdict": "right_section_wrong_claim",
+          "reasoning": "Section 316 does define the offence but also prescribes punishment in sub‑clauses (2)‑(5); the claim that it does not prescribe punishment is unsupported."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "bns_05_kidnapping",
+    "query": "What is the punishment for kidnapping?",
+    "primary_mode": "bns_bnss_confusion",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "363",
+        "similarity": 0.8056
+      },
+      {
+        "act": "BNS",
+        "section": "140",
+        "similarity": 0.7366
+      },
+      {
+        "act": "IPC",
+        "section": "368",
+        "similarity": 0.6552
+      },
+      {
+        "act": "BNS",
+        "section": "142",
+        "similarity": 0.6628
+      },
+      {
+        "act": "IPC",
+        "section": "364",
+        "similarity": 0.7306
+      },
+      {
+        "act": "BNS",
+        "section": "97",
+        "similarity": 0.7451
+      }
+    ],
+    "conversational_summary": "Sure, I can explain what Indian law says about kidnapping and the punishments involved.",
+    "structured_data": {
+      "situation_overview": "Kidnapping is a criminal offence that involves taking a person away against their will. The law prescribes imprisonment and fines, with harsher penalties if the kidnapping is for murder or ransom.",
+      "severity": "high",
+      "severity_reason": "It deprives a person of liberty and can endanger life.",
+      "laws_applicable": [
+        {
+          "act": "IPC 1860",
+          "section": "363",
+          "title": "Punishment for kidnapping",
+          "why_applies": "Provides the general punishment for kidnapping any person."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "140",
+          "title": "Kidnapping or abducting in order to murder or for ransom, etc.",
+          "why_applies": "Specifies the punishment when kidnapping is done with intent to murder or for ransom."
+        }
+      ],
+      "punishments": [
+        {
+          "act": "IPC 1860",
+          "section": "363",
+          "offence": "Kidnapping",
+          "imprisonment": "Up to 7 years",
+          "fine": "Liable to fine as decided by the court"
+        },
+        {
+          "act": "BNS 2023",
+          "section": "140",
+          "offence": "Kidnapping for murder or ransom",
+          "imprisonment": "Life imprisonment or rigorous imprisonment for a term which may extend to 10 years",
+          "fine": "Liable to fine as decided by the court"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Report the incident to the nearest police station",
+          "details": "Provide all known details: victim's name, location, time, and any description of the kidnappers.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Preserve any evidence",
+          "details": "Do not tamper with phones, messages, CCTV footage, or physical items that may help the investigation.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 3,
+          "action": "Seek medical assistance for the victim if needed",
+          "details": "Get a medical examination and obtain a medical report for the police.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 4,
+          "action": "Contact a lawyer",
+          "details": "Engage legal counsel to protect your rights and guide you through the process.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 5,
+          "action": "Cooperate with the investigating officers",
+          "details": "Provide statements, answer questions truthfully, and assist in any further inquiries.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 6,
+          "action": "Inform close family members or trusted persons",
+          "details": "Ensure they are aware of the situation and can provide support.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 7,
+          "action": "Monitor case progress",
+          "details": "Stay in touch with your lawyer and the police for updates on investigations and court dates.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "File a First Information Report (FIR) with the police",
+          "consequence": "Failure to report promptly may hinder investigation and affect legal remedies."
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may engage a lawyer at any stage of the investigation or trial."
+        },
+        {
+          "right": "Right to be informed of the charges",
+          "explanation": "The police must inform you of the specific offence and sections under which you are being investigated."
+        },
+        {
+          "right": "Right against self‑incrimination",
+          "explanation": "You are not compelled to incriminate yourself during police questioning."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Do report the kidnapping to police immediately.",
+          "Do preserve any evidence and avoid altering the scene.",
+          "Do seek medical and legal assistance promptly."
+        ],
+        "donts": [
+          "Do not confront the kidnappers yourself.",
+          "Do not destroy or hide any potential evidence.",
+          "Do not delay filing an FIR or seeking professional help."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 2,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "IPC",
+        "section": "363",
+        "section_text": "363. Punishment for kidnapping.—Whoever kidnaps any person from 1[India] or from lawful guardianship, shall be punished with imprisonment of either description for a term which may extend to seven years, and shall also be liable to fine.",
+        "marginal_note": "Punishment for kidnapping.—Whoever kidnaps any person from 1[India] or from lawful",
+        "judicial_status": null
+      },
+      {
+        "act": "BNS",
+        "section": "140",
+        "section_text": "140. Kidnapping or abducting in order to murder or for ransom, etc.—(1) Whoever kidnaps or abducts any person in order that such person may be murdered or may be so disposed of as to be put in danger of being murdered, shall be punished with imprisonment for life or rigorous imprisonment for a term which may extend to ten years, and shall also be liable to fine. Illustrations. (a) A kidnaps Z from India, intending or knowing it to be likely that Z may be sacrificed to an idol. A has committed the offence defined in this section. (b) A forcibly carries or entices B away from his home in order that B may be murdered. A has committed the offence defined in this section. (2) Whoever kidnaps or abducts any person or keeps a person in detention after such kidnapping or abduction, and threatens to cause death or hurt to such person, or by his conduct gives rise to a reasonable apprehension that such person may be put to death or hurt, or causes hurt or death to such person in order to compel the Government or any foreign State or international inter-governmental organisation or any other person to do or abstain from doing any act or to pay a ransom, shall be punishable with death, or imprisonment for life, and shall also be liable to fine. (3) Whoever kidnaps or abducts any person with intent to cause that person to be secretly and wrongfully confined, shall be punished with imprisonment of either description for a term which may extend to seven years, and shall also be liable to fine. (4) Whoever kidnaps or abducts any person in order that such person may be subjected, or may be so disposed of as to be put in danger of being subjected to grievous hurt, or slavery, or to the unnatural lust of any person, or knowing it to be likely that such person will be so subjected or disposed of, shall be punished with imprisonment of either description for a term which may extend to ten years, and shall also be liable to fine.",
+        "marginal_note": "",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Kidnapping",
+          "stated_imprisonment": "Up to 7 years",
+          "stated_fine": "Liable to fine as decided by the court",
+          "verdict": "grounded",
+          "reasoning": "IPC 363 states imprisonment may extend to seven years and also liability to fine."
+        },
+        {
+          "offence": "Kidnapping for murder or ransom",
+          "stated_imprisonment": "Life imprisonment or rigorous imprisonment for a term which may extend to 10 years",
+          "stated_fine": "Liable to fine as decided by the court",
+          "verdict": "grounded",
+          "reasoning": "BNS 140(1) prescribes imprisonment for life or up to ten years and liability to fine."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "IPC 1860",
+          "section": "363",
+          "verdict": "faithful",
+          "reasoning": "The claim that it provides the general punishment for kidnapping matches the text."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "140",
+          "verdict": "faithful",
+          "reasoning": "The claim that it specifies punishment for kidnapping with intent to murder or for ransom aligns with the provisions in the section."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  },
+  {
+    "id": "general_02_rape",
+    "query": "What is the punishment for rape?",
+    "primary_mode": "right_section_wrong_claim",
+    "retrieved_sections": [
+      {
+        "act": "IPC",
+        "section": "376",
+        "similarity": 0.7255
+      },
+      {
+        "act": "IPC",
+        "section": "376AB",
+        "similarity": 0.7295
+      },
+      {
+        "act": "IPC",
+        "section": "376DB",
+        "similarity": 0.7302
+      },
+      {
+        "act": "BNS",
+        "section": "65",
+        "similarity": 0.7468
+      },
+      {
+        "act": "IPC",
+        "section": "376DA",
+        "similarity": 0.7239
+      },
+      {
+        "act": "BNS",
+        "section": "64",
+        "similarity": 0.7173
+      }
+    ],
+    "conversational_summary": "I understand you want to know the legal punishment for rape under Indian law. Below is the relevant statutory information and practical steps you can take.",
+    "structured_data": {
+      "situation_overview": "Rape is a serious criminal offence punishable by long-term imprisonment and a fine. The law provides harsher penalties when the victim is a minor.",
+      "severity": "critical",
+      "severity_reason": "Rape is among the gravest offences in Indian law.",
+      "laws_applicable": [
+        {
+          "act": "BNS 2023",
+          "section": "64",
+          "title": "Punishment for rape",
+          "why_applies": "Specifies the punishment for the offence of rape."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "65",
+          "title": "Punishment for rape in certain cases (victim under 16)",
+          "why_applies": "Provides the enhanced punishment when the victim is a girl under sixteen years of age."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "376AB",
+          "title": "Punishment for rape on woman under twelve years of age",
+          "why_applies": "Specifies the maximum punishment when the victim is a girl under twelve years of age."
+        }
+      ],
+      "punishments": [
+        {
+          "act": "BNS 2023",
+          "section": "64",
+          "offence": "Rape",
+          "imprisonment": "Minimum 10 years, may extend to life",
+          "fine": "Liable to fine"
+        },
+        {
+          "act": "BNS 2023",
+          "section": "65",
+          "offence": "Rape on woman under sixteen years of age",
+          "imprisonment": "Minimum 20 years, may extend to life",
+          "fine": "Liable to fine (paid to the victim)"
+        },
+        {
+          "act": "IPC 1860",
+          "section": "376AB",
+          "offence": "Rape on woman under twelve years of age",
+          "imprisonment": "Minimum 20 years, may extend to life",
+          "fine": "Fine (paid to the victim)"
+        }
+      ],
+      "immediate_steps": [
+        {
+          "step": 1,
+          "action": "Report the incident to the nearest police station",
+          "details": "File a formal FIR as soon as possible to initiate criminal proceedings.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 2,
+          "action": "Seek medical examination",
+          "details": "Obtain a medico‑legal report within 24 hours to preserve evidence and receive necessary treatment.",
+          "urgency": "within_24h"
+        },
+        {
+          "step": 3,
+          "action": "Preserve any evidence",
+          "details": "Do not wash clothes, change clothes, or discard any items that may be relevant.",
+          "urgency": "immediate"
+        },
+        {
+          "step": 4,
+          "action": "Engage a qualified lawyer",
+          "details": "Legal counsel can guide you through the investigation, court process, and victim‑support services.",
+          "urgency": "within_week"
+        },
+        {
+          "step": 5,
+          "action": "Access victim support services",
+          "details": "Contact NGOs or government helplines for counseling, shelter, and financial assistance.",
+          "urgency": "within_week"
+        }
+      ],
+      "critical_deadlines": [
+        {
+          "deadline": "24 hours",
+          "what": "Medical examination and collection of forensic evidence",
+          "consequence": "Delay may reduce the availability of crucial evidence."
+        },
+        {
+          "deadline": "7 days",
+          "what": "Filing of the FIR (if not done immediately)",
+          "consequence": "Late reporting can complicate investigation and prosecution."
+        }
+      ],
+      "your_rights": [
+        {
+          "right": "Right to medical care",
+          "explanation": "You are entitled to free emergency medical treatment and a medico‑legal examination."
+        },
+        {
+          "right": "Right to legal representation",
+          "explanation": "You may engage a lawyer of your choice at any stage of the investigation or trial."
+        },
+        {
+          "right": "Right to protection",
+          "explanation": "The police must ensure your safety and may provide protective measures if needed."
+        }
+      ],
+      "dos_and_donts": {
+        "dos": [
+          "Report the crime promptly to police.",
+          "Obtain a medico‑legal report without delay.",
+          "Preserve any physical evidence."
+        ],
+        "donts": [
+          "Do not destroy or alter any evidence.",
+          "Do not delay seeking medical help.",
+          "Do not discuss the case with unrelated parties before consulting a lawyer."
+        ]
+      }
+    },
+    "c5_citation_verification": {
+      "total": 3,
+      "stripped_nonexistent": 0,
+      "stripped_not_retrieved": 0
+    },
+    "citation_free_text_ungrounded": [],
+    "full_sections_for_judge": [
+      {
+        "act": "BNS",
+        "section": "64",
+        "section_text": "64. Punishment for rape.—(1) Whoever, except in the cases provided for in sub-section (2), commits rape, shall be punished with rigorous imprisonment of either description for a term which shall not be less than ten years, but which may extend to imprisonment for life, and shall also be liable to fine. (2) Whoever,— (a) being a police officer, commits rape,— (i) within the limits of the police station to which such police officer is appointed; or (ii) in the premises of any station house; or (iii) on a woman in such police officer’s custody or in the custody of a police officer subordinate to such police officer; or (b) being a public servant, commits rape on a woman in such public servant’s custody or in the custody of a public servant subordinate to such public servant; or (c) being a member of the armed forces deployed in an area by the Central Government or a State Government commits rape in such area; or (d) being on the management or on the staff of a jail, remand home or other place of custody established by or under any law for the time being in force or of a women’s or children’s institution, commits rape on any inmate of such jail, remand home, place or institution; or (e) being on the management or on the staff of a hospital, commits rape on a woman in that hospital; or (f) being a relative, guardian or teacher of, or a person in a position of trust or authority towards the woman, commits rape on such woman; or (g) commits rape during communal or sectarian violence; or (h) commits rape on a woman knowing her to be pregnant; or (i) commits rape, on a woman incapable of giving consent; or (j) being in a position of control or dominance over a woman, commits rape on such woman; or (k) commits rape on a woman suffering from mental or physical disability; or (l) while committing rape causes grievous bodily harm or maims or disfigures or endangers the life of a woman; or (m) commits rape repeatedly on the same woman, shall be punished with rigorous imprisonment for a term which shall not be less than ten years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person’s natural life, and shall also be liable to fine. Explanation.—For the purposes of this sub-section,— (a) “armed forces” means the naval, army and air forces and includes any member of the Armed Forces constituted under any law for the time being in force, including the paramilitary forces and any auxiliary forces that are under the control of the Central Government or the State Government; 37 (b) “hospital” means the precincts of the hospital and includes the precincts of any institution for the reception and treatment of persons during convalescence or of persons requiring medical attention or rehabilitation; (c) “police officer” shall have the same meaning as assigned to the expression “police” under the Police Act, 1861 (5 of 1861); (d) “women’s or children’s institution” means an institution, whether called an orphanage or a home for neglected women or children or a widow’s home or an institution called by any other name, which is established and maintained for the reception and care of women or children.",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "BNS",
+        "section": "65",
+        "section_text": "65. Punishment for rape in certain cases.—(1) Whoever, commits rape on a woman under sixteen years of age shall be punished with rigorous imprisonment for a term which shall not be less than twenty years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person’s natural life, and shall also be liable to fine: Provided that such fine shall be just and reasonable to meet the medical expenses and rehabilitation of the victim: Provided further that any fine imposed under this sub-section shall be paid to the victim. (2) Whoever, commits rape on a woman under twelve years of age shall be punished with rigorous imprisonment for a term which shall not be less than twenty years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person’s natural life, and with fine or with death: Provided that such fine shall be just and reasonable to meet the medical expenses and rehabilitation of the victim: Provided further that any fine imposed under this sub-section shall be paid to the victim.",
+        "marginal_note": "",
+        "judicial_status": null
+      },
+      {
+        "act": "IPC",
+        "section": "376AB",
+        "section_text": "376AB. Punishment for rape on woman under twelve years of age.—Whoever, commits rape on a woman under twelve years of age shall be punished with rigorous imprisonment for a term which shall not be less than twenty years, but which may extend to imprisonment for life, which shall mean imprisonment for the remainder of that person's natural life, and with fine or with death: Provided that such fine shall be just and reasonable to meet the medical expenses and rehabilitation of the victim: Provided further that any fine imposed under this section shall be paid to the victim.",
+        "marginal_note": "Punishment for rape on woman under twelve years of age.",
+        "judicial_status": null
+      }
+    ],
+    "judge_verdict": {
+      "punishment_verdicts": [
+        {
+          "offence": "Rape",
+          "stated_imprisonment": "Minimum 10 years, may extend to life",
+          "stated_fine": "Liable to fine",
+          "verdict": "grounded",
+          "reasoning": "Section 64 states \"punished with rigorous imprisonment ... not less than ten years, but which may extend to imprisonment for life, and shall also be liable to fine\"."
+        },
+        {
+          "offence": "Rape on woman under sixteen years of age",
+          "stated_imprisonment": "Minimum 20 years, may extend to life",
+          "stated_fine": "Liable to fine (paid to the victim)",
+          "verdict": "grounded",
+          "reasoning": "Section 65(1) states \"punished with rigorous imprisonment ... not less than twenty years, but which may extend to imprisonment for life, and shall also be liable to fine... fine shall be paid to the victim\"."
+        },
+        {
+          "offence": "Rape on woman under twelve years of age",
+          "stated_imprisonment": "Minimum 20 years, may extend to life",
+          "stated_fine": "Fine (paid to the victim)",
+          "verdict": "grounded",
+          "reasoning": "Section 376AB states \"punished with rigorous imprisonment ... not less than twenty years, but which may extend to imprisonment for life, and with fine or with death... fine shall be paid to the victim\"; the fine component is present."
+        }
+      ],
+      "citation_verdicts": [
+        {
+          "act": "BNS 2023",
+          "section": "64",
+          "verdict": "faithful",
+          "reasoning": "The claim that it \"specifies the punishment for the offence of rape\" matches the section text."
+        },
+        {
+          "act": "BNS 2023",
+          "section": "65",
+          "verdict": "faithful",
+          "reasoning": "The claim that it \"provides the enhanced punishment when the victim is a girl under sixteen years of age\" accurately reflects the section."
+        },
+        {
+          "act": "IPC 1860",
+          "section": "376AB",
+          "verdict": "faithful",
+          "reasoning": "The claim that it \"specifies the maximum punishment when the victim is a girl under twelve years of age\" is a correct restatement of the section."
+        }
+      ],
+      "cross_act_mixing_detected": false,
+      "cross_act_mixing_note": ""
+    }
+  }
+]

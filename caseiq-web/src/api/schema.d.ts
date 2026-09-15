@@ -962,6 +962,11 @@ export interface components {
              * @default []
              */
             helplines: components["schemas"]["HelplineOut"][];
+            /**
+             * Citations Grounded
+             * @default true
+             */
+            citations_grounded: boolean;
         };
         /** RefreshIn */
         RefreshIn: {

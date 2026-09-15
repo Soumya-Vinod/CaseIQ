@@ -211,6 +211,24 @@ jobs:
         # from this job's caseiq_eval, same Postgres service, no conflict.
         run: pytest tests/integration/test_punishment_verification.py -m integration -v
 
+      - name: Pre-flight -- ungrounded-response detection branch can still fire
+        # Same reasoning as the punishment-suppression check just above,
+        # for a different guardrail (docs/evaluation.md, "confident
+        # overview, empty laws_applicable"): grounding_stats.responses_
+        # ungrounded_* sitting near 0 on real traffic is consistent with
+        # either the smart_snippet retrieval fix genuinely working, or
+        # app.services.grounding.apply_grounding_check silently broken --
+        # the two look identical from the outside. This forces the exact,
+        # already-confirmed shape (a confident, unhedged situation_overview
+        # with empty laws_applicable, the real dowry-death case) through
+        # the REAL production function every night: severity suppressed,
+        # confidence_score reset, the correct one of two distinct notes
+        # appended, and the stats row incremented -- not just
+        # smart_snippet's own pure-function tests
+        # (tests/test_punishment_clause.py::TestSmartSnippet), which cover
+        # the retrieval-side fix but not this downstream safety net.
+        run: pytest tests/integration/test_grounding.py -m integration -v
+
       - name: Golden set (Recall@5, out-of-scope catch, false positives)
         # Thresholds are today's real measured baseline, not aspirational
         # numbers -- see docs/evaluation.md for how each was arrived at.

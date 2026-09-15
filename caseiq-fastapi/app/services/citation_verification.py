@@ -178,3 +178,16 @@ NOTE_CITATIONS_STRIPPED = (
     "was actually retrieved for this query, so no section citations are shown below -- treat the "
     "rest of this answer as general guidance, not a specific legal citation."
 )
+
+# Distinct wording, not a reuse of NOTE_CITATIONS_STRIPPED -- that note says
+# "sections were named and then couldn't be confirmed", which would be
+# factually wrong here: this fires when NOTHING was ever cited to begin
+# with (docs/evaluation.md, "confident overview, empty laws_applicable").
+# Same fixed, deterministic, non-LLM-authored shape either way -- app.api.v1.
+# legal appends exactly one of these two, never both, right after
+# verify_citations.
+NOTE_NO_GROUNDED_CITATIONS = (
+    " No specific section could be confirmed for this answer, even though relevant law was "
+    "retrieved for this query -- treat the summary above as general information, not a specific "
+    "legal citation, and verify with a lawyer before relying on it."
+)

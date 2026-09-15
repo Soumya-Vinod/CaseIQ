@@ -158,6 +158,81 @@ def extract_punishment_clauses(section_text: str) -> list[PunishmentClause]:
     return clauses
 
 
+# --- The RAG-context side: how much of a section the GENERATOR gets to see ---
+#
+# FOUND (docs/evaluation.md, "confident overview, empty laws_applicable"):
+# app.services.retrieval.build_rag_context fed the generator a hard
+# `section_text[:300]` for every retrieved section. Checked directly against
+# the whole live corpus: 519/2155 sections (24%) have their entire
+# punishment clause sitting past character 300 -- not a rare edge case, a
+# quarter of the corpus. IPC 304B/BNS 80 (dowry death) is the clearest real
+# instance: the punishment is sub-section (2), which begins after the whole
+# of sub-section (1)'s circumstances clause. The generator was never shown a
+# number to cite, not being careless with one it could see.
+#
+# DEFAULT_CEILING = 1500, chosen from the real distribution, not a round
+# guess: checked against every section needing ANY extension (699 of them),
+# 1500 covers 656/699 (94%) outright. The sections it doesn't cover are the
+# right ones to exclude, not just the cheapest: the biggest outliers (BNS
+# 356 needs 8122, BNSS 2 needs 5902, CrPC 2 needs 4848) are giant
+# definitions/schedule sections where this parser matches a stray clause
+# deep inside, not "the" punishment clause a citation to that section would
+# mean -- extending a prompt by 8KB to chase that isn't a fix, it's a new
+# cost with no matching benefit. A section that DOES hit the ceiling is back
+# in the original failure mode for that one section -- the caller must log
+# it (see retrieval.py's use of this), never silently accept the cap as if
+# nothing happened; that is exactly the "0 could mean broken or could mean
+# fine" shape this project keeps finding and keeps insisting be made visible
+# instead.
+DEFAULT_SNIPPET_BASE = 300
+DEFAULT_SNIPPET_CEILING = 1500
+
+
+def _sentence_spans(text: str) -> list[tuple[int, int]]:
+    """Exact (start, end) for each sentence AS SPLIT BY _SENTENCE_SPLIT_RE --
+    `end` lands exactly where the next sentence's own text begins (the
+    separator is consumed into the span before it), computed from real match
+    positions (`finditer`), not approximated by re-adding a fixed separator
+    length the way naively walking `.split()` output would have to.
+    """
+    spans = []
+    pos = 0
+    for m in _SENTENCE_SPLIT_RE.finditer(text):
+        spans.append((pos, m.end()))
+        pos = m.end()
+    spans.append((pos, len(text)))
+    return spans
+
+
+def smart_snippet(
+    section_text: str, *, base: int = DEFAULT_SNIPPET_BASE, ceiling: int = DEFAULT_SNIPPET_CEILING,
+) -> tuple[str, bool]:
+    """`section_text[:base]`, EXTENDED only far enough to include the first
+    sentence that itself contains an extractable punishment clause -- never
+    extended for any other reason, never shortened below `base`. Sections
+    with no extractable clause at all (most of the corpus) are completely
+    unaffected: identical to the plain `[:base]` slice this replaces.
+
+    Returns `(snippet, capped)`. `capped=True` means a real clause was found
+    but only past `ceiling` -- the snippet stops at `ceiling` anyway (a
+    bounded worst case per section, not an unbounded one), and the caller
+    MUST log this, since it means this specific section is back in the
+    original truncation failure mode this function exists to fix.
+    """
+    if not section_text:
+        return section_text, False
+    for start, end in _sentence_spans(section_text):
+        sentence = section_text[start:end]
+        if not extract_punishment_clauses(sentence):
+            continue
+        if end <= base:
+            return section_text[:base], False
+        if end > ceiling:
+            return section_text[:ceiling], True
+        return section_text[:end], False
+    return section_text[:base], False
+
+
 # --- The CLAIM side: the model's own free-text `punishments[].imprisonment` ---
 #
 # A DIFFERENT vocabulary from the statute side -- the model paraphrases

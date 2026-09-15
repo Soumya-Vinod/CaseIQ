@@ -64,6 +64,34 @@
   margin-top: 0.5rem;
 }
 
+/* citations_grounded === false (docs/evaluation.md, "confident overview,
+   empty laws_applicable"): nothing above this could be confirmed against
+   the retrieved corpus. Deliberately its own box, not folded into
+   .severityReason's quieter treatment -- a response with no basis at all
+   is a different, more serious case than one that merely rates itself
+   "high severity", and the two must not look alike. --gold, not --struck:
+   this isn't a judicial-status fact (struck/read down), it's a "verify this
+   yourself" caution, the same vocabulary --gold already carries for
+   .confidenceValue. */
+.ungroundedNotice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.ungroundedIcon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .block {
   display: flex;
   flex-direction: column;

@@ -41,6 +41,17 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
   const severityColor = sd.severity ? SEVERITY_VAR[sd.severity] : undefined;
   const severityLabel = sd.severity ? SEVERITY_LABEL[sd.severity] ?? sd.severity : undefined;
 
+  // FIXED 2026-09-15 (docs/evaluation.md, "confident overview, empty
+  // laws_applicable"): `?? true` is a deliberate fallback, not a guess --
+  // this field didn't exist on responses generated before this fix shipped
+  // (a cached/stored one from before still deserves the OLD, un-flagged
+  // rendering it was actually correct for at the time, not a retroactive
+  // false warning); every response generated from here on always sets it
+  // explicitly (backend default is also `true`, but that default exists
+  // for the abstention/incident-date short-circuit paths, which never
+  // reach this component at all -- see QueryOut's own field docstring).
+  const citationsGrounded = result.citations_grounded ?? true;
+
   const hasWhatApplies = nonEmptyArray(sd.laws_applicable) || nonEmptyArray(sd.punishments);
   const hasWhatToDo =
     nonEmptyArray(sd.immediate_steps) ||
@@ -79,6 +90,29 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
           <p className={styles.severityReason}>{sd.severity_reason}</p>
         )}
       </div>
+
+      {/* citations_grounded === false: a real generation happened, but
+          nothing in it could be confirmed against the retrieved corpus --
+          the backend already suppressed severity/severity_reason and
+          reset the confidence score for this same reason (app.services.
+          grounding.apply_grounding_check). Without this, "What applies"
+          would just silently not render (hasWhatApplies is false too, for
+          the same underlying reason) and the summary above would stand
+          alone with nothing telling the reader why -- exactly the gap
+          this fix exists to close. Rendered even when hasWhatApplies is
+          also true in principle (it won't be, in practice, since an empty
+          laws_applicable is what makes citations_grounded false) so this
+          never depends on staying in sync with that separate check. */}
+      {!citationsGrounded && (
+        <div className={styles.ungroundedNotice} role="note">
+          <span className={styles.ungroundedIcon} aria-hidden="true">⚠</span>
+          <span>
+            No specific law section could be confirmed for this answer. The summary above
+            reflects general legal understanding, not a verified citation -- confirm with a
+            lawyer before relying on it.
+          </span>
+        </div>
+      )}
 
       {hasWhatApplies && (
         <div className={styles.block}>

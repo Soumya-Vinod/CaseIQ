@@ -4246,3 +4246,212 @@ UNVERIFIABLE-missing-section cases, so the test can't pass by suppressing everyt
 `nightly-eval.yml` as its own pre-flight step (a separate `caseiq_integration_test` database, same
 Postgres service, no conflict with that job's `caseiq_eval` corpus) so the branch is proven to still
 fire on a schedule, independent of whether real traffic ever exercises it that day.
+
+## Confident overview, empty laws_applicable: a 24%-of-corpus generation-time defect, not a rare model quirk (2026-09-15)
+
+The 20-generation conflation probe (previous entry's item 1 verification run) surfaced a second, more
+serious finding along the way, not the one it was built to measure: 8 of those 20 generations -- and 3
+of a separate, independent 20-case fidelity-battery run -- produced a confident, unhedged
+`situation_overview` ("classified as dowry death... critical... severe legal implications") with an
+EMPTY `laws_applicable`. Two honestly-hedged empty-citation cases (adultery, outraging modesty --
+"not expressly defined... in the sections we have retrieved") were the system working correctly; these
+were not. **This is worse than the punishment-fabrication finding above**: a wrong sentence length at
+least comes with a section number someone could check. A confident conclusion with nothing cited has
+nothing to check at all.
+
+**Root-caused, not left as "the model sometimes drops citations"**: one query (dowry death, IPC 304B /
+BNS 80) failed 5 of 5 times it was ever run, independently, across two separate sessions. That
+reproduction rate is itself evidence against pure sampling noise -- a fixed-input defect looks exactly
+like this; stochastic flakiness does not reproduce 5/5. Traced directly: `app.services.retrieval.
+_serialise` fed the generator a hard `section_text[:300]` for every retrieved section, unconditionally.
+IPC 304B's punishment clause is sub-section (2), which begins after the whole of sub-section (1)'s
+circumstances clause -- past character 300, every time. The generator was never shown a number to cite,
+not being careless with one it could see.
+
+**Checked against the whole live corpus before deciding this was two unlucky cases**: 519 of 2,155
+sections (24%) have a real, extractable punishment clause (using this session's own punishment-clause
+parser, `app.legal_corpus.parsing.punishment_clause.extract_punishment_clauses`) that the 300-char
+snippet cuts off entirely. This had been silently degrading roughly a quarter of the corpus at
+GENERATION time, invisible to every existing check -- C5 only verifies citations that exist, the
+fidelity battery only judges citations the model actually made, and nothing previously compared what
+the generator was SHOWN against what the corpus actually contains for a section.
+
+### A. The retrieval-side fix: `smart_snippet`
+
+`app.legal_corpus.parsing.punishment_clause.smart_snippet(section_text, base=300, ceiling=1500)` --
+extends the 300-char base only as far as the sentence containing the first detected punishment clause,
+reusing the parser this session already built and tested against all 2,155 sections. Sized against the
+real distribution before picking a number, not guessed:
+
+| Approach | Sections still losing their clause |
+|---|---|
+| Blanket 300 (old behaviour) | 519/2,155 (24.1%) |
+| Blanket 500 | 221/2,155 (10.3%) |
+| Blanket 800 | 72/2,155 (3.3%) |
+| Smart, uncapped | 4/2,155 (0.2%) |
+| **Smart, capped at 1,500 (shipped)** | **28/2,155 (1.3%)** |
+
+The 1,500 ceiling was chosen from the real distribution of how far a smart cutoff would need to extend:
+it covers 656 of 699 sections needing any extension (94%) outright. The sections it doesn't reach are
+the right ones to exclude, not just the cheapest to skip: the largest outliers (BNS 356 needs 8,122
+chars, BNSS 2 needs 5,902, CrPC 2 needs 4,848) are giant definitions/schedule sections where the parser
+matches a stray clause deep inside, not "the" punishment clause a citation to that section would mean --
+extending a prompt by 8KB to chase that isn't a fix, it's a new cost with no matching benefit. Confirmed
+directly through the real production path, not just the standalone function: `semantic_search` against
+the live corpus now returns IPC 304B's snippet at 791 chars, containing sub-section (2) in full.
+
+**The ceiling is never a silent cap**: a section whose needed extension exceeds 1,500 is truncated at
+the ceiling AND logged (`rag_snippet_capped_at_ceiling`, with the section and its full length) --
+per instruction, "a section truncated at the ceiling is back in the original failure mode and should be
+visible." Confirmed firing live: BNSS 531 (a 20,000-character section) hit the cap on the very first
+real query tested against it.
+
+### 1-4. The downstream safety net: `app.services.grounding.apply_grounding_check`
+
+The retrieval fix closes the reproducible cause structurally but doesn't reach zero (28/2,155 sections
+still at risk after the ceiling), and genuine no-coverage queries (adultery-shaped) will always exist --
+this is the backstop for both. Runs immediately after C5 (`verify_citations`), keyed off one signal
+(whether `laws_applicable` survived), not off parsing the model's own prose for hedge language -- exactly
+the fragile, free-text-sniffing pattern this project has repeatedly found unreliable elsewhere. Two
+distinct, deterministic notes for two distinct causes (never cited anything at all, vs. cited something
+C5 stripped down to nothing -- `NOTE_CITATIONS_STRIPPED`'s existing wording would misdescribe the first
+case), but one unified consequence once nothing survives verification either way:
+
+- **Severity suppressed, not merely flagged** (`severity`/`severity_reason` popped entirely) -- a red
+  "Critical" badge is the loudest, least-qualified claim on the screen, and per instruction: "If nothing
+  survived verification, the system has no basis to characterise seriousness."
+- **`confidence_score` reset to 0.0** -- it was computed from `retrieval_strength` alone
+  (`llm.py`, before citation verification even runs), so showing a high "match strength" next to zero
+  surviving citations would be actively misleading, not merely stale.
+- **`citations_grounded: bool`**, a new, explicit `QueryOut` field (default `true`; only the real-
+  generation path can set it `false`) -- computed once, server-side, instead of asking the frontend to
+  re-derive "is this ungrounded" from array emptiness on its own.
+- **`conversational_summary`'s broken promise, fixed in the same pass**: `_STRUCTURED_PROMPT`'s own
+  schema example used to hardcode `"End with 'See the detailed breakdown for applicable laws, steps, and
+  your rights.'"` -- an unconditional instruction, regardless of whether anything ended up in that
+  breakdown (the real dowry-death case promised it with every downstream list empty). Removed from the
+  prompt; appended deterministically instead (`_has_detailed_breakdown`, `app/api/v1/legal.py`), computed
+  from the same fields `AnswerBriefing.tsx`'s own `hasWhatApplies`/`hasWhatToDo` checks use, so backend
+  and frontend agree about when the promise is true.
+- **Frontend**: `AnswerBriefing.tsx` previously had no state between "normal answer" and full
+  abstention -- an ungrounded response just silently rendered with no "What applies" heading and no
+  explanation. Now an explicit, honestly-worded notice (`citations_grounded === false`) fills that gap,
+  matching the existing `QueryOut.abstained`-driven branch's own pattern (`QueryPage.tsx` already
+  branches on one top-level boolean; this is a second one, same shape). `schema.d.ts` regenerated from
+  the real running app's own OpenAPI export (`openapi-typescript`), not hand-edited -- a 5-line diff,
+  confirming nothing else drifted.
+
+**Standing prevalence counter, not left as a one-off sample**: `grounding_stats` (migration `0013`,
+mirroring `punishment_verification_stats`' own shape) tracks `responses_total` /
+`responses_ungrounded_never_cited` / `responses_ungrounded_stripped_to_zero` / `responses_grounded`
+against real traffic. Per instruction: a counter sitting near 0 afterward is consistent with either the
+fix working or the detection branch silently breaking, and the two look identical from outside --
+`tests/integration/test_grounding.py` closes that the same way `test_punishment_verification.py` already
+does for the punishment-suppression branch: forces the real, confirmed ungrounded shape through
+`apply_grounding_check` itself every night (`nightly-eval.yml`), not just `smart_snippet`'s own
+pure-function tests.
+
+**Tests**: `TestSmartSnippet` (5 cases, `tests/test_punishment_clause.py`, real IPC 304B text) covers the
+retrieval-side fix, including the exact ceiling-capping behaviour. `TestApplyGroundingCheck` (4 cases,
+`tests/integration/test_grounding.py`) covers the downstream safety net against a real Postgres, using
+the real dowry-death `structured_data` shape verbatim. `TestHasDetailedBreakdown` (7 cases,
+`tests/test_legal_helpers.py`) covers item 4 in isolation. Full suite: 178 passed, 0 failures, 0
+regressions.
+
+### Addition 1: re-running the fidelity battery's affected cases -- some of what was attributed to the model was this
+
+Per instruction: feeding the generator punishment clauses it previously couldn't see should move some of
+what the earlier fidelity-battery run attributed to `definition_vs_punishment_conflation` and
+`not_grounded` punishment claims. Scoped BEFORE spending any Groq calls, not assumed: of the 8 flagged
+findings in `docs/fidelity_battery_results.json`, checked each flagged section directly against which
+sections the fix actually extended. Only 4 had a real causal path -- their flagged section's snippet
+was confirmed extended by `smart_snippet`:
+
+| Case | Flagged section | Original verdict | Extended by the fix? |
+|---|---|---|---|
+| punish_02_criminal_intimidation | IPC 506 | `right_section_wrong_claim` | Yes (300→684) |
+| punish_05_criminal_breach_of_trust | IPC 408, IPC 409 | `not_grounded` (the fabrication) | Yes (300→419, 300→525) |
+| bns_05_kidnapping | BNS 97 | `not_grounded` | Yes (300→388) |
+| general_02_rape | IPC 376AB | `not_grounded` / `right_section_wrong_claim` | Yes (also benefited from the earlier stub-row fix) |
+| punish_01_murder | BNS 103 | `definition_vs_punishment_conflation` | **No** -- BNS 103's full text is under 300 chars; never truncated |
+| punish_03_grievous_hurt | IPC 325 | `definition_vs_punishment_conflation` | **No** |
+| punish_04_extortion | IPC 384 | `definition_vs_punishment_conflation` | **No** |
+| bns_01_theft | IPC 379 | `definition_vs_punishment_conflation` | **No** |
+
+The 4 `definition_vs_punishment_conflation` cases are confirmed NOT caused by truncation -- their
+sections' punishment clauses were always fully visible to the generator. That failure mode is a real,
+separate, still-open model-reasoning error (the `_STRUCTURED_PROMPT` GROUNDING addition from the earlier
+entry in this file targets exactly this, unrelated to today's fix) -- re-running those 4 would have spent
+Groq calls to show nothing and risked muddying a real result with noise, so they weren't re-run.
+
+**Result, full judged run (generation + judge) on the 4 affected cases,
+`scripts/rerun_smart_truncation_affected.py` → `docs/fidelity_battery_rerun_smart_truncation_results.json`:
+4 of 4 fully resolved.**
+
+- **punish_02_criminal_intimidation**: IPC 506 `right_section_wrong_claim` → `faithful`. All 4
+  punishment entries (IPC 506, IPC 507, BNS 351, CrPC 260) `grounded`.
+- **punish_05_criminal_breach_of_trust -- the headline fabrication case**: IPC 408 and IPC 409 both
+  `grounded`, with the CORRECT figures this time -- "Section 408 prescribes imprisonment up to seven
+  years" and "Section 409 provides life imprisonment or up to ten years", matching the real statute text
+  exactly (previously: fabricated as 3 years and 7 years respectively). The model didn't get smarter; it
+  was shown the number it needed.
+- **bns_05_kidnapping**: this run cited IPC 363 + BNS 140 instead of BNS 97 (real retrieval/generation
+  variance, unrelated to the fix) -- both `grounded`/`faithful`, no ungrounded claim either way.
+- **general_02_rape**: IPC 376AB now `faithful` ("specifies the maximum punishment when the victim is a
+  girl under twelve" -- a correct restatement, with real figures: "not less than twenty years... may
+  extend to imprisonment for life... or with death"). This section benefited from BOTH fixes stacked --
+  the earlier corpus stub-row repair (376A/376AB) made the real text exist at all; today's fix made
+  enough of it visible to the generator.
+
+4/4 is a small N and not a rate claim -- but it is a clean, complete resolution of every case where this
+fix had a plausible causal path, with zero cases that moved to grounded for the wrong reason (checked the
+reasoning text on each, not just the verdict label).
+
+### Addition 2: the standing counter, so a quiet `grounding_stats` table can't be silently ambiguous
+
+Covered above under "Standing prevalence counter" -- `grounding_stats` (migration `0013`) plus
+`tests/integration/test_grounding.py` wired into `nightly-eval.yml`, the same shape as the punishment-
+verification branch check this file's previous entry built. Once live, `responses_ungrounded_*` sitting
+low is the residual this fix doesn't reach (28/2,155 sections, plus genuine no-coverage queries) --
+worth its own look if it turns out to be a meaningfully nonzero rate against real traffic, per
+instruction.
+
+**Applied to production and verified live on the exact query that surfaced this (2026-09-15)**:
+migration `0013_grounding_stats` run against the real Neon database, app booted against the new schema,
+then the dowry-death query itself sent straight at production -- the same query that failed 5/5 times
+across two independent sessions before this fix. Result: **fully grounded**. `citations_grounded: true`,
+`laws_applicable` cites both BNS 80 and IPC 304B, and `punishments` states "Minimum 7 years, may extend
+to life" for both -- the real statute figure, not a guess and not the empty citation this exact query
+produced every prior time. `severity: critical` and `severity_reason` both survive untouched (correctly
+-- nothing was suppressed, because nothing needed to be), `confidence_score` is a real 0.753 (not
+zeroed), and the "See the detailed breakdown" sentence is present and, this time, true -- every
+downstream section (`immediate_steps`, `critical_deadlines`, `your_rights`, `dos_and_donts`) is
+populated. `grounding_stats` confirmed incremented correctly in the same call:
+`{responses_total: 1, responses_grounded: 1, responses_ungrounded_never_cited: 0,
+responses_ungrounded_stripped_to_zero: 0}`. The server log shows `rag_snippet_capped_at_ceiling` firing
+again for BNSS 531 (correctly capped and logged, as designed) and no `response_ungrounded_overview` --
+consistent end to end. Five failures, root-caused to a fixed 300-char truncation, fixed at the source,
+closed on the query that found it.
+
+### The attribution correction this finding requires, stated plainly
+
+The IPC 408/409 fabrication (docs/evaluation.md, the punishment-fabrication headline finding earlier in
+this file) was, at the time, the single most serious result in this project -- a real, correctly-cited
+sentence with an invented number, in an assistant a non-lawyer would have no way to check. A full
+deterministic verification system was built for it: a punishment-clause parser tested against the whole
+corpus, a suppress-on-mismatch production guardrail, a standing stats table, a synthetic nightly test
+forcing the branch to fire. All of that was the right thing to build, and none of it was wasted --
+`verify_punishments`/`apply_grounding_check` are both real, permanent, useful guardrails now. But the
+finding that eventually explained the ORIGINAL 408/409 fabrication was this one: checked directly against
+the live corpus, IPC 408's own text is 419 characters, and "seven years" -- the actual figure -- doesn't
+start until character 373, past the RAG snippet's fixed 300-char cutoff. The model had the right section,
+cited it correctly, and was never shown the number it needed to state
+correctly -- it wasn't inventing a figure out of nothing, it was extrapolating from a snippet that
+structurally could not contain the answer. **The cause was upstream of the model entirely: this
+project's own retrieval code, not the model's judgement.** The guardrail built in response is still the
+right thing to have -- a defence against fabrication shouldn't depend on correctly diagnosing every
+possible cause of one in advance, and the 28/2,155 sections still at risk after today's fix, plus
+whatever future retrieval change could reintroduce a gap like this, are exactly what it still exists to
+catch. But the original write-up's framing -- treating this as evidence about what the MODEL does with a
+citation it has -- was wrong, and this file should say so rather than let a corrected root cause sit
+silently under an uncorrected conclusion.
