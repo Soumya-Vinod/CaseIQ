@@ -23,6 +23,10 @@ from app.services.citation_verification import (
 )
 from app.services.helplines import select_helplines
 from app.services.llm import llm_service
+from app.services.punishment_verification import (
+    record_stats as record_punishment_stats,
+    verify_punishments,
+)
 from app.services.pii_redaction import RedactionSession, restore_deep, restore_text
 from app.services.retrieval import (
     build_rag_context,
@@ -380,6 +384,23 @@ async def process_query(
         if had_laws and not result["structured_data"].get("laws_applicable"):
             result["conversational_summary"] += NOTE_CITATIONS_STRIPPED
         await record_stats(db, citation_counters)
+
+        # Deterministic, no LLM: does a stated imprisonment term actually
+        # match the cited section's own text (docs/evaluation.md, the IPC
+        # 408/409 finding -- a real, correctly-cited sentence with a
+        # fabricated number, invisible to the check above since that only
+        # verifies WHICH section was cited, never WHAT was claimed about
+        # it). Runs after citation stripping, on whatever laws_applicable
+        # survived -- a punishment for an already-stripped citation has
+        # nothing left to be grounded in either. Only suppresses on a
+        # genuine extracted mismatch; an unparseable statute or claim is
+        # left alone, never treated as a mismatch (see
+        # punishment_verification's own module docstring for why).
+        result["structured_data"], punishment_counters = await verify_punishments(
+            db, result["structured_data"], as_of,
+        )
+        await record_punishment_stats(db, punishment_counters)
+
         free_text_citations = scan_free_text_for_citations(
             result["structured_data"], result["conversational_summary"],
         )

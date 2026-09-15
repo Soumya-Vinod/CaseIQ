@@ -81,7 +81,7 @@ REQUIRED SCHEMA:
     "severity": "low | medium | high | critical",
     "severity_reason": "one sentence",
     "laws_applicable": [{{"act": "BNS 2023", "section": "303", "title": "Theft", "why_applies": "..."}}],
-    "punishments": [{{"offence": "Theft", "imprisonment": "Up to 3 years", "fine": "As court decides"}}],
+    "punishments": [{{"act": "BNS 2023", "section": "303", "offence": "Theft", "imprisonment": "Up to 3 years", "fine": "As court decides"}}],
     "immediate_steps": [{{"step": 1, "action": "...", "details": "...", "urgency": "immediate | within_24h | within_week"}}],
     "critical_deadlines": [{{"deadline": "24 hours", "what": "...", "consequence": "..."}}],
     "your_rights": [{{"right": "...", "explanation": "..."}}],
@@ -89,7 +89,11 @@ REQUIRED SCHEMA:
   }}
 }}
 RULES: Return ONLY JSON. 3-5 laws (prefer BNS 2023 over IPC), ONLY from the retrieved sections --
-never a section number, doctrine, or citation you were not given above. 5-7 steps. BNS replaced
+never a section number, doctrine, or citation you were not given above. Each punishments[] entry's
+act+section MUST match one of the sections in laws_applicable -- never a punishment for a section
+you did not cite. Phrase imprisonment as "Up to N years", "Minimum N years, may extend to life",
+"Life imprisonment", or "Death or imprisonment for life" -- these are checked against the retrieved
+text directly, so this exact phrasing is what makes that check possible. 5-7 steps. BNS replaced
 IPC from 1 July 2024."""
 
 _FOLLOWUP_PROMPT = """You are CaseIQ with full memory of this conversation. The user is asking a \

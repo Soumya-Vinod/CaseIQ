@@ -28,6 +28,15 @@ export interface StructuredData {
     why_applies?: string;
   }[];
   punishments?: {
+    // act/section added 2026-09-14 (backend punishment-verification, see
+    // docs/evaluation.md) -- purely for the backend's own deterministic
+    // check to key a lookup by; not currently rendered. Additive, safe for
+    // this component: every field here is already optional and read by
+    // name, no enumeration of unknown keys (see this file's own docstring
+    // on the bailable/cognizable field removal, 2026-09-02, for the same
+    // property holding the other direction).
+    act?: string;
+    section?: string;
     offence?: string;
     imprisonment?: string;
     fine?: string;

@@ -4155,3 +4155,70 @@ structurally, not just the three specific year tokens already named in the regex
 the exact false-positive strings observed in the battery ("...defined in BNS 2023 and penalised in
 IPC 1860." now returns an empty set) and against a real citation ("...prescribed in BNS Section
 103." still correctly returns `{('BNS', '103')}`).
+
+## A defect in the source document itself, not this project's parser (2026-09-14)
+
+Worth its own line, a different category from every parser bug above: IPC 145's real body text, in
+the tracked `documents/IPC_1860.pdf` itself, reads "...may **extent** to two years..." -- confirmed
+directly against the PDF (`pdfplumber`, page containing "145. Joining or continuing in unlawful
+assembly"), not an artifact of this project's own extraction or storage. "Extent" for "extend" is a
+typo in the government's own published text, predating anything this project did to it. The
+punishment-clause parser (below) accepts "extent" as a narrow, confirmed alias specifically for this
+one word -- not a general fuzzy-match policy, and not a claim that the source document is otherwise
+unreliable. Named here so the next person who diffs the corpus against a fresh government re-download
+and finds this spelling doesn't waste time deciding whether it's their own bug.
+
+## Deterministic punishment verification: built, tested against all 913 sections, wired into production (2026-09-14)
+
+Closes the gap the answer-fidelity battery's IPC 408/409 finding named directly: C5
+(`citation_verification.py`) checks whether a cited section exists and was retrieved, never whether a
+*punishment claim* attached to it is true of that section's text -- free-text `offence` matching was
+why 408/409 was never caught automatically. `app/legal_corpus/parsing/punishment_clause.py` is a
+regex-based, no-LLM parser for both sides: the statute's own full `section_text` (never the 300-char
+snippet the generator saw) and the model's own `imprisonment` claim string, compared for consistency.
+
+**Extraction rate against the real corpus, checked exhaustively, not sampled**: 696 of 913 sections
+mentioning punishment/imprisonment extract at least one real clause directly. Of the 217 that don't,
+every one was classified, not just counted: ~46 cross-referential ("same manner as..."), ~91 general
+sentencing machinery (solitary-confinement limits, fine-default mechanics -- real law, never an
+offence-specific punishment clause), ~10 fractional/formulaic, ~10 scope/preamble/definitional, 1
+repealed stub, and a small residual dominated by the known word-form-fine gap (see that module's own
+docstring for the four confirmed sections). Three real parser bugs found and fixed running this
+against every section, not a sample: a crash on a malformed fine-amount artifact, months-denominated
+sentences unhandled entirely (~105 sections recovered), and two further phrasing variants (`"not BE
+less than N years"`, the `"extent"` typo above, and an amendment-bracket marker breaking adjacency
+*inside* a clause -- `"extend to 4[three years]"`, IPC 295A -- the same footnote-marker mechanism as
+the corpus-completeness merges, here breaking a clause instead of a section boundary).
+
+**The critical property holds by construction**: `extract_punishment_clauses` and
+`extract_claim_terms` return empty/`None` on anything unrecognised -- there is no code path that
+returns a guessed or partial value. Verified directly against 7 real cases (IPC 408, 409, 379, BNS
+103, BNS 64, IPC 406, IPC 407) before wiring anything in: both real fabrications (408, 409) correctly
+flagged inconsistent, all 5 grounded cases correctly flagged consistent -- committed as
+`tests/test_punishment_clause.py`, 16 tests, all against real corpus text, not synthetic fixtures.
+
+**Product decision, made explicitly, not defaulted into**: on a genuine mismatch, the specific
+punishment line is suppressed and the rest of the answer kept -- matching C5's existing behaviour on
+ungrounded citations, and chosen over a visible "unverified" flag because the user is a non-lawyer
+with no basis to evaluate a caveat; a flagged-but-shown wrong number still reads as a number.
+**UNVERIFIABLE is never suppressed** -- only a clause that actually parsed on both sides and actually
+disagrees triggers suppression; an unparseable statute or claim is left alone, logged as
+`unverifiable`, never as a mismatch. Every suppression is logged with the claim, the extracted
+statute figure, and the section (`punishment_claim_suppressed_mismatch`), and counted in a new
+`punishment_verification_stats` table (migration `0012`, mirroring C5's own `citation_verification_
+stats`) -- the prevalence data nothing currently has: how often this actually fires against real
+traffic, not just "it happened at least once in a battery."
+
+**Schema change**: `punishments[]` entries now carry `act`+`section`, the same key shape
+`laws_applicable[]` already uses -- this is *why* 408/409 was invisible before, there was no reliable
+key to look the real text up by. The prompt also now asks for a specific, checkable imprisonment
+phrasing ("Up to N years", "Minimum N years, may extend to life", "Life imprisonment", "Death or
+imprisonment for life") rather than open phrasing, to raise how often the claim side actually parses.
+`caseiq-web`'s `structuredData.ts`/`AnswerBriefing.tsx` checked directly before this shipped: every
+field is read by name and optional, the object already survived a field-removal cycle once
+(2026-09-02) -- new fields are additive and safe, confirmed, not assumed.
+
+**Not yet applied to production**: migration `0012_punishment_verification` is written and reviewed
+but `alembic upgrade head` has not been run against the live database -- purely additive (one new,
+empty table, no existing data touched) but still a production schema change, held for the same
+explicit go-ahead the row-level corpus fix got, not run silently.
