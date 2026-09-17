@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field, PostgresDsn, computed_field
+from pydantic import Field, PostgresDsn, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # Optional, unset by default -- see app.core.sentry.configure_sentry. Every
+    # capture call in the SDK degrades to a cheap no-op when this is None
+    # (measured directly, not assumed), so nothing in dev/CI/tests needs a
+    # guard around it; only a real Render env var turns it on.
+    SENTRY_DSN: str | None = None
 
     # --- Security ---
     SECRET_KEY: str = Field(..., min_length=32)
@@ -157,6 +163,70 @@ class Settings(BaseSettings):
         traceback. See docs/deployment.md."""
         parts = urlsplit(self.DATABASE_URL)
         return f"{parts.hostname}:{parts.port or 5432}{parts.path}"
+
+    @model_validator(mode="after")
+    def _assert_database_url_direct_agrees_with_database_url(self) -> "Settings":
+        """FOUND 2026-09-16 (docs/evaluation.md, observability entry): a
+        script explicitly overrode DATABASE_URL_DIRECT to point at a local
+        test database but left DATABASE_URL_RAW unset -- DATABASE_URL (which
+        prefers DATABASE_URL_RAW) silently fell through to the real
+        production value already sitting in this machine's own .env file.
+        The write landed on production before anyone noticed the two URLs
+        no longer agreed. This makes that class of mistake structurally
+        impossible: whenever DATABASE_URL_DIRECT is set at all, it must
+        resolve to the SAME target as DATABASE_URL, or this raises here, at
+        settings-load time, before any engine is ever created -- an error,
+        never a silent fallback to whichever one happened to be set.
+
+        Compares host, port, and database name -- not just host. A bare
+        hostname match would still pass two local Postgres instances on
+        different ports (or different database names on the same instance)
+        as "the same target", which is exactly the kind of partial-override
+        mistake this exists to catch, just with lower stakes than the
+        production incident that prompted it.
+
+        NORMALIZED FOR NEON'S OWN POOLED/DIRECT NAMING CONVENTION
+        SPECIFICALLY -- flagged HERE, at the rule itself, not only in the
+        design discussion that produced it, because a silently-wrong
+        assumption in exactly this spot is the failure class this project
+        keeps finding: Neon's pooled endpoint hostname is its direct
+        endpoint hostname with "-pooler" inserted immediately before the
+        first "." (confirmed against this project's own real values --
+        "ep-winter-river-ax8tv54p-pooler.c-4.us-east-2.aws.neon.tech" vs
+        "ep-winter-river-ax8tv54p.c-4.us-east-2.aws.neon.tech"). That is a
+        fact about Neon, not about managed Postgres in general. If this
+        project ever moves providers, or Neon changes its own naming, this
+        check does not fail safe -- it fails as a FALSE PASS: a genuine
+        disagreement would stop being recognised as one, because the
+        provider's real pooled/direct hosts no longer differ by this exact
+        pattern, and this function would compare two now-different-looking
+        strings that no longer collapse to equal after normalization,
+        OR (the more dangerous direction) two hosts that use some other
+        provider's OWN suffix convention that happens to still collapse
+        here by coincidence. Revisit this function specifically -- not just
+        rerun it and trust a green result -- if the connection provider
+        ever changes.
+        """
+        if not self.DATABASE_URL_DIRECT:
+            return self
+        direct = urlsplit(self.DATABASE_URL_DIRECT)
+        resolved = urlsplit(self.DATABASE_URL)
+        if direct.hostname is None or resolved.hostname is None:
+            return self  # a malformed URL is a different failure, not this check's job
+        normalized_resolved_host = resolved.hostname.replace("-pooler.", ".", 1)
+        resolved_port = resolved.port or 5432
+        direct_port = direct.port or 5432
+        if (direct.hostname, direct_port, direct.path) != (normalized_resolved_host, resolved_port, resolved.path):
+            raise ValueError(
+                f"DATABASE_URL_DIRECT ({direct.hostname}:{direct_port}{direct.path}) disagrees with "
+                f"DATABASE_URL's resolved target ({resolved.hostname}:{resolved_port}{resolved.path}, "
+                f"normalized host: {normalized_resolved_host}) -- refusing to start with an ambiguous "
+                f"database target. This almost always means a PARTIAL override: one of "
+                f"DATABASE_URL_RAW/DATABASE_URL_DIRECT was set explicitly while the other silently fell "
+                f"through to .env's own value. Set both consistently, or unset the one you didn't mean "
+                f"to override."
+            )
+        return self
 
     # --- Redis / Cache / Rate limit ---
     REDIS_URL: str = "redis://localhost:6379/0"

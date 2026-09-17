@@ -66,6 +66,17 @@ jobs:
       - name: Test (unit + integration, real local Postgres+pgvector, no Neon)
         run: pytest -q
 
+      - name: Every writable scripts/*.py must call the shared production-write guard
+        # docs/evaluation.md, observability entry: a shared guard
+        # (scripts.lib.production_guard) only protects the scripts that
+        # actually call it -- this makes "a new writable script forgot to"
+        # a red build instead of a silent gap, calibrated clean (6/6
+        # correct, 0 false positives across the other 18) before being
+        # wired to fail anything -- see this script's own module docstring.
+        # No DB, no app import -- pure text scan, fits here, not a
+        # separate job.
+        run: python -m scripts.ci_check_scripts_call_production_guard
+
       - name: Lint (report-only -- see docs/evaluation.md)
         # ruff's own config (pyproject.toml) has apparently never been run
         # before -- 284 real violations found scoping this, 51 auto-

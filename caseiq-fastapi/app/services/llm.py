@@ -11,6 +11,7 @@ import re
 import time
 from typing import Any
 
+import sentry_sdk
 from groq import AsyncGroq, APIError as GroqAPIError, RateLimitError as GroqRateLimitError
 
 from app.core.config import settings
@@ -266,6 +267,16 @@ class LLMService:
         warm = [k for k in keys if not k.is_cold]
         if not warm:
             logger.warning("groq_all_keys_cold", keys=[k.label for k in keys])
+            # FIXED 2026-09-16 (docs/evaluation.md, observability entry):
+            # every warm key already cold means THIS request has no path to
+            # succeed at all, not a transient blip one retry would fix --
+            # worth a Sentry event with a real stack trace, not just the
+            # rate this also feeds into (scripts/check_observability_
+            # thresholds.py, via audit_logs' status=503 rows). A single
+            # key's own cooldown+successful-failover (groq_key_cooldown,
+            # just below) is normal traffic-shaping and deliberately NOT
+            # captured here -- only the case where a request actually fails.
+            sentry_sdk.capture_message("groq_all_keys_cold", level="warning")
             raise AppError(
                 "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
                 code="llm_temporarily_unavailable", status_code=503,
@@ -307,6 +318,10 @@ class LLMService:
                 # per-key), so this goes straight to the 503, same as before
                 # rotation existed, no rotation attempted.
                 logger.warning("groq_call_failed", error_type=type(exc).__name__, error=str(exc), key=key.label)
+                # A real exception with a real stack trace -- capture the
+                # actual `exc`, not a message, so Sentry groups by the
+                # underlying Groq error type instead of one flat bucket.
+                sentry_sdk.capture_exception(exc)
                 raise AppError(
                     "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
                     code="llm_temporarily_unavailable", status_code=503,
@@ -314,6 +329,7 @@ class LLMService:
 
         # Every warm key hit a rate limit during this call (both cold now).
         logger.warning("groq_all_keys_rate_limited", keys=[k.label for k in warm])
+        sentry_sdk.capture_message("groq_all_keys_rate_limited", level="warning")
         raise AppError(
             "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
             code="llm_temporarily_unavailable", status_code=503,

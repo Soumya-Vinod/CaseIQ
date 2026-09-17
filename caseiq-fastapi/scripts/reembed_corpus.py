@@ -36,9 +36,11 @@ from sqlalchemy import select, update
 from app.db.base import SessionLocal
 from app.models.corpus import SectionVersion
 from app.services.embeddings import LocalOnnxEmbedder
+from scripts.lib.production_guard import confirm_writable_target
 
 
-async def main(batch_size: int) -> None:
+async def main(batch_size: int, skip_prompt: bool = False) -> None:
+    confirm_writable_target("reembed_corpus", skip_prompt=skip_prompt)
     embedder = LocalOnnxEmbedder()
     started = time.perf_counter()
 
@@ -88,5 +90,7 @@ async def main(batch_size: int) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--yes", action="store_true",
+                        help="Skip the production-write confirmation prompt.")
     args = parser.parse_args()
-    asyncio.run(main(args.batch_size))
+    asyncio.run(main(args.batch_size, args.yes))

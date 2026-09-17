@@ -7,12 +7,15 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+import sentry_sdk
+
 from app.api.v1.router import api_router
 from app.core.build_info import get_build_info
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, logger
 from app.core.ratelimit import limiter
+from app.core.sentry import configure_sentry
 from app.db.base import SessionLocal
 from app.middleware.request_context import RequestContextMiddleware
 from app.services.domain_classifier import assert_domain_gate_matches_embedder
@@ -21,6 +24,10 @@ from app.services.embeddings import assert_embedding_config_matches_corpus, embe
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # FIRST, before configure_logging or anything else that could plausibly
+    # fail -- see app.core.sentry.configure_sentry's own docstring for why
+    # this has to be active before the two assertions below run, not after.
+    configure_sentry()
     configure_logging()
     # A stale --reload worker on Windows logs no error (see
     # app.core.build_info's docstring for the incident this is for) -- this
@@ -40,21 +47,42 @@ async def lifespan(app: FastAPI):
     # string -- get_embedder() no longer has a silent fallback (see its own
     # docstring), so these should always agree, but this check doesn't get
     # to assume that held. See that function's own docstring for the live
-    # incident this closes. Deliberately NOT wrapped in try/except: a
-    # mismatch must crash startup, not degrade to a logged warning nobody
-    # reads until a user notices wrong answers.
-    async with SessionLocal() as db:
-        await assert_embedding_config_matches_corpus(db, embedder)
-    # Option B, shipped 2026-09-08 (docs/evaluation.md): the domain-gate
-    # classifier's weights are only meaningful against the exact embedding
-    # space they were trained on -- same failure shape as the check just
-    # above, one layer up (a swapped embedder produces a confident, wrong
-    # classifier verdict, not an exception, for the identical reason a
-    # swapped embedder produces a confident, wrong similarity score). No DB
-    # needed for this one -- a pure in-process identity comparison against
-    # the artifact's own stamped embedding_model_id. Deliberately NOT
-    # wrapped in try/except, same reasoning as the check above.
-    assert_domain_gate_matches_embedder(embedder)
+    # incident this closes.
+    #
+    # FIXED 2026-09-16 (docs/evaluation.md, observability entry): still
+    # deliberately crashes startup on a mismatch -- that part is unchanged
+    # and correct, a mismatch must never degrade to a logged warning nobody
+    # reads until a user notices wrong answers. What changed: a crash here
+    # used to reach nobody -- Render would show a failed deploy in its own
+    # dashboard and nothing else. Automatic capture (Sentry's global
+    # exception hook, sys.excepthook) can't be relied on for THIS specific
+    # failure -- checked directly against the installed uvicorn source
+    # (uvicorn/lifespan/on.py's LifespanOn.main()), not assumed: it wraps
+    # the whole lifespan call in `except BaseException`, logs it, and
+    # returns WITHOUT re-raising -- this exception never becomes a raw,
+    # process-level uncaught exception at all, so there's nothing for a
+    # global hook to see. Explicit capture + flush (the process exits right
+    # after this, so the event must be sent before that happens, not queued
+    # and lost) + re-raise the SAME exception, unmodified -- the
+    # crash-startup behaviour is bit-for-bit identical to before, Sentry is
+    # just now also watching.
+    try:
+        async with SessionLocal() as db:
+            await assert_embedding_config_matches_corpus(db, embedder)
+        # Option B, shipped 2026-09-08 (docs/evaluation.md): the domain-gate
+        # classifier's weights are only meaningful against the exact
+        # embedding space they were trained on -- same failure shape as the
+        # check just above, one layer up (a swapped embedder produces a
+        # confident, wrong classifier verdict, not an exception, for the
+        # identical reason a swapped embedder produces a confident, wrong
+        # similarity score). No DB needed for this one -- a pure in-process
+        # identity comparison against the artifact's own stamped
+        # embedding_model_id.
+        assert_domain_gate_matches_embedder(embedder)
+    except Exception:
+        sentry_sdk.capture_exception()
+        sentry_sdk.flush(timeout=5)
+        raise
     yield
     logger.info("app_stopping")
 
@@ -108,6 +136,18 @@ def create_app() -> FastAPI:
         # exception middleware for /legal/query and /complaints' decorator-
         # raised RateLimitExceeded, and this middleware's own manual sync
         # dispatch for every default_limits-only route.
+        #
+        # FIXED 2026-09-16 (docs/evaluation.md, observability entry): a 429
+        # used to be invisible to structlog entirely -- the ONLY record was
+        # a per-request AuditLog row's `status` field (RequestContextMiddleware),
+        # queryable but not in the structured log stream everything else
+        # goes through. Logged here directly (not via contextvars, which
+        # this handler's two different call paths -- see the comment above
+        # -- don't reliably bind) so the signal exists at all; volume-based
+        # alerting on this lives in scripts/check_observability_thresholds.py
+        # (a rate, not a per-event capture -- a single rate-limited user is
+        # normal, expected behaviour, not an incident on its own).
+        logger.warning("rate_limited", path=request.url.path, detail=exc.detail)
         response = JSONResponse(
             status_code=429,
             content={"error": {

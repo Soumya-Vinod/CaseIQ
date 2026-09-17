@@ -175,6 +175,24 @@ def _schema_ready():
     env = _os.environ.copy()
     env["DATABASE_URL_DIRECT"] = plain_test_url
     env["DATABASE_URL_RAW"] = ""  # falsy -- env.py's ssl="require" flag keys off this being unset
+    # FIXED 2026-09-16: settings.DATABASE_URL_RAW being empty makes
+    # settings.DATABASE_URL (the app's runtime property) fall through to
+    # POSTGRES_HOST/PORT/USER/PASSWORD/DB's own defaults -- which, left
+    # untouched, compose to localhost:5432/caseiq, NOT this fixture's actual
+    # target (localhost:5434/caseiq_integration_test). That mismatch used
+    # to be harmless (nothing compared the two). It stopped being harmless
+    # the moment app.core.config.Settings gained a validator asserting
+    # DATABASE_URL_DIRECT and DATABASE_URL always agree (docs/evaluation.md,
+    # observability entry) -- the alembic subprocess below started failing
+    # its own settings import before ever reaching a real migration. Setting
+    # the discrete POSTGRES_* fields to the SAME target as DATABASE_URL_DIRECT
+    # makes the two agree without touching DATABASE_URL_RAW, so the SSL flag
+    # above stays correctly off for this local Postgres.
+    env["POSTGRES_HOST"] = parsed.hostname or "localhost"
+    env["POSTGRES_PORT"] = str(parsed.port or 5432)
+    env["POSTGRES_USER"] = parsed.username or "postgres"
+    env["POSTGRES_PASSWORD"] = parsed.password or "postgres"
+    env["POSTGRES_DB"] = db_name
     project_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],

@@ -32,9 +32,18 @@ Same principle as backup_dump.sh's pg_dump-version assertion (which has
 since caught two real failures of its own): the thing this script depends
 on but doesn't control -- here, which SECRET_KEY and which database are
 actually active in this shell -- gets checked and shown, not assumed.
-Below: a hard block on values that look like a placeholder, and a
-mandatory confirmation (skippable with --yes) showing exactly which
-target and which key fingerprint this run is about to write with.
+Below: a hard block on values that look like a placeholder, plus the
+shared write-confirmation gate (scripts.lib.production_guard, skippable
+with --yes) every writable script under scripts/ now uses.
+
+FIXED 2026-09-16 (docs/evaluation.md, observability entry): the
+host-and-confirmation half of this script's own gate was extracted into
+scripts.lib.production_guard after a SECOND, structurally identical
+incident two days later -- a different one-off script, hitting
+production through a different partially-overridden environment. Only the
+SECRET_KEY-placeholder check stays here, since it's specific to what THIS
+script depends on (hash_ip's correctness); the target-host confirmation is
+now shared, not reimplemented per script.
 """
 from __future__ import annotations
 
@@ -43,7 +52,6 @@ import asyncio
 import hashlib
 import re
 import sys
-from urllib.parse import urlsplit
 
 from sqlalchemy import select
 
@@ -51,6 +59,7 @@ from app.core.config import settings
 from app.core.security import hash_ip
 from app.db.base import SessionLocal, engine
 from app.models.legal import LegalQuery
+from scripts.lib.production_guard import confirm_writable_target
 
 _ALREADY_HASHED = re.compile(r"^[0-9a-f]{40}$")
 
@@ -60,7 +69,7 @@ _ALREADY_HASHED = re.compile(r"^[0-9a-f]{40}$")
 _PLACEHOLDER_MARKERS = ("test", "change-me", "changeme", "example", "placeholder", "dummy", "sample")
 
 
-def _assert_real_key_and_confirm(skip_prompt: bool) -> None:
+def _assert_real_key(skip_prompt: bool) -> None:
     key = settings.SECRET_KEY
     lowered = key.lower()
     for marker in _PLACEHOLDER_MARKERS:
@@ -72,28 +81,15 @@ def _assert_real_key_and_confirm(skip_prompt: bool) -> None:
             sys.exit(1)
 
     fingerprint = hashlib.sha256(key.encode()).hexdigest()[:12]
-    # settings.DATABASE_URL, not MIGRATION_DATABASE_URL -- this script writes
-    # through SessionLocal/engine (app/db/base.py), which is bound to
-    # DATABASE_URL (the pooled endpoint), not the direct one migrations use.
-    # Printing the wrong URL's host here would defeat the entire point of
-    # this check if the two ever diverge.
-    target_host = urlsplit(settings.DATABASE_URL).hostname
-    print(f"About to write to legal_queries on host: {target_host}")
     print(f"Using SECRET_KEY fingerprint: {fingerprint} "
           f"(not the key itself -- compare this against a known-good run's "
           f"fingerprint if you have one, to confirm it's the same key)")
-
-    if skip_prompt:
-        return
-    answer = input("Type 'yes' to continue: ").strip().lower()
-    if answer != "yes":
-        print("Aborted -- nothing written.", file=sys.stderr)
-        sys.exit(1)
+    confirm_writable_target("backfill_legal_query_ip_hash", skip_prompt=skip_prompt)
 
 
 async def main(dry_run: bool, skip_prompt: bool = False) -> None:
     if not dry_run:
-        _assert_real_key_and_confirm(skip_prompt)
+        _assert_real_key(skip_prompt)
     async with SessionLocal() as db:
         rows = (await db.execute(
             select(LegalQuery).where(LegalQuery.ip_hash.is_not(None))

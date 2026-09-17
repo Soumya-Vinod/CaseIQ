@@ -8,6 +8,12 @@ venv/
 media/
 *.log
 
+# scripts/check_observability_thresholds.py's last-observed-counters state --
+# only ever meant to live inside the observability-alerts.yml workflow's own
+# actions/cache, never committed. Present locally only if someone runs the
+# script by hand.
+current_state.json
+
 # documents/*.pdf deliberately tracked, not ignored (2026-09-08): the 5
 # source PDFs (BNS/BNSS/BSA/CrPC/IPC, ~6.85MB total) used to be excluded
 # here, but the exclusion was unexplained boilerplate from this repo's

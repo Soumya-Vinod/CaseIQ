@@ -4455,3 +4455,229 @@ whatever future retrieval change could reintroduce a gap like this, are exactly 
 catch. But the original write-up's framing -- treating this as evidence about what the MODEL does with a
 citation it has -- was wrong, and this file should say so rather than let a corrected root cause sit
 silently under an uncorrected conclusion.
+
+## Observability: error capture, a threshold-alerting job, and one real mistake made building it (2026-09-16)
+
+Scoped, then built, after this session found four real, live, self-announcing-to-nobody failures by hand
+in one sitting (rate limiting enforcing nothing, a test suite writing to production, RAG truncation
+losing a quarter of the corpus, an ungrounded answer reaching a user). Production had no tracing, no
+error aggregation, and no alerting -- the next one would have waited for someone to look. Three pieces,
+built in the order asked.
+
+**Checked, not recalled, before committing to a design**: fetched Render's own log-streams doc page
+directly (not just the general free-tier overview, which was ambiguous on this point) -- log streaming
+to an external aggregator requires Pro workspaces and higher, **not available on the free tier**. This
+settles the design in favour of an SDK reaching Sentry via its own outbound HTTPS call from inside the
+running process, which works regardless of what Render's free tier exports. Separately confirmed: 750
+free instance-hours/month per workspace, resets monthly, no rollover.
+
+### 1. UptimeRobot -- instructions only, no code
+
+Target: `https://caseiq.onrender.com/health` (confirmed live and reachable before writing this, HTTP 200,
+0.85s). **Recommended interval: 5 minutes**, not a longer one that would let the instance spin down
+between checks. Reasoning stated plainly, per instruction: the entire point of this piece is faster
+detection of a silent failure, and a longer interval directly trades against that -- a check every 30
+minutes means up to 30 minutes before a real outage is even noticed, working against the stated goal.
+The side effect, not hidden: a 5-minute interval keeps the instance continuously warm (5 min < Render's
+15-minute spin-down window), which also happens to eliminate cold starts for real visitors -- a real,
+separate benefit this project's own deployment notes already flagged as a concern for anyone evaluating
+the live demo. The real cost: this consumes close to the entire 750-hour monthly budget for a 31-day
+month (31 x 24 = 744 hours, ~6 hours of margin) -- comfortable only as long as this remains the ONLY free
+Render service on the account; adding a second would need revisiting this choice, not assuming the
+budget still fits.
+
+Monitor type: HTTP(s), URL as above, expect HTTP 200. Set up an alert contact (email is enough to start)
+so a failed check actually notifies someone -- the monitor alone does nothing without one.
+
+### 2. Sentry -- error capture only, tracing off
+
+`app/core/sentry.py`: `traces_sample_rate=0.0` and `send_default_pii=False`, both explicit rather than
+relied on as SDK defaults -- this project's own style, and `send_default_pii` specifically matters given
+the deliberate PII redaction already done throughout (`app.services.pii_redaction`) that Sentry's own
+default request-context capture must not become a second, unredacted channel for. Measured directly
+before wiring in (installed sentry-sdk 2.69.1, benchmarked, uninstalled after the scoping pass, pinned
+the exact measured version now that it's actually used): **~5MB on disk, ~1s one-time init cost, ~0.6ms
+per `capture_exception` call** -- negligible against a 512MB instance already paying a 30-60s cold start,
+and zero cost on the request path when nothing goes wrong (tracing is the part with per-request overhead;
+plain error capture only activates on an actual exception).
+
+Explicit capture at four sites, not a structlog pipeline (Sentry has no first-party structlog processor,
+and piping every `logger.warning` into it would burn the free tier's error quota on routine, already-
+countered warnings -- see the counter-alerting job below for that shape instead):
+- `app/core/exceptions.py`'s catch-all `Exception` handler -- the one seam every truly unhandled 500
+  funnels through. Captured explicitly rather than relied on via Sentry's automatic hook, since this
+  handler catches the exception and returns a normal response rather than letting it propagate --
+  whether the automatic integration still sees it wasn't verified live (would need a real DSN and a
+  triggered request), so explicit capture is the version guaranteed to work regardless.
+- `app/services/llm.py`'s three 503-raising paths (`groq_all_keys_cold`, a non-rate-limit `GroqAPIError`,
+  `groq_all_keys_rate_limited`) -- a request that has genuinely failed with no retry path left, not a
+  single key's own cooldown-and-successful-failover (deliberately not captured -- that's normal traffic-
+  shaping, not an incident).
+- **The startup-assertion crash, the part explicitly asked about**: `app/main.py`'s `lifespan` wraps
+  `assert_embedding_config_matches_corpus`/`assert_domain_gate_matches_embedder` in try/except,
+  `sentry_sdk.capture_exception()` + `sentry_sdk.flush(timeout=5)` + re-raise the SAME exception
+  unmodified. **Automatic capture cannot be relied on here, checked directly against the installed
+  uvicorn source, not assumed**: `uvicorn/lifespan/on.py`'s `LifespanOn.main()` wraps the whole lifespan
+  call in `except BaseException`, logs it, and returns WITHOUT re-raising -- the exception never becomes
+  a raw, process-level uncaught exception at all, so there is nothing for a global exception hook to see.
+  Explicit capture is the only version that works. `flush()` is necessary too, not decorative: the
+  process exits right after this (uvicorn sets `should_exit=True` once the re-raised exception reaches
+  it), so an event queued for Sentry's async background sender would otherwise be lost. Confirmed the
+  re-raise is load-bearing, not just correctness theatre: without it, uvicorn never learns startup failed
+  and the app would incorrectly appear to boot successfully.
+
+### 429 structlog gap, closed
+
+`main.py`'s `RateLimitExceeded` handler returned the JSON response but never logged anything -- the only
+record was a per-request `AuditLog.details.status` field, invisible to the structured log stream
+everything else goes through. Added `logger.warning("rate_limited", path=..., detail=...)` directly in
+the handler (not via contextvars, which this handler's two different call paths -- see its own long-
+standing comment on slowapi's sync/async dispatch split -- don't reliably bind).
+
+### 3. The counter-alerting workflow
+
+`scripts/check_observability_thresholds.py` + `.github/workflows/observability-alerts.yml`, reusing
+`secrets.NEON_DATABASE_URL_DIRECT` (the same secret `db-backup.yml` already trusts with production
+credentials) and `actions/cache` for last-seen state, exactly as scoped. Five rate checks: grounding
+(ungrounded/total), punishment (suppressed-mismatch/total), citation (stripped/total), and 429/503 rate
+from `audit_logs` (the only existing record of either, queried directly since neither has its own stats
+table). Each requires its own minimum sample size before evaluating a rate at all -- at this project's
+traffic volume, n=2 is noise, not a signal, and evaluating anyway would alert on one bad response landing
+after a quiet stretch.
+
+**Thresholds are provisional, stated plainly, same discipline as `app/core/ratelimit.py`'s own
+"provisional... revisit once there is" real traffic**: grounding 25%, punishment-suppression 10%,
+citation-stripped 15%, 429s 30%, 503s 10%, minimum samples 10-20 depending on the check. None of these
+are calibrated against real numbers -- there aren't any yet. Schedule (every 6 hours) is the same kind of
+guess. Revisit both once real traffic exists; a threshold guessed once and never revisited becomes noise
+people mute.
+
+State persistence uses `actions/cache` with a `github.run_id`-unique save key and a prefix `restore-keys`
+fallback -- the standard pattern for a cache that must be rewritten every run, not restored unchanged.
+**Known limitation, not hidden**: GitHub evicts a cache entry after ~7 days of no access; a workflow gap
+that long loses its baseline and the next run's delta silently widens. Degrades safely either way (a
+missing prior state is treated as "record a baseline, don't evaluate this run" -- never a crash), and the
+save step runs on `if: always()` specifically so a failing run still advances the baseline for next time,
+rather than leaving a real regression to keep diluting against an ever-older window.
+
+**Verified end to end against a real Postgres, not just read for correctness**: ran the script against the
+local integration-test database at each stage -- first run correctly records a baseline with no prior
+state; a second run with no new activity correctly skips every check (0 samples); a real bug was caught
+doing this, not just exercised for coverage (asyncpg needs an actual `datetime` object for a `timestamptz`
+bind parameter, not an ISO string -- `DataError`, fixed, confirmed passing after); a seeded 50% and later
+80% ungrounded rate on real sample sizes correctly produced `[FAIL]` lines and a real, verified exit code
+1 (checked directly, not assumed -- the first check of this used a shell pipe that silently ate the actual
+exit code, caught before it was reported as verified).
+
+### A real mistake made while verifying this, corrected immediately, reported rather than buried
+
+While seeding a test row to verify the threshold-crossing path, a quick script used
+`app.db.base.SessionLocal` (which resolves its connection from `settings.DATABASE_URL`, preferring
+`DATABASE_URL_RAW`) instead of the pattern the actual check script correctly uses
+(`settings.MIGRATION_DATABASE_URL`, preferring `DATABASE_URL_DIRECT`). Only `DATABASE_URL_DIRECT` was set
+as an environment override for that call -- `DATABASE_URL_RAW` was left unset, so pydantic-settings fell
+through to the real value already sitting in this machine's local `.env` file: **production's own Neon
+credentials**. The seed step (`+30` responses_total, `+15` responses_ungrounded_never_cited) landed
+directly on production's real `grounding_stats` row, briefly turning the one real, correctly-grounded
+verification from the previous entry into what looked like a 50% failure rate.
+
+Caught immediately by checking the row directly afterward (a habit, not luck) rather than trusting the
+seed script's own printed output. Reverted with a safety check, not blindly: read the row back, asserted
+its values matched exactly what the accidental write should have produced (`31`/`15`) before subtracting
+the exact known delta -- refusing to proceed if anything had changed in between, which would have meant
+real concurrent traffic and made a blind subtraction wrong. Confirmed restored to the exact prior state
+(`responses_total: 1, responses_grounded: 1`, matching the previous entry's live verification precisely).
+No other tables were touched by the mistaken write. For the remainder of this build, every further
+ad-hoc verification script built its own engine explicitly from a named URL rather than importing
+`SessionLocal`, specifically to make this class of mistake structurally impossible to repeat by accident.
+
+### Sentry wired, one manual step outstanding
+
+DSN received, `SENTRY_DSN=` documented in `.env.example` (empty placeholder -- the real value was never
+committed anywhere, per this project's own "the user updates `.env` and Render's dashboard themselves"
+convention, docs/deployment.md). **Outstanding, to do by hand on Render's dashboard**: add `SENTRY_DSN`
+with the real value to the deployed backend service's environment variables. Nothing else needs changing
+there -- tracing and PII capture are already off in code (`app/core/sentry.py`), not something to toggle
+on Sentry's own dashboard.
+
+## Making "be careful next time" structural: a shared write-guard, a config-level agreement check, and a calibrated CI scan (2026-09-16)
+
+The `grounding_stats` accidental write was the second production write from a partially-overridden
+environment in two days -- the SECRET_KEY backfill incident (`scripts/backfill_legal_query_ip_hash.py`'s
+own docstring, 2026-09-12) was structurally identical. Both were caught and reverted correctly, and both
+times the fix was a resolution to be more careful, which does not survive a new session. Three pieces
+close the gap structurally instead.
+
+**Worth its own line, not folded into the fix description**: anyone designing this guard would reach for
+`settings.ENV` first -- it looks like exactly the right signal ("only prompt in production"). Checked
+directly before committing to a design: this machine's own local `.env` has `ENV=development` sitting
+right next to the real production Neon credentials (kept there for this session's own local-against-
+production verification work). An `ENV == "production"` check would have caught **neither** of the two
+incidents. The gate had to be the actually-resolved connection host, not a label that can be true and
+still say the wrong thing.
+
+**1. `app.core.config.Settings._assert_database_url_direct_agrees_with_database_url`** -- a
+`model_validator(mode="after")`, so it protects every code path that loads settings, not only scripts
+that remember to call something. Fires only when `DATABASE_URL_DIRECT` is set at all; compares host,
+port, AND database name (not host alone -- two local Postgres instances on different ports, or different
+database names on the same instance, are exactly this class of mistake at lower stakes, and a host-only
+check would wave both through) against `DATABASE_URL`'s own resolved target. A genuine disagreement
+raises immediately, at settings construction, before any engine exists.
+
+**The Neon-specific assumption is flagged at the rule itself, not just here**: the pooled/direct
+normalization (`ep-x-pooler.region.neon.tech` vs `ep-x.region.neon.tech`, confirmed against this
+project's own real values) is a fact about Neon's own naming convention, not managed Postgres in general.
+The validator's own docstring says so directly and names the exact failure mode a future provider change
+would produce: not a crash, a **false pass** -- a real disagreement that stops being recognised as one
+because the new provider's pooled/direct hosts no longer differ by this exact pattern. Naming the
+assumption in the design discussion isn't enough on its own; a silently-wrong assumption living only in a
+scope document, not at the code that depends on it, is exactly the class of gap this project keeps
+finding.
+
+**Caught its own regression before it shipped**: wiring this in broke
+`tests/integration/conftest.py`'s own alembic subprocess -- that fixture deliberately sets
+`DATABASE_URL_RAW=""` (so `alembic/env.py`'s `ssl="require"` flag, keyed off `DATABASE_URL_RAW` being
+truthy, stays correctly OFF for a local test Postgres) while setting `DATABASE_URL_DIRECT` to the test
+database -- exactly the shape the new validator exists to catch, except this one was legitimate: nothing
+else told `DATABASE_URL`'s own POSTGRES_*-composed fallback to point at the SAME target. Fixed by setting
+`POSTGRES_HOST`/`PORT`/`USER`/`PASSWORD`/`DB` explicitly in that fixture's subprocess env to match
+`DATABASE_URL_DIRECT`, so the two agree without touching `DATABASE_URL_RAW` (preserving the SSL-flag
+behaviour). Found by actually running the test suite after adding the validator, not by reasoning it
+through and trusting the reasoning -- confirmed via `tests/test_config_database_url_agreement.py` (7
+cases: unset-is-fine, the real Neon pooled/direct pair agreeing, the exact incident reproduced and
+rejected, same-host-different-port rejected, same-host-same-port-different-dbname rejected, the fixture's
+own fix pattern accepted, both URLs pointing at the identical target accepted).
+
+**2. `scripts/lib/production_guard.py`** -- `confirm_writable_target(label, *, skip_prompt=False)`,
+extracted from `backfill_legal_query_ip_hash.py`'s own bespoke version so the next writable script gets
+the same protection by default. Silently returns for a `localhost`/`127.0.0.1` host (zero friction for
+the normal case); for anything else, prints the real target (plus `settings.ENV`, shown for context only,
+explicitly NOT what gates the check) and requires either an interactive "yes", `--yes` (a flag each
+calling script defines and passes through), or `CONFIRM_PRODUCTION_WRITE=1` for a non-interactive
+context. Wired into all 6 scripts that actually write (verified by grep, not assumed: `backfill_legal_
+query_ip_hash.py`, `ingest_sections.py`, `ingest_offence_attributes.py`,
+`ingest_bnss_offence_attributes.py`, `reembed_corpus.py`, `seed_judicial_status.py` -- the other 18
+scripts under `scripts/` are read-only against the DB). `backfill`'s own SECRET_KEY-placeholder check
+stays where it is, on top of the shared guard, since it's specific to what only that one script depends
+on -- not merged into the shared function, which stays generic to what's true of every writable script.
+8 tests (`tests/test_production_guard.py`), including the exact real shape: a non-local host still
+requires confirmation even when `settings.ENV` claims "development".
+
+**3. `scripts/ci_check_scripts_call_production_guard.py`** -- the piece that makes the guard's own
+adoption structural, not conventional: "a shared function only helps if a script remembers to call it" is
+the identical shape to the two incidents it exists to prevent. Scans every `scripts/*.py` file for
+patterns that look like a database write (`db.add(`, `db.commit(`, `.execute(update(`/`delete(`/`insert(`,
+a raw `UPDATE`/`INSERT`/`DELETE` inside `text(...)`) and asserts each one also imports the shared guard.
+
+**Calibrated before being wired to fail anything, exactly as instructed** -- report-only run against the
+real tree first: **6/6 known-writable scripts flagged, all 6 already carrying the guard, zero false
+positives among the other 18.** `_restore_drill_verify.py` was checked by hand specifically because its
+name suggested it might write (it doesn't -- raw `asyncpg` for read-only row-count/hash comparison
+between a source and a restored target, no ORM session, no `db.add`/`commit` anywhere). Confirmed the
+failure path actually fires too, not just the clean pass: a scratch file with `db.add`/`db.commit` and no
+guard import was correctly flagged and exited 1, then removed. Clean on the first calibration run -- no
+pattern tuning was needed, unlike the corpus-completeness checker's own history (35 findings, 33 false,
+before that one was trusted). Wired into `backend-ci.yml`'s existing `test` job (pure text scan, no DB, no
+app import -- fits the fast every-push tier, not a new job).
+
+Full suite after all three pieces: 193 passed (178 + 15 new), 0 regressions.

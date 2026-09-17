@@ -10,6 +10,7 @@ Usage: python scripts/ingest_offence_attributes.py
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 import hashlib
 import sys
@@ -23,9 +24,11 @@ from sqlalchemy import delete
 
 from app.db.base import SessionLocal
 from app.models.offence_attributes import OffenceAttributes
+from scripts.lib.production_guard import confirm_writable_target
 
 
-async def main() -> None:
+async def main(skip_prompt: bool = False) -> None:
+    confirm_writable_target("ingest_offence_attributes", skip_prompt=skip_prompt)
     pdf_bytes = Path(PDF_PATH).read_bytes()
     source_hash = hashlib.sha256(pdf_bytes).hexdigest()
 
@@ -67,4 +70,8 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--yes", action="store_true",
+                        help="Skip the production-write confirmation prompt.")
+    args = parser.parse_args()
+    asyncio.run(main(args.yes))

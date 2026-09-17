@@ -1,4 +1,5 @@
 """Domain exceptions + a single JSON error envelope for the whole API."""
+import sentry_sdk
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -61,6 +62,19 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
         logger.exception("unhandled_error", error=str(exc))
+        # FIXED 2026-09-16 (docs/evaluation.md, observability entry): this is
+        # the ONE seam every truly unhandled exception in the whole app
+        # funnels through -- captured explicitly here rather than relied on
+        # via Sentry's own automatic exception hook. This handler catches
+        # the exception and returns a normal JSONResponse instead of letting
+        # it propagate; whether Sentry's FastAPI integration still sees an
+        # exception a registered handler already caught isn't something
+        # this project verified live (would need a real DSN and a triggered
+        # request), so an explicit call here is the version that's certain
+        # to work regardless -- a possible duplicate event if the automatic
+        # hook also fires is a far smaller problem than a silent gap. No-op
+        # when SENTRY_DSN is unset (app.core.sentry).
+        sentry_sdk.capture_exception(exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_envelope("internal_error", "Something went wrong."),

@@ -29,6 +29,7 @@ from app.legal_corpus.ingest import ingest_act
 from app.legal_corpus.parsing.registry import PARSERS
 from app.legal_corpus.provenance import ProvenanceError
 from app.legal_corpus.validate import ValidationGateError
+from scripts.lib.production_guard import confirm_writable_target
 
 DEFAULTS = {
     "BNS": "documents/BNS_2023.pdf",
@@ -100,7 +101,10 @@ async def main() -> None:
     p.add_argument("--resume", action="store_true",
                     help="skip re-embedding sections whose text is unchanged and "
                          "already embedded (continue an interrupted run)")
+    p.add_argument("--yes", action="store_true",
+                    help="Skip the production-write confirmation prompt.")
     args = p.parse_args()
+    confirm_writable_target("ingest_sections", skip_prompt=args.yes)
     targets = DEFAULTS if args.all else {args.act: args.pdf or DEFAULTS.get(args.act)}
 
     exit_code = 0

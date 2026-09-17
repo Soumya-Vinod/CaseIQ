@@ -31,6 +31,12 @@ arq==0.26.3
 slowapi==0.1.9
 structlog==24.4.0
 anyio==4.7.0
+# Error capture only -- tracing explicitly OFF (app.core.sentry.configure_sentry
+# sets traces_sample_rate=0.0). Version pinned to what was actually measured
+# before this was wired in (docs/evaluation.md, observability entry): ~5MB on
+# disk, ~1s one-time init cost, ~0.6ms per capture call, all against a real
+# venv, not assumed.
+sentry-sdk==2.69.1
 
 # --- PDF / parsing ---
 reportlab==4.2.5
