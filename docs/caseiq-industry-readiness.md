@@ -56,6 +56,21 @@ What someone judges before reading any code. Fix these and the project stops *lo
 - [ ] **B6.** **Finish Gemini re-embedding** across all five acts (blocked by 1,000/day free-tier cap).
 - [ ] **B7.** **Resumable ingestion** — `--act` and `--resume` flags; skip rows already embedded by the current provider so re-runs don't burn quota.
 - [ ] **B8.** **Golden-source spot check** — manually verify 30 random stored sections against the official Bare Act PDF. Document the accuracy rate in the README.
+- [ ] **B9.** **`legacy_parser.py`'s amendment-bracket preprocessing is single-pass, not general.**
+  Found 2026-09-18 investigating the CrPC First Schedule's stacked-bracket section marker
+  (`docs/evaluation.md`, s.373/374/376 finding): `_extract_text()`'s own bracket-stripping regex
+  (`re.sub(r"(?<=\n)\d{1,2}\[", "", text)`) removes exactly ONE amendment-footnote bracket
+  immediately after a newline, not a stacked run of them (`"\n1[ 2["` → `"\n 2["`, still broken —
+  confirmed directly). **Not currently live**: checked the real IPC/CrPC corpus text directly, not
+  assumed — IPC's own body text for the one section known to carry a stacked marker elsewhere
+  (376, in the CrPC Schedule's own classification table) has no bracket at all in its own operative
+  text. But "not currently triggered" is a property of *this specific reprint's* text, not a
+  guarantee the code makes — a future India Code re-source (this project has already re-sourced
+  once, 2026-08-10, per C9 above) could introduce one, silently reproducing the exact 376AB/174A/
+  s.374 failure shape a third time in a parser that's supposedly already been hardened against it
+  twice. Fix: make the strip loop/repeat (`+` on the whole prefix unit, or a `while` loop) rather
+  than firing once, mirroring `parse_crpc_schedule.py`'s own generalised `(?:\d+\[\s*)*` fix for the
+  same underlying pattern.
 
 ---
 

@@ -77,6 +77,19 @@ jobs:
         # separate job.
         run: python -m scripts.ci_check_scripts_call_production_guard
 
+      - name: CrPC schedule court values -- no new anomaly beyond the known, quantified deferral
+        # docs/evaluation.md, "the sub-clause-merge pattern": every row this
+        # check currently flags (21) is already understood -- 20 are one
+        # named, sized, deliberately-deferred parser limitation (a missing
+        # sub-clause-boundary-detection capability, not a patchable bug),
+        # one more (s.376A) is a separate tracked truncation. Gates on the
+        # RESIDUAL, not the known set -- per instruction, a check that only
+        # ever flags known-deferred rows gates on nothing new and must say
+        # so rather than sit red. A row flagged outside
+        # _KNOWN_DEFERRED_SECTIONS is real new information and fails this
+        # build. No DB, only the tracked PDF -- fits here, not nightly-eval.
+        run: python -m scripts.ci_check_crpc_schedule_vocabulary
+
       - name: Lint (report-only -- see docs/evaluation.md)
         # ruff's own config (pyproject.toml) has apparently never been run
         # before -- 284 real violations found scoping this, 51 auto-
