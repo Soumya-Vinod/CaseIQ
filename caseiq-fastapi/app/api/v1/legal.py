@@ -20,6 +20,10 @@ from app.services.citation_verification import (
     scan_free_text_for_citations,
     verify_citations,
 )
+from app.services.directive_language import (
+    detect_directive_language,
+    record_stats as record_directive_language_stats,
+)
 from app.services.grounding import apply_grounding_check
 from app.services.helplines import select_helplines
 from app.services.llm import llm_service
@@ -445,6 +449,17 @@ async def process_query(
 
         if _has_detailed_breakdown(result["structured_data"]):
             result["conversational_summary"] += _DETAILED_BREAKDOWN_NOTE
+
+        # DETECTION ONLY, no enforcement (docs/evaluation.md, directive-
+        # language entry) -- scoped to conversational_summary,
+        # situation_overview, and why_applies only; immediate_steps and
+        # dos_and_donts are deliberately imperative by field design and are
+        # never scanned. Nothing here modifies the response; a hit is
+        # logged and counted, never suppressed or altered.
+        directive_hits = detect_directive_language(
+            result["structured_data"], result["conversational_summary"],
+        )
+        await record_directive_language_stats(db, directive_hits)
 
         free_text_citations = scan_free_text_for_citations(
             result["structured_data"], result["conversational_summary"],

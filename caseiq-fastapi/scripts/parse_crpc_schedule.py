@@ -550,6 +550,33 @@ _KNOWN_COURT_CORRECTIONS: dict[str, str] = {
             "Chapter XXVI; or, if not committed in a Court, any Magistrate."),
     "181": "Magistrate of the first class.",
     "373": "Any Magistrate.",
+    # s.133/134 -- a DIFFERENT mechanism from every other entry in this
+    # dict, and OUR bug, not the source document's, confirmed by checking
+    # the actual word coordinates rather than assumed either way (a first
+    # pass here wrongly guessed this was a pdfplumber/source-rendering
+    # quirk -- corrected before it shipped). "Magistrate" (x0=500.52) and
+    # "of" (x0=537.12) sit on the SAME visual line, 0.37pt apart in `top`
+    # (414.84 vs 414.47) -- comfortably inside extract_lines()'s own
+    # 2.5pt line-clustering tolerance, so they correctly belong together.
+    # But `words.sort(key=lambda w: (round(w["top"]), w["x0"]))` uses
+    # ROUNDED top as the PRIMARY sort key, computed over the WHOLE PAGE
+    # before clustering ever runs -- round(414.84)=415 and round(414.47)=
+    # 414 land in different integer buckets despite being well within the
+    # same visual line, so the page-wide pre-sort can place "of" (bucket
+    # 414) ahead of "Magistrate" (bucket 415) in the final word order,
+    # even though x0 -- true reading order -- says "Magistrate" comes
+    # first. pdfplumber's own coordinates are correct throughout; nothing
+    # about the source PDF is unusual here. A general fix (cluster first
+    # on raw, unrounded top, THEN sort each cluster by x0, rather than a
+    # single global pre-sort conflating "which line" with "what order
+    # within it") is possible, but touches the shared clustering logic
+    # every row in the schedule depends on for one confirmed instance --
+    # same "patch, don't touch shared logic for a handful of rows"
+    # reasoning as every other entry in this dict. s.134 has no
+    # independent instance of this -- it Ditto-inherits 133's own value,
+    # so it needs the correction too, same shape as 109/110 and 117/118.
+    "133": "Magistrate of the first class.",
+    "134": "Magistrate of the first class.",
 }
 
 

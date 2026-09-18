@@ -22,15 +22,36 @@ from app.services.retrieval import (
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
 MEDIA_ROOT = Path("media")
-_DISCLAIMER = ("DRAFT ONLY: for reference purposes. CaseIQ does not provide legal advice. "
-               "Review with a qualified advocate before submission.")
+
+# Ported from the retired Django backend's seed_disclaimers.py ('complaint'
+# context) -- see docs/evaluation.md's disclaimer-language entry for the
+# full scoping. English kept as this project's own already-shipped wording
+# (shorter than Django's, unchanged here); hi/mr are Django's own real,
+# already-written translations, copied verbatim, not newly translated here
+# -- this project has no way to independently verify a fresh translation,
+# but these were real content that existed and is worth not losing.
+#
+# ta/te are DELIBERATELY absent, not an oversight: Complaint.language
+# (app/models/complaint.py) accepts any value ComplaintPage.tsx's own
+# selector offers (en/hi/mr/ta -- see that component), and llm_service.
+# detect_language separately supports 5 codes (adds te) -- but Django's
+# disclaimers only ever covered 3. Porting closes the hi/mr gap, not the
+# ta/te one; _DISCLAIMERS.get() falls back to English for any language
+# without a real, verified translation on record, rather than ship no
+# disclaimer at all or (worse) a machine-translated one never checked.
+_DISCLAIMERS: dict[str, str] = {
+    "en": ("DRAFT ONLY: for reference purposes. CaseIQ does not provide legal advice. "
+           "Review with a qualified advocate before submission."),
+    "hi": "⚠️ केवल मसौदा: यह शिकायत मसौदा केवल संदर्भ के लिए तैयार किया गया है। दाखिल करने से पहले किसी योग्य अधिवक्ता से समीक्षा करवाएं।",
+    "mr": "⚠️ केवल मसुदा: हा तक्रार मसुदा केवल संदर्भासाठी तयार केला आहे। सादर करण्यापूर्वी योग्य वकिलाकडून तपासा।",
+}
 
 
 def _out(c: Complaint, *, download_url: str | None) -> ComplaintOut:
     return ComplaintOut(
         id=c.id, complaint_type=c.complaint_type, complainant_name=c.complainant_name,
         status=c.status, generated_draft=c.generated_draft, pdf_available=bool(c.pdf_path),
-        download_url=download_url, disclaimer=_DISCLAIMER,
+        download_url=download_url, disclaimer=_DISCLAIMERS.get(c.language, _DISCLAIMERS["en"]),
         legal_sections=c.retrieved_sections, grounded=bool(c.retrieved_sections),
     )
 
