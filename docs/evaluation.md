@@ -4822,3 +4822,95 @@ One real mistake made and caught getting to that number: the first attempt at th
 the exact same mistake this file already has an entry for, from earlier in this project's history,
 repeated here before being caught by the missing summary line rather than avoided from having read that
 entry. Re-run capturing full output to a file instead, no truncation at the source.
+
+## s.373/374/376: a third mechanism, a live wrong answer, and a stacked-bracket section (2026-09-18)
+
+Scoping s.374 (per instruction: root-cause before deciding whether it belongs with the already-scoped
+20 concatenation rows) surfaced a genuinely different, more serious defect than either of the last two
+findings -- not corrupted text, but **real Rape (IPC 376) content confidently misclassified under IPC
+374 ("Unlawful compulsory labour"), live in production**, plus IPC 376 not existing as an addressable
+section at all. Exactly the failure class this whole project treats as worst-case: a confident, specific,
+wrong answer, not an absence.
+
+**Immediate**: the two bogus rows were removed from production BEFORE any parser work, per instruction --
+a missing section is a gap; a wrong classification is a wrong answer, and the second is strictly worse.
+Backed up first (the real 2 rows, read directly, saved outside the repo, same pattern as the CrPC re-
+ingestion backup) then deleted via a targeted `DELETE ... WHERE section_number = '374'`. Confirmed:
+0 rows remain for 374 immediately after.
+
+**Confirmed pre-existing, not introduced by this session's earlier work**: ran the pre-session parser
+(`crpc-schedule-v3`, checked out from git history, before ANY of this session's fixes) against the same
+PDF -- produces the IDENTICAL wrong 373/374 output. This has been live and wrong since at least the
+original ingestion (2026-09-01), in exactly the same shape.
+
+### Mechanism (e): a short column's continuation crossing a row boundary
+
+s.373's real triable_by, `"Any Magistrate."`, splits across the exact physical line where s.374's own
+row opens: `"Any"` lands in 373's buffer before it closes (triggered by seeing "374" in col0); `"Magistrate."`
+arrives on the immediately following raw line, which carries no col0 of its own, so it gets folded into
+whichever row is now open (374) rather than the row it actually continues. **Checked for prevalence, not
+assumed rare**: a scan of every row-close in the whole schedule for this exact signature (closes via new-
+section-detected while its own court column doesn't look finished) found 7 candidates; cross-referenced
+against everything already known/fixed, exactly ONE -- this one -- was a genuinely new, unaddressed
+instance. (s.228 was a false positive of the scan's own narrow vocabulary, not a real defect -- checked
+directly, its value was already fully correct.) Contained, not systemic, on that evidence. Fixed the same
+way mechanism (d) was: a direct value correction (`_KNOWN_COURT_CORRECTIONS["373"]`), not a change to the
+shared close-timing logic every row depends on.
+
+### The double-bracket section marker: a general form, not a third special case
+
+s.373's own collision compounded with a second, independent defect on the exact same lines: the base Rape
+entry's section number is printed as `"1[ 2[376"` -- TWO stacked amendment-footnote bracket markers, since
+IPC 376 has been amended twice (Act 13/2013, Act 22/2018) and the PDF's own typesetting keeps both still-
+open markers visible before the number. The single-bracket tolerance built for 174A
+(`(?:\d+\[)?`, zero-or-ONE) doesn't match a stacked prefix at all -- checked the real vocabulary of every
+bracketed col0 token in this schedule (15 distinct values, not just the 3 already-known cases) and found
+the general shape is "zero or more digit+bracket prefixes, optionally separated by whitespace", not a
+third special case. `_SECTION_NO_RE`'s `(?:\d+\[\s*)*` (was `(?:\d+\[)?`) covers all 15 directly, verified.
+
+**Checked whether the same gap exists in the OTHER parser** (`legacy_parser.py`, responsible for the
+earlier, separately-fixed IPC 376AB/174A finding, itself only ever patched at the data level, never the
+regex level): that parser already has its own bracket-stripping preprocessing
+(`re.sub(r"(?<=\n)\d{1,2}\[", "", text)`), but it's single-pass -- would fail on a stacked prefix the same
+way. **No live triggered instance found there**, checked directly rather than assumed: IPC's own body text
+for section 376 carries no bracket at all (`"376. Punishment for rape.—(1) Whoever..."`, confirmed against
+the real PDF). An initial test suggesting IPC 376DA was missing turned out to be a false signal from an
+incomplete test reproduction (skipped the real preprocessing step) -- corrected before being reported, not
+after. Named as a latent, not live, structural weakness in that other parser -- distinct in severity from
+this entry's own confirmed-live findings, not fixed here since nothing currently depends on it.
+
+### The fix: whole-row replacements, a stronger tool than a single-field correction
+
+374's and 376's entire rows were garbled, not just `triable_by` -- `_KNOWN_COURT_CORRECTIONS` (a single-
+field patch) wasn't the right tool. Built `_KNOWN_ROW_REPLACEMENTS`: hand-verified, source-checked full
+rows (offence, punishment, cognizable, bailable, court) that replace whatever the parser produces for a
+given section entirely. 376 is genuinely THREE independent sub-clauses in the source (base rape; rape by
+a person in authority; rape on a woman under sixteen) -- each gets its own row, matching how every other
+multi-clause section in this schedule is already represented.
+
+**A second-order bug found building this**: 376's own genuinely long, genuinely correct sub-clauses (up
+to 594 chars) were being rejected by `complete_rows()`'s existing length-based garbling heuristic
+(`_MAX_SANE_OFFENCE_LEN=250`) -- a false rejection of ground-truth data by a proxy built to catch text
+that LOOKS long because it's garbled, not text that's long because it's genuinely a long clause. Fixed by
+exempting `_KNOWN_ROW_REPLACEMENTS` sections from that specific check -- ground truth overrides the
+proxy, for these named sections only, not a general loosening.
+
+**Result**: 258 complete rows (was 256), 222 sections with ≥1 complete row (was 221, +1 -- 376 is newly
+addressable; 374 was already counted, just wrong). `PARSER_VERSION` unchanged at `crpc-schedule-v4`
+(same version as yesterday's patch -- this is a continuation of the same fix pass, not a new one).
+
+**Tests**: `tests/test_crpc_schedule_row_boundary_collision.py`, 15 cases, same enumerate-then-verify
+shape as the Ditto patch -- confirmed genuinely failing against the pre-fix code first (a hard
+`ImportError` on `apply_known_row_replacements`, which didn't exist yet -- the strongest possible "this
+is genuinely new" signal, stronger than a failing assertion, confirmed by reverting via `git stash` to
+the last-committed state rather than editing the fix out by hand), then passing after restoring. Full
+suite: 225 passed (210 + 15 new), 0 regressions.
+
+**Re-ingested into production and verified against the live database directly**: `s.373` → `'Any
+Magistrate.'`, `s.374` → one row, `'Unlawful compulsory labour. Imprisonment for 1 year, or fine, or
+both.'` / `'Court of Session.'` / cognizable=True / bailable=False, `s.376` → three rows, all `cognizable=
+True, bailable=False`, covering the base offence, the person-in-authority aggravation, and the under-
+sixteen aggravation -- matching the source PDF exactly, confirmed live, not just in the parser's own
+printout. Golden set re-run against production afterward: `Recall@5 = 0.909 (40/44)`, `MRR = 0.730`,
+out-of-scope `44/45`, false positives `1/44` -- unmoved, as expected for the same reason as yesterday's
+re-ingestion (`offence_attributes` still doesn't participate in `semantic_search`).

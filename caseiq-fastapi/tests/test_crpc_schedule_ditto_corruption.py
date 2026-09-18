@@ -58,7 +58,8 @@ this file's job from here on is to fail again if any of this regresses.
 from __future__ import annotations
 
 from scripts.parse_crpc_schedule import (
-    PDF_PATH, apply_known_corrections, complete_rows, extract_lines, reconstruct_rows,
+    PDF_PATH, apply_known_corrections, apply_known_row_replacements, complete_rows,
+    extract_lines, reconstruct_rows,
 )
 
 # Deliberately NOT pytest.mark.integration -- that marker's own registered
@@ -74,13 +75,15 @@ import pytest
 def rows():
     # Matches the real ingestion pipeline (scripts/ingest_offence_
     # attributes.py) exactly -- apply_known_corrections() is what mechanism
-    # (d)'s direct value patches depend on; without it, this fixture would
-    # only exercise mechanisms (a)/(b)/(c), which are fixed upstream in
-    # reconstruct_rows() itself.
+    # (d)'s direct value patches depend on; apply_known_row_replacements()
+    # is what mechanism (e)'s whole-row replacements (s.374/376) depend on.
+    # Without both, this fixture would only exercise what's fixed upstream
+    # in reconstruct_rows()/_SECTION_NO_RE itself.
     diags: list[dict] = []
     raw_lines = extract_lines(PDF_PATH, diags)
     rows = reconstruct_rows(raw_lines, diags)
-    return apply_known_corrections(rows)
+    rows = apply_known_corrections(rows)
+    return apply_known_row_replacements(rows)
 
 
 def _triable_by_values(rows, section: str) -> list[str]:

@@ -76,9 +76,22 @@ _DEVIATION_FLAG = 15.0  # log if a page's measured peak differs from reference b
 # here, in unrelated code, is itself worth noting -- if it broke two
 # parsers that never share code, a third one touching raw amendment-
 # bracketed PDF text should be treated as an open question, not assumed
-# clean. The optional `(?:\d+\[)?` tolerates the prefix without capturing
-# it -- group 1 is always just the real section number.
-_SECTION_NO_RE = re.compile(r"^\(?(?:\d+\[)?(\d{2,4}[A-Z]{0,3}(?:-[A-Z])?)\)?$")
+# clean.
+#
+# EXTENDED (docs/evaluation.md, s.374/376 finding): the first version here
+# tolerated exactly ONE `\d+\[` prefix -- broke on "1[ 2[376" (the base
+# Rape entry), which carries TWO STACKED bracket markers with a space
+# between them. Not a third special case: checked the real vocabulary of
+# every bracketed col0 token in this schedule (15 distinct values) and
+# found the general shape is "zero or more digit+bracket prefixes,
+# optionally separated by whitespace" -- section 376 has simply been
+# amended twice (Act 13/2013, Act 22/2018), and the PDF's own typesetting
+# stacks BOTH still-open footnote markers before the real number. `(?:\d+
+# \[\s*)*` (zero-or-more, was `(?:\d+\[)?`, zero-or-one) covers every
+# observed variant including the stack, verified against all 15 directly.
+# Group 1 is always just the real section number, regardless of how many
+# markers preceded it.
+_SECTION_NO_RE = re.compile(r"^\(?(?:\d+\[\s*)*(\d{2,4}[A-Z]{0,3}(?:-[A-Z])?)\)?$")
 
 
 def _clean_section_number(col0: str) -> str | None:
@@ -552,6 +565,115 @@ def apply_known_corrections(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     return rows
 
 
+# WHOLE-ROW replacements -- a different, stronger tool than
+# _KNOWN_COURT_CORRECTIONS above, needed for a different severity of defect
+# (docs/evaluation.md, s.373/374/376 finding). Mechanism (e): a row closes
+# via new-section-DETECTED the instant a fresh col0 token appears, even
+# when the row's own SHORT column (here, court) hasn't finished wrapping --
+# its trailing fragment lands on the NEXT raw line, which carries no col0
+# of its own, so it gets folded into whichever row is now open rather than
+# the row it structurally continues. Confirmed on s.373/374: s.373's real
+# "Any Magistrate." splits into "Any" (373's own buffer, closed early) and
+# "Magistrate." (folded into 374 instead). This one instance additionally
+# collided with 376's own STACKED-bracket section number ("1[ 2[376", see
+# _SECTION_NO_RE's own comment) going unrecognised, so 376's real content
+# had nowhere of its own to land either -- both defects compounded on the
+# exact same few physical lines.
+#
+# Checked, not assumed rare: scripts/_scratch_mechanism_e_scan.py (one-off,
+# not committed) scanned every row-close in the whole schedule for "closed
+# via new-section-detected while its own court column doesn't look
+# finished" -- the general signature of this mechanism. 7 rows matched;
+# cross-referenced against every already-known correction, only s.373/374
+# is a genuine NEW instance of mechanism (e) itself. (s.228 was a false
+# positive of the SCAN's own narrow "looks finished" vocabulary, not a
+# real defect -- checked directly, its value was already fully correct;
+# the other 5 matches are the already-known/already-fixed mechanism (c)/(d)
+# cases.) Not a systemic, corpus-wide pattern -- a contained, two-section
+# collision, verified rather than guessed at.
+#
+# s.374's and s.376's real content (offence, punishment, classification),
+# copied verbatim from the tracked source PDF (documents/CrPC_1973.pdf,
+# pages 214-215), not reconstructed from the corrupted extraction. 376 is
+# genuinely THREE independent sub-clauses in the source (base rape; rape by
+# a person in authority; rape on a woman under sixteen) -- each gets its
+# own row, matching how every other multi-clause section in this schedule
+# is already represented (see s.109/110's own family, or s.117's).
+_KNOWN_ROW_REPLACEMENTS: dict[str, list[dict]] = {
+    "374": [
+        {
+            "offence_description": "Unlawful compulsory labour.",
+            "punishment": "Imprisonment for 1 year, or fine, or both.",
+            "cognizable_raw": "Cognizable", "cognizable": True,
+            "bailable_raw": "Non-bailable", "bailable": False,
+            "triable_by": "Court of Session.",
+        },
+    ],
+    "376": [
+        {
+            "offence_description": "Rape.",
+            "punishment": ("Rigorous imprisonment of not less than 10 years but which may extend to "
+                            "imprisonment for life and with fine."),
+            "cognizable_raw": "Cognizable", "cognizable": True,
+            "bailable_raw": "Non-bailable", "bailable": False,
+            "triable_by": "Court of Session.",
+        },
+        {
+            "offence_description": (
+                "Rape by a police officer or a public servant or member of armed forces or a "
+                "person being on the management or on the staff of a jail, remand home or other "
+                "place of custody or women's or children's institution or by a person on the "
+                "management or on the staff of a hospital, and rape committed by a person in a "
+                "position of trust or authority towards the person raped or by a near relative of "
+                "the person raped."
+            ),
+            "punishment": ("Rigorous imprisonment of not less than 10 years but which may extend to "
+                            "imprisonment for life which shall mean imprisonment for the remainder of "
+                            "that person's natural life and with fine."),
+            "cognizable_raw": "Cognizable", "cognizable": True,
+            "bailable_raw": "Non-bailable", "bailable": False,
+            "triable_by": "Court of Session.",
+        },
+        {
+            "offence_description": "Persons committing offence of rape on a woman under sixteen years of age.",
+            "punishment": ("Rigorous imprisonment for a term which shall not be less than 20 years but "
+                            "which may extend to imprisonment for life, which shall mean imprisonment "
+                            "for the remainder of that person's natural life and with fine."),
+            "cognizable_raw": "Cognizable", "cognizable": True,
+            "bailable_raw": "Non-bailable", "bailable": False,
+            # Trailing "]" preserved, not stripped -- matches this corpus's own existing
+            # convention for a row that closes an amendment bracket (e.g. "Any Magistrate.]",
+            # "Magistrate of the first class.]" already appear verbatim elsewhere, unmodified).
+            "triable_by": "Court of Session.]",
+        },
+    ],
+}
+
+
+def apply_known_row_replacements(rows: list[ScheduleRow]) -> list[ScheduleRow]:
+    """Drops every existing row for a section in _KNOWN_ROW_REPLACEMENTS and
+    replaces it with the hand-verified, source-checked rows above --
+    call in the same place as apply_known_corrections() (order between the
+    two doesn't matter; they touch disjoint section sets). Every replacement
+    row is built with source_page=214 (both 374 and 376 sit on p.214 in the
+    tracked PDF) and punishment folded into offence_description, matching
+    this parser's own existing convention (ScheduleRow.punishment_text is
+    always "" -- see close_row()'s own construction)."""
+    replaced_sections = set(_KNOWN_ROW_REPLACEMENTS)
+    kept = [r for r in rows if r.section_number not in replaced_sections]
+    for section_number, specs in _KNOWN_ROW_REPLACEMENTS.items():
+        for spec in specs:
+            kept.append(ScheduleRow(
+                section_number=section_number,
+                offence_description=f"{spec['offence_description']} {spec['punishment']}",
+                punishment_text="",
+                cognizable_raw=spec["cognizable_raw"], cognizable=spec["cognizable"],
+                bailable_raw=spec["bailable_raw"], bailable=spec["bailable"],
+                triable_by=spec["triable_by"], source_page=214,
+            ))
+    return kept
+
+
 _MAX_SANE_OFFENCE_LEN = 250  # see docstring below
 
 # s.358's second row is KNOWN-BAD but NOT guessed at. The real source text
@@ -607,8 +729,20 @@ def complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     prefix, not section alone, since s.358's own FIRST row (the real
     "Assault or use of criminal force..." clause) is fine and must not be
     excluded along with it.
+
+    The length check is DELIBERATELY skipped for any section in
+    _KNOWN_ROW_REPLACEMENTS (2026-09-18): that dict's rows are hand-
+    verified against the source PDF, not inferred by this heuristic --
+    length is a PROXY for "probably garbled", and s.376's own genuinely
+    long, genuinely correct sub-clauses (up to 594 chars, well past the
+    250-char threshold) would otherwise be rejected on exactly the same
+    signal a real merge would trigger. Ground truth overrides the proxy,
+    for these specific, named sections only -- not a general loosening of
+    the threshold, which stays doing its job for everything else.
     """
     def _clean(r: ScheduleRow) -> bool:
+        if r.section_number in _KNOWN_ROW_REPLACEMENTS:
+            return bool(r.triable_by.strip())
         if not r.triable_by.strip() or len(r.offence_description) > _MAX_SANE_OFFENCE_LEN:
             return False
         if r.bailable_raw.strip().startswith("if ") or r.cognizable_raw.strip().startswith("if "):
@@ -628,6 +762,7 @@ if __name__ == "__main__":
     raw_lines = extract_lines(PDF_PATH, diags)
     rows = reconstruct_rows(raw_lines, diags)
     rows = apply_known_corrections(rows)
+    rows = apply_known_row_replacements(rows)
     print(f"rows: {len(rows)}")
 
     complete = complete_rows(rows)

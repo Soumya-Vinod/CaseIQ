@@ -20,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from parse_crpc_schedule import (
-    PARSER_VERSION, PDF_PATH, apply_known_corrections, complete_rows, extract_lines, reconstruct_rows,
+    PARSER_VERSION, PDF_PATH, apply_known_corrections, apply_known_row_replacements, complete_rows,
+    extract_lines, reconstruct_rows,
 )
 from sqlalchemy import delete
 
@@ -38,6 +39,7 @@ async def main(skip_prompt: bool = False) -> None:
     raw_lines = extract_lines(PDF_PATH, diags)
     rows = reconstruct_rows(raw_lines, diags)
     rows = apply_known_corrections(rows)
+    rows = apply_known_row_replacements(rows)
     rows = complete_rows(rows)
 
     # act='IPC', not 'CrPC': the First Schedule classifies IPC offences by
