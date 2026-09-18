@@ -5253,3 +5253,50 @@ contradict a boundary this project already drew on purpose, not just leave a gap
 
 Verified: `npx tsc --noEmit` clean on `caseiq-web` after both the `situationGuides.ts` and
 `BrowseByActPage.tsx` changes.
+
+## "Looks wired, isn't" — a named pattern, now four instances in the retired Django codebase (2026-09-19)
+
+Checking `caseiq-backend`'s LLM code before deleting it (`docs/legacy-stack-retirement.md`)
+turned up two more instances of the same shape this document already had one entry for. Worth its
+own line specifically because all four were found the same way -- reading actual call sites and
+running the actual code path, not reading a method's name, an endpoint's existence, or a model's
+schema and inferring it must work -- and all four would survive a top-down code review that never
+does that:
+
+1. **`EthicsRule`** (directive-language entry, above, 2026-09-19) -- a real model, seeded with 7
+   real rows, registered in Django admin for a human to view. Never queried by any view, service,
+   or middleware in the whole codebase. Found by grepping every reference to the model, not by
+   reading `apps/ethics/filter.py` and assuming the rule table it sat next to was what actually ran.
+2. **`generate_complaint_draft`** (`legacy-stack-retirement.md`) -- wired to a real endpoint,
+   called with `(complaint_dict, language)`, defined to accept only `(self, complaint_data)`. Found
+   by reading the view and the method side by side, not by trusting that a method existing with a
+   matching name and a disclaimer string ready in the success-path response meant the path between
+   them worked.
+3. **`semantic_search`'s import** (`legacy-stack-retirement.md`) -- `from services.gemini_service
+   import gemini_service` inside a `try`, against a file that is zero bytes. Found by opening the
+   imported file directly, not by trusting that an import statement existing, inside a function
+   that clearly expected it to succeed, meant it ever had.
+4. **`semantic_search`'s embedding column** (`legacy-stack-retirement.md`) -- a second, independent
+   defect in the same endpoint: `LegalProvision.embedding` is commented out in the model itself
+   (`# will be enabled after pgvector install`), so the `L2Distance('embedding', ...)` query a
+   working `gemini_service` would have fed would reference a field that doesn't exist. Found by
+   reading the model file next to the view, not by assuming a `pgvector_src/` Dockerfile sitting in
+   the repo meant the column it was built to support was ever actually added.
+
+**#2 is the sharpest of the four, and belongs in its own category, not just this list**: #1, #3,
+and #4 are all *capabilities that were designed but never connected* -- inert, but honest in the
+sense that nothing claiming to work was actually invoked. #2 is different in kind: `/complaints/
+generate_draft` was written, wired to a real URL, called with real arguments from a real view, and
+returned a fully-formed success response shape (disclaimer text and all) in its own source --
+**and would have raised `TypeError` and returned HTTP 500 on every single request for the entire
+time that code existed** -- checked, not assumed dead code nobody could reach: the Django-era
+frontend (`caseiq-frontend`) has a real page built against it, `FIRDraftPage.jsx`, calling
+`complaintsAPI.generateDraft` (`services/api.js`, `POST /complaints/draft/`) -- the exact broken
+view. Whether anyone actually clicked "generate" against a live instance isn't verified here, and
+that specific claim is left unmade rather than guessed at. What's confirmed, not guessed: the arity
+mismatch means it could not have worked if they had. A feature can be fully written, wired, called
+from a real frontend page, and still have never once executed successfully -- that is a distinct
+failure mode from "nobody built the consumer," and it's the one none of this project's own review
+passes (this document's own history is full of them) would have caught either, since a
+correct-looking call site next to a correct-looking method signature is exactly what a review reads
+past without opening both files at once.

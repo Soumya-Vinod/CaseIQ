@@ -267,6 +267,16 @@ DOM, so there is no incremental path from a `<div>`-based web app to a universal
 app as reference for *information architecture only* (screens, flows, what data each view needs), not
 as code to port.
 
+**`caseiq-frontend` itself is now deleted (2026-09-19)** — before removal, checked for anything not
+already reference-only: real hand-authored content with no `caseiq-web` equivalent turned up one
+substantial gap, a complete Hindi/Marathi translation dictionary for the UI chrome (nav labels,
+buttons, disclaimer, welcome message) that `caseiq-web` has no equivalent of at all — reproduced
+verbatim, all three languages, in `docs/legacy-stack-retirement.md`, not just noted as having
+existed. That same doc also has the four built-but-unported tool panels (timeline, rights card,
+scenario simulator, citation verifier) this Part's G-checklist items below don't yet cover. Anyone
+reading "not code to port" above should still open that file before assuming nothing here is
+recoverable.
+
 **Architecture:** one Expo Router codebase → web export deployed to Vercel, native builds via EAS. Web
 is the primary deliverable; native is a stretch goal, not a blocker.
 
