@@ -4914,3 +4914,342 @@ sixteen aggravation -- matching the source PDF exactly, confirmed live, not just
 printout. Golden set re-run against production afterward: `Recall@5 = 0.909 (40/44)`, `MRR = 0.730`,
 out-of-scope `44/45`, false positives `1/44` -- unmoved, as expected for the same reason as yesterday's
 re-ingestion (`offence_attributes` still doesn't participate in `semantic_search`).
+
+## The length-based garbling filter, checked broadly, not assumed fine because one exemption was correct (2026-09-18)
+
+Per instruction: exempting `_KNOWN_ROW_REPLACEMENTS` sections from `complete_rows()`'s length check was
+correct for 376's own genuinely-long-but-correct sub-clauses -- but that doesn't mean the filter is
+behaving correctly everywhere else. Counted rows rejected ON LENGTH ALONE (isolated from every other
+exclusion reason, so the count isn't inflated by rows that were already going to be excluded for a
+different cause): **12 rows**, across 11 distinct sections (s.116, 119, 120B, 175, 201, 222, 225A, 404,
+500 x2, 511).
+
+**Spot-checked 2 of 12 against the real source PDF, not assumed garbled because they read that way**:
+s.116's real source is genuinely TWO separate sub-clauses (the same row-boundary sub-clause limitation
+already named in this parser's own module docstring history -- "s.115's unlabelled second clause")
+merged into one incoherent row by the current parser. s.500's real source shows the SAME shape (two
+sub-clauses: defamation against specific high officials → "Court of Session."; defamation in any other
+case → "Magistrate of the first class."), compounded by a second, previously-unknown gap found checking
+this: `_SECTION_NO_RE` doesn't recognise a parenthesized-letter section number (`"501(a)"`, `"502(a)"`) --
+checked the whole schedule directly, only 2 real instances of this exact shape (the `(b)` continuations
+are blank-`col0` lines the parser already handles via its existing "blank column 1 inherits the current
+section number" convention). Both spot-checks confirm genuine multi-clause merges, not false rejections
+-- the filter is doing its job correctly on this set.
+
+**Where this belongs, per instruction ("your call after you see the number")**: NOT the 20-concatenation
+scope. The concatenation rows are a narrower, single-column symptom (two court PHRASES stuck together in
+an otherwise-complete row's `triable_by`); these 12 are a different, whole-row symptom (multiple
+independent CLAUSES -- offence, punishment, and classification together -- merged across what should be
+separate rows), rooted in the same sub-clause-boundary limitation already named as a known, deferred gap
+before this session started. These 12 rows, plus the 2-instance parenthesized-section gap, are a
+newly-QUANTIFIED (not newly-discovered-as-a-category) slice of the already-accepted 44%-incomplete CrPC
+coverage -- they degrade to absent (the same failure MODE the 44% figure already covers), not to a wrong
+answer (the severity class that made 373/374/376 urgent). Logged here so the number is no longer invisible,
+not fixed now.
+
+**One more, smaller, adjacent finding, surfaced only because 374/376 dropped off the vocabulary
+detector's flag list once fixed**: `s.376A`'s own `triable_by` is truncated to `'Session.'` (missing
+"Court of"), and its `offence_description` shows the same col1/col2 interleaving already seen in s.373.
+**Confirmed pre-existing, not introduced by today's fix**: checked against the true original parser
+(`896e2c8f`, before any of this session's CrPC work) -- the truncation was already there. Its OWN third
+row in the original was actually 376AB's content mislabeled under 376A (confirmed against source); today's
+fix already correctly relocated that content to 376AB as a side effect (verified: 376AB's own row is
+complete and correct). 376A's own remaining truncation is real, small, and NOT fixed in this pass --
+noted rather than silently expanding an already-large emergency-fix scope further; a natural candidate
+for a future small correction given its direct adjacency to the family just fixed.
+
+**`ci_check_crpc_schedule_vocabulary.py` was stale, fixed before trusting its output further**: it still
+called only `apply_known_corrections()`, not `apply_known_row_replacements()` -- meaning it was reporting
+374/376 as still-flagged (wrong: they're fixed) right up until this was caught re-running it for this
+exact investigation. A report-only tool that quietly drifts out of sync with the pipeline it's reporting
+on is its own small instance of this project's own recurring finding; fixed immediately, not left for a
+future session to rediscover as a mystery.
+
+## `legacy_parser.py`'s latent bracket weakness, added to the standing checklist (2026-09-18)
+
+Per instruction: "not currently triggered" is a property of the data, not the code, and the data changes
+-- this belongs on a durable list, not only in this file. Added as `docs/caseiq-industry-readiness.md`'s
+new **B9**, matching the existing pattern items like **C9** (state amendments: "detected and excluded...
+not the real feature") and **I15** (complaint idempotency: "a latent gap, not an active bug") already use
+for exactly this shape of finding -- real, verified, not urgent, and worth being unable to forget.
+
+## s.133/134: a word-order inversion -- the wrong answer that almost shipped, kept on the record deliberately (2026-09-18)
+
+Scoping the (now-reclassified) "20 concatenation rows" surfaced one genuinely distinct, isolated
+mechanism: `s.133`'s `triable_by` read `'of Magistrate the first class.'` instead of `'Magistrate of the
+first class.'` -- not two things concatenated, one thing with its word order inverted. What follows is
+kept in the order it actually happened, not smoothed into just the corrected version -- a mistakes
+document that only ever shows the final right answer is less useful than one that also shows where the
+first answer was wrong and what specifically overturned it.
+
+**1. The claim as first made, stated plainly, not softened in hindsight.** Reported to the user as: "the
+word-order inversion is worth its own line too: pdfplumber's word x0 ordering disagreeing with reading
+order is a source-rendering quirk, not a bug in our logic, and it's the second source-document defect
+after the 'extent to N years' typo." No hedge, no "possibly" -- a flat claim, ready to be written into
+this file as the second confirmed source-document defect, alongside the genuine PDF typo already on
+record here. **If the user had simply accepted this and moved on, it would have gone into the permanent
+record wrong.**
+
+**2. The specific check that overturned it, not just "further investigation."** Before writing the claim
+into this file, the actual word coordinates were pulled directly from the PDF and compared:
+`"Magistrate"` at x0=500.52, `"of"` at x0=537.12. **500 < 537** -- pdfplumber's own x0 order, the true
+reading-order signal, already has "Magistrate" before "of". The claim that pdfplumber disagreed with
+reading order was checkable against a single number comparison, and failed it immediately. The two words'
+`top` values are 414.84 and 414.47 -- 0.37pt apart, comfortably inside `extract_lines()`'s own 2.5pt
+line-clustering tolerance, confirming they genuinely belong to the same visual line (so this isn't even a
+clustering failure). What actually produces the wrong order: `words.sort(key=lambda w: (round(w["top"]),
+w["x0"]))` sorts by ROUNDED top as the PRIMARY key, computed over the WHOLE PAGE before clustering ever
+runs. `round(414.84)=415` and `round(414.47)=414` land in different integer buckets despite being well
+within the same line -- the page-wide pre-sort places `"of"` (bucket 414) ahead of `"Magistrate"` (bucket
+415), at a rounding boundary the separate 2.5pt clustering tolerance was never actually protecting
+against, because that tolerance runs at a different step entirely.
+
+**3. The corrected conclusion.** This is **our bug**, not the source document's -- a rounding-boundary
+flaw in this project's own sort key, confirmed by direct coordinate comparison, not inferred. Unlike the
+"extent to N years" PDF typo (a genuine source-document defect, already its own line in this file for
+exactly this reason) or the stacked-bracket marker (the source PDF's own legitimate double-amendment
+typesetting), this one has no source-document component at all. Named as ours specifically because the
+wrong attribution was one sentence away from being recorded as the second external defect.
+
+**Confirmed narrow, not systemic**: s.134 has no independent instance -- it Ditto-inherits 133's own
+(then-wrong) value, the same shape as every other Ditto-dependent correction this session. Fixed via
+`_KNOWN_COURT_CORRECTIONS` (a direct value patch, not a change to the shared sort/cluster logic every row
+in the schedule depends on -- the same "patch, don't touch shared logic for one confirmed instance"
+reasoning as every other entry in that dict; a general fix -- cluster first on raw top, sort each cluster
+by x0 after, rather than one global pre-sort conflating "which line" with "order within it" -- is named
+in the dict's own comment, not built here). `tests/test_crpc_schedule_word_order_inversion.py`, 3 cases,
+confirmed genuinely failing pre-fix via `git stash` (not hand-edited out), then passing after restoring.
+Full suite: 228 passed (225 + 3 new), 0 regressions. **Re-ingested into production and verified against
+the live database directly (2026-09-19)**: `s.133` -> `'Magistrate of the first class.'`, `s.134` (both
+rows) -> `'Magistrate of the first class.'` -- backed up first (the 2 real pre-fix rows, read directly,
+saved outside the repo), matching the same targeted-backup discipline as every other production write
+this session.
+
+## The sub-clause-merge pattern: quantified, not fixed -- a real record, not a shrug (2026-09-18)
+
+**What it is, precisely, not "20 concatenation rows"**: reclassifying the vocabulary detector's flagged
+rows against source revealed almost all of them share the SAME root cause as the length-filter finding
+from earlier this session -- not a concatenation-specific defect, and not N independent one-off bugs.
+`reconstruct_rows()`'s only signal for "a new row should start" is a fresh section number in `col0`; it
+has no signal at all for "a new SUB-CLAUSE has started within the same section, still under the same
+section number" -- exactly the gap this parser's own module docstring has named since `v3`, unaddressed
+across every version since: *"Row reconstruction still needs a position-based (not text-based) signal for
+sub-clause boundaries (e.g. s.115's unlabelled second clause, s.500's 'Defamation in any other case')."*
+When a section has 2+ genuine sub-clauses (confirmed directly against source for a sample spanning both
+buckets below -- s.116, s.153, s.221, s.500 -- every one checked was a real multi-clause offence, not a
+false positive), the parser merges them into fewer rows than the source actually contains, each losing
+its own distinct classification.
+
+**The exact count, checked precisely, not estimated**: **25 distinct sections**, **32 affected rows**
+total (12 + 20, disjoint by construction -- the length filter only ever sees rows that never reach the
+vocabulary check, and vice versa):
+- **12 rows / 10 sections** long enough to be caught by `complete_rows()`'s existing length heuristic and
+  excluded outright (silently absent, not wrong): `116, 119, 120B, 175, 201, 222, 225A, 404, 500, 511`.
+- **20 rows / 16 sections** short enough to survive that filter, landing in production with two or more
+  real court phrases concatenated into one field instead: `119, 120, 153, 153A, 153B, 193, 212, 221, 225,
+  235, 294A, 307, 312, 352, 451, 506`.
+- `s.119` appears in both -- one of its sub-clause rows is long enough to be length-rejected, another
+  short enough to survive concatenated. The same underlying defect, the same section, two different
+  downstream symptoms, which is exactly why "the 20 concatenation rows" and "the 12 length-rejected rows"
+  looked like two separate findings when they were investigated in the order they were discovered, rather
+  than one pattern from the start.
+- `s.376A`'s truncation (found in the same pass) is explicitly NOT part of this count -- a single
+  dropped-word truncation, not a sub-clause merge, tracked separately (previous entry, this file).
+
+**What it would actually take to fix, so the deferral decision is informed, not a guess**: this is a
+missing parser CAPABILITY, not a patchable bug -- there is no existing "detect a new sub-clause" signal
+to correct, narrow, or generalize the way `_SECTION_NO_RE`'s bracket tolerance was. It would need a
+genuine positional signal (e.g., recognising that a fresh, non-wrapping chunk of column-1 text starting
+at a row-initial x-position marks a new sub-clause, even with no `col0` and no clean "court column looks
+finished" signal) built into `extract_lines()`/`reconstruct_rows()`'s shared core -- code every one of the
+~259 currently-correct complete rows in this schedule depends on, at the SAME layer this project has
+already tried once and measured failing: `merge_orphan_fragments()` (this file's own earlier CrPC-coverage
+entry) attempted a narrower, simpler version of essentially this same problem (merging leftover fragments
+onto the preceding row after the fact, rather than detecting sub-clause starts proactively) and came back
+**measured net negative** (0 sections gained, 1 lost) against the same corpus. That attempt's own
+conclusion already named what this would really require: *"the close heuristic and the line-clustering
+step redesigned, not a post-processing patch."* Rough size, given that precedent and the number of
+already-correct rows a redesign here could put at risk: **a multi-day effort with a genuinely uncertain
+outcome**, not a bounded patch -- this is not the "turned out to be four narrow mechanisms" shape the
+373/374/376 investigation was; it is the shape this project already tried once, at smaller scope, and
+measured as a real redesign. Deferred as one named, quantified item alongside the already-accepted
+44%-incomplete CrPC coverage, not attempted this pass.
+
+## The vocabulary detector: gated on the residual, not left sitting report-only forever (2026-09-18)
+
+Per instruction: once the sub-clause-merge pattern was precisely quantified, `ci_check_crpc_schedule_
+vocabulary.py`'s own residual is now fully understood -- 21 flagged rows, all 21 already accounted for
+(20 sub-clause-merge, 1 the separately-tracked s.376A truncation). A check that only ever flags rows
+everyone already knows about gates on nothing new; left report-only, it would just sit there, either
+ignored or, worse, eventually mistaken for meaning something is still wrong.
+
+Rewired: `_KNOWN_DEFERRED_SECTIONS` names the exact 17 sections this check currently flags, each with a
+real entry on record (the two entries immediately above). Flagged rows split into "known-deferred"
+(reported, never fails the build) and "new" (fails the build). Verified both paths, not just the pass:
+running unmodified against the real corpus, `21/21` known, exit 0. Removing one section from the known
+set by hand and re-running correctly flagged it as new and raised `SystemExit(1)` with a message pointing
+at exactly what to do next (check against source, then either add it to the known set with a matching
+evaluation.md entry, or investigate it as genuinely different -- the same fork s.133/134's word-order
+inversion actually took). Wired into `backend-ci.yml`'s fast tier (no DB, only the tracked PDF -- same
+profile as the production-guard scan already there, not a `nightly-eval.yml` job).
+
+Full suite: 228 passed, 0 regressions (unchanged from the word-order fix above -- this script isn't
+exercised by the pytest suite itself, only by CI directly).
+
+## Complaint-draft disclaimers: a real architecture split found before porting, not assumed (2026-09-19)
+
+Scoped, then built: porting the retired Django backend's `seed_disclaimers.py` ('complaint' context)
+into `POST /complaints`. Checked the actual architecture on both sides before writing anything, because
+"port the disclaimer" turned out to mean two different things depending which endpoint it landed on.
+
+`/complaints` has a real backend field already wired end-to-end: `ComplaintOut.disclaimer: str`, rendered
+in `ComplaintPage.tsx`, which already has a working "Draft language" en/hi/mr/ta selector on the frontend.
+The backend side, until this change, always returned one flat English string regardless of what language
+the draft itself was generated in -- straight-port-eligible, and exactly what was built: `_DISCLAIMERS`,
+a dict keyed off `Complaint.language` (the field already on the request), `_out()` changed from a flat
+constant to `_DISCLAIMERS.get(c.language, _DISCLAIMERS["en"])`.
+
+`/legal/query` has no backend disclaimer field at all. Its only disclaimer coverage is
+`caseiq-web/src/components/Footer.tsx`, one static, always-English, site-wide string, structurally
+unconnected to `QueryOut.language`. Left alone, per instruction -- where disclaimers belong on that
+endpoint is a real design decision (a per-response field? language-keyed? does the Footer's static
+English notice even need one if a field exists?) and making that call as an incidental side effect of a
+content port would be the wrong way to make it.
+
+The ta/te gap, stated precisely rather than glossed: `llm_service.detect_language` (`app/services/llm.py`)
+supports 5 codes (en/hi/mr/ta/te). Django's disclaimers only ever covered 3 (en/hi/mr). Porting closes the
+hi/mr gap on `/complaints` -- it does not close ta/te, on either endpoint. `_DISCLAIMERS.get()` falls back
+to English for any language without a real, verified translation on record, rather than ship no
+disclaimer at all or a machine-translated one nobody has checked. The hi/mr text itself is Django's own
+already-written translations, copied verbatim, not newly translated here -- this project has no
+independent way to verify a fresh translation, but these were real content that existed and is worth not
+losing.
+
+Tested: `tests/test_complaint_disclaimers.py`, 5 cases -- English/Hindi/Marathi each return their own
+keyed string, Hindi and Marathi are confirmed distinct (not one string duplicated under two keys), and
+both `ta` and `te` fall back to English rather than raising or returning empty text. All 5 pass. Full
+suite (`--ignore=tests/integration`): 177 passed, 0 regressions.
+
+## Directive-language detection: a capability neither this project nor Django's ever actually ran, built as detection-only with a stats counter (2026-09-19)
+
+Corrected framing first, because the first pass at scoping this got it wrong and it matters which task
+this actually is. The claim going in was "port Django's ethics filter, a capability Django had and we
+lack." Checked directly against the retired Django backend before writing anything: `EthicsRule` (the
+model carrying `you should`/`you must`/`i recommend`/`i advise`/`file a case`/`hire a lawyer`/`take legal
+action`, 7 seeded rows, severity-tagged) was schema plus seed data plus a Django-admin registration -- and
+nothing else. Grepped for every reference to `EthicsRule` across the whole Django codebase: no view, no
+service, no middleware, ever queried it. The one thing that actually ran on every response there
+(`apps/ethics/filter.py`'s `EthicsFilter.filter_response`) did JSON-unwrapping, logged (never blocked) an
+unrelated harm-facilitation phrase list, and deduplicated a disclaimer emoji -- nothing to do with
+directive language at all. Django never built this. "Port the working filter" and "build a filter nobody
+ever wired" are different tasks, and the first framing was the wrong one of the two.
+
+Built accordingly: `app/services/directive_language.py`, detection only, no enforcement -- the same staged
+path `grounding.py` and `punishment_verification.py` both earned by shipping a stats counter against real
+traffic before any decision was made about what happens on a hit. Django's own history here is a warning
+against skipping that stage, not a template to follow: a block-phrase list that exists in a database and
+is never consulted is its own vacuous-pass shape, a safety feature that looks real and does nothing.
+Detection wired into the real request path with a real counter, before any enforcement question is even
+asked, is already a stronger starting position than Django ever reached.
+
+The trap, worth its own line rather than folding into the general description: `immediate_steps[].action`
+is *deliberately* imperative by field design. Confirmed against a real production response before scoping
+the fields, not assumed -- `"Consult a qualified criminal defence lawyer"`, `"Preserve all relevant
+documents and evidence"`. The whole job of that field is to tell the user what to do next; `dos_and_donts`
+is the same shape. A directive-language filter built without checking this first would flag exactly the
+content it's supposed to contain -- the field designed to be directive is exactly what a naive version of
+this filter would have caught first. Scoped instead to the three fields whose job is to describe what the
+law says, never to instruct: `conversational_summary`, `structured_data.situation_overview`, and every
+`structured_data.laws_applicable[].why_applies`. `immediate_steps` and `dos_and_donts` are not parameters
+the detection function even accepts -- there is no path by which a caller could scan them by accident.
+
+`DirectiveLanguageStats` (`responses_total`, `responses_flagged`, `hits_total`) persists the same way
+`GroundingStats`/`PunishmentVerificationStats` do -- one singleton row, updated per real generation,
+migration `0014_directive_language_stats` chained off `0013_grounding_stats`. Wired into `legal.py`
+immediately after the `_has_detailed_breakdown` note, the last point `conversational_summary`/
+`structured_data` are touched before the free-text citation scan. A hit is logged
+(`directive_language_detected`, with the exact phrase and field) and counted; nothing about the response
+is altered, suppressed, or regenerated.
+
+Tested at both layers: `tests/test_directive_language.py` (8 pure-function cases -- no hits on clean
+text, hits in each of the three scoped fields including the indexed `laws_applicable[1].why_applies`
+naming, multiple hits in one field all reported, case-insensitivity and word-boundary correctness, and
+the exemption itself: a response carrying only `immediate_steps`/`dos_and_donts` directive text produces
+zero hits) and `tests/integration/test_directive_language.py` (4 cases against real Postgres -- a
+no-hit call only increments the denominator, a single hit flags the response and counts one hit, multiple
+hits in one response flag the response once while counting every hit, and counts accumulate correctly
+across calls). All 12 pass. Full suite: 177 passed (non-integration) / 68 passed (integration, which also
+exercises `0014`'s own `alembic upgrade head` as part of test-database setup) -- 0 regressions in either.
+The new migration has not yet been run against production; that is a separate, later authorization step,
+matching the pattern for every other schema change this session.
+
+## Folding Django's situation-guide nuggets: two small real folds, one scope conflict caught before building (2026-09-19)
+
+Three pieces of Django's retired `seed_education.py` content were scoped for a fold into
+`caseiq-web`'s existing situation guides plus one new explainer. Two folded cleanly; the third ran
+straight into a decision this project already made deliberately, and got caught before writing any
+code for it, not after.
+
+**fir-refused, ID and evidence**: Django's FIR-filing guide's "STEP 2" (bring evidence -- photos,
+videos, documents, witness contacts -- and ID proof) folded into the existing "What to say, right
+now" `practicalTip` on `entitlement 1` as a fourth item, stated as helpful, not required --
+`BNSS 173` doesn't condition FIR registration on having either, and the item says so explicitly, so
+it can't read as a gate the reader has to clear first.
+
+**arrested-or-detained, Articles 22, 20(3), 21, and habeas corpus**: this guide's five entitlements
+are all BNSS procedure (sections 47, 48, 38, 53, 58) with zero constitutional framing anywhere in it
+-- Article 20(3) in particular (right against self-incrimination) has no BNSS entitlement standing
+in for it at all, a real content gap, not just a missing citation on something already covered.
+Checked `SituationGuideDetail.tsx` before deciding where any of this could go: `entitlements` and
+`refusalSteps` both render a "Read the full section" button that calls the live corpus for that
+`(act, section)` -- there is no Constitution act in the corpus (`acts_seed.py` seeds only
+BNS/BNSS/BSA/IPC/CrPC), so putting Article 22/20(3)/21 into either of those fields would wire a
+button that 404s. `leadCallout`/`practicalTips`/`closingNote` render with no act/section badge and no
+such button -- built for exactly this "real advice, not a statutory quote" shape already (see this
+file's own docstring in `situationGuides.ts`). Added as a second `practicalTip` after entitlement 2
+(Article 22(1) and 20(3), since 22(1) is what BNSS 47/38 actually carry out and 20(3) is the one with
+no BNSS counterpart above it) and a closing-note paragraph (Article 21 and the habeas corpus escalation
+route) -- prose, not citations, matching the provenance discipline the rest of the file already
+enforces rather than adding a new one.
+
+**BNS vs IPC explainer -- scoped wrong on the first pass, corrected before building, not after**: the
+instruction as given was to build a BNS-vs-IPC explainer as new content, which was read, at first, as
+including the section-number correspondences Django's own version listed (murder IPC 302 -> BNS 103,
+theft 378 -> 303, rape 375 -> 63). Checked this file's own history before writing anything, per this
+project's standing discipline, and found "Finding: the fabricated mapping this project refused to
+build was already shipping" (2026-09-02, above): this exact feature -- an IPC<->BNS section
+correspondence -- was already investigated once. No substrate exists anywhere in the corpus for it
+(BNS's own text never mentions an IPC section number; the one place that does, CrPC's First Schedule,
+is deliberately excluded from ingestion, `schedule_exclusion.py`) and building it honestly was scoped
+as a real hand-verified ~500-row data-contribution task, never done (`caseiq-industry-readiness.md`
+C2). Worse, that same entry records an LLM-guessed `laws_applicable[].ipc_equivalent` field ("IPC 378"
+for BNS 303) shipping in production, unverified, with the same visual weight as genuinely grounded
+fields, before it was removed alongside `cognizable`/`bailable` for the same reason. Shipping even a
+short, hand-picked set of section numbers here -- the four correspondences this project's own eval
+work (`m1-verification.md`, this file's fidelity-battery entries) happens to have independently
+touched -- was floated and rejected on reflection, not built: a four-row list still reads as the start
+of a lookup table to a reader who has no way to see it was hand-picked rather than systematic, and
+this project has already paid once for a field that looked more grounded than it was.
+
+Built on the corrected scope instead, with no section numbers anywhere: a collapsible explainer on
+`BrowseByActPage` (`caseiq-web/src/pages/BrowseByActPage.tsx`), the page that already lists BNS,
+BNSS, BSA, IPC, and CrPC side by side as act filter pills -- the exact place a reader would ask "why
+are there two IPCs here." Content is limited to what's independently grounded in this project's own
+already-verified `acts_seed.py` data: the three new laws (BNS/BNSS/BSA) named against the three they
+replaced (IPC/CrPC/the Indian Evidence Act, 1872 -- the same phrasing already used in
+`app/services/retrieval.py`'s K3-routing comment, not newly asserted here), the 1 July 2024 cutover
+date, and the cutover rule itself (an offence before that date stays under the old law; on or after,
+the new one applies) -- drawn directly from `acts_seed.py`'s own comments ("repealed by BNS s.358 for
+offences on/after this date", "repealed by BNSS s.531..."), which were themselves verified against a
+primary source when written, not re-asserted from memory here.
+
+Consumer rights, Django's fourth education entry, dropped entirely, per instruction: Consumer
+Protection Act disputes are civil-forum matters -- the same domain `retrieval.py`'s
+`is_civil_scope_mismatch`/`_CIVIL_ONLY_PHRASES` exists to keep this project's criminal-law-focused
+scope out of (tenancy, alimony, succession, and similar civil-only phrases are already excluded there
+by design, even though "consumer" isn't itself one of the listed phrases). Porting a consumer-rights
+guide would add content in a domain this project's own classifier is built to abstain on, which would
+contradict a boundary this project already drew on purpose, not just leave a gap.
+
+Verified: `npx tsc --noEmit` clean on `caseiq-web` after both the `situationGuides.ts` and
+`BrowseByActPage.tsx` changes.

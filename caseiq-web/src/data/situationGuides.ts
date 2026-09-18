@@ -526,6 +526,7 @@ export const SITUATION_GUIDES: SituationGuide[] = [
             "Say this: “This is a serious crime. I am entitled to have it registered here, under section 173.” You don't need to say more than that.",
             "Take someone with you if you can — a family member, a friend, anyone.",
             "Note the officer's name and badge number, and the time. If you need to complain later, this helps.",
+            "Bring whatever you already have — photos, videos, documents, witness names and numbers — and an ID proof (Aadhaar, PAN, voter ID, anything with your name and photo). None of this is required for the police to register your complaint; it just helps them record it accurately.",
           ],
         },
       },
@@ -648,6 +649,16 @@ export const SITUATION_GUIDES: SituationGuide[] = [
         },
       },
       {
+        afterEntitlement: 2,
+        tip: {
+          heading: "This traces back to the Constitution, not just BNSS",
+          items: [
+            "Article 22(1) is why you must be told the offence and can consult a lawyer of your choice — BNSS Sections 47 and 38 carry that guarantee out, they didn't invent it.",
+            "Article 20(3) is separate, and covers something no BNSS section above does: you cannot be forced to be a witness against yourself. You are allowed to stay silent.",
+          ],
+        },
+      },
+      {
         afterEntitlement: 3,
         tip: {
           heading: "What to say",
@@ -678,6 +689,7 @@ export const SITUATION_GUIDES: SituationGuide[] = [
       "This page describes what the law requires. It cannot guarantee how any one police station will behave in the moment.",
       "Every quote here is checked directly against the real law — nothing is written from memory. Tap “Read the full section” to see the complete text.",
       "If these rights aren't being honoured, tell a lawyer or a free legal aid clinic as soon as you can. NALSA: 15100.",
+      "Article 21 — the right to life and personal liberty — is what all of this ultimately protects. If someone is being held with no charge reaching anyone and no magistrate involved at all, a lawyer can file a habeas corpus petition in the High Court or Supreme Court, asking the court to order the person produced and either released or properly charged.",
     ],
   },
 ];

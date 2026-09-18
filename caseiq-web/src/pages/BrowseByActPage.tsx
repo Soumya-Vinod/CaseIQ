@@ -75,6 +75,42 @@ export function BrowseByActPage() {
       </header>
       <div className={styles.rule} aria-hidden="true" />
 
+      {/* Why this list shows both old and new acts side by side -- the
+          question this page itself raises just by listing IPC/CrPC next to
+          BNS/BNSS/BSA. Deliberately no section-number correspondence table
+          (murder 302->103, etc.): this project already checked whether that
+          substrate exists anywhere in the corpus and found it doesn't (BNS's
+          own text never mentions IPC section numbers; the one place that
+          does, CrPC's First Schedule, is deliberately excluded from
+          ingestion -- schedule_exclusion.py), and separately found an
+          LLM-guessed `ipc_equivalent` field shipping unverified in
+          production before it was removed (docs/evaluation.md, "the
+          fabricated mapping this project refused to build was already
+          shipping", 2026-09-02). Everything below is grounded in this
+          project's own verified act metadata (app/legal_corpus/acts_seed.py)
+          -- names and the 1 July 2024 cutover date -- not a number mapping. */}
+      <details className={styles.explainer}>
+        <summary className={styles.explainerSummary}>Why are old and new acts both here?</summary>
+        <div className={styles.explainerBody}>
+          <p>
+            On 1 July 2024, three new laws replaced three colonial-era ones: Bharatiya Nyaya
+            Sanhita (BNS) replaced the Indian Penal Code (IPC); Bharatiya Nagarik Suraksha Sanhita
+            (BNSS) replaced the Code of Criminal Procedure (CrPC); Bharatiya Sakshya Adhiniyam
+            (BSA) replaced the Indian Evidence Act, 1872.
+          </p>
+          <p>
+            Which one applies to a specific incident depends on when it happened, not on when
+            you're reading this. An offence committed before 1 July 2024 is still governed by the
+            old law — IPC and CrPC didn't stop applying to cases already open when they were
+            repealed. An offence on or after that date falls under BNS and BNSS instead.
+          </p>
+          <p>
+            That's why both are still in this list. If your case was registered before the
+            cutover, the section you need is the old one, not the new one.
+          </p>
+        </div>
+      </details>
+
       <div className={styles.controls}>
         <div className={styles.actRow}>
           {ACTS.map((a) => (
