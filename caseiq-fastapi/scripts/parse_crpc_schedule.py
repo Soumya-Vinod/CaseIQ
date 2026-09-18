@@ -63,7 +63,30 @@ _REF_PEAKS = [55.0, 85.0, 250.0, 375.0, 450.0, 510.0]
 _SEARCH_WINDOW = 20.0  # +/- this many points when hunting for a page's own peak
 _DEVIATION_FLAG = 15.0  # log if a page's measured peak differs from reference by more than this
 
-_SECTION_NO_RE = re.compile(r"^\(?(\d{2,4}[A-Z]{0,3}(?:-[A-Z])?)\)?$")
+# FIXED (docs/evaluation.md, CrPC Ditto-propagation sizing): an amendment-
+# bracket-prefixed section number ("1[174A", the inserted-by-amendment
+# marker) didn't match this at all -- the whole of 174A silently merged
+# into the PRECEDING section's row (174) instead of becoming its own
+# addressable section. Not corrupted data, INVISIBLE data: nothing about
+# 174A -- offence, punishment, anything -- was ever reachable under its
+# own section number. The exact same amendment-bracket defect class
+# already found and fixed once this session in a completely different
+# parser (section_versions ingestion, "1[376AB." -- see docs/
+# evaluation.md's corpus-completeness entry); recurring independently
+# here, in unrelated code, is itself worth noting -- if it broke two
+# parsers that never share code, a third one touching raw amendment-
+# bracketed PDF text should be treated as an open question, not assumed
+# clean. The optional `(?:\d+\[)?` tolerates the prefix without capturing
+# it -- group 1 is always just the real section number.
+_SECTION_NO_RE = re.compile(r"^\(?(?:\d+\[)?(\d{2,4}[A-Z]{0,3}(?:-[A-Z])?)\)?$")
+
+
+def _clean_section_number(col0: str) -> str | None:
+    """The real section number from col0, with any amendment-bracket
+    prefix stripped -- see _SECTION_NO_RE's own comment. None if col0
+    doesn't look like a section number at all."""
+    m = _SECTION_NO_RE.match(col0)
+    return m.group(1) if m else None
 _CHAPTER_RE = re.compile(r"^\d*\[?CHAPTER\b", re.I)
 _FOOTNOTE_RE = re.compile(r"^\d+\.\s+(Ins\.|Subs\.|Omitted|Rep\.)")
 _HEADER_NOISE_RE = re.compile(
@@ -164,7 +187,22 @@ def extract_lines(pdf_path: str, diagnostics: list[dict]) -> list[RawLine]:
                     "penal", "code", "offences", "under", "the", "i.—offences",
                 }
                 tokens = [t.strip(".—-").lower() for t in full_line_text.split()]
-                if tokens and all(t in header_words for t in tokens):
+                # FIXED (docs/evaluation.md, CrPC Ditto-propagation sizing):
+                # "all tokens are header words" had no minimum count, so a
+                # genuine DATA line consisting of a single word that also
+                # happens to be in this vocabulary -- "triable." alone, the
+                # tail of a wrapped conditional court clause -- matched
+                # trivially (a one-element list where "all" is vacuously
+                # true) and was silently dropped before row-reconstruction
+                # ever saw it. Confirmed directly: s.109 and s.149's real
+                # triable_by both end in "...is triable." in the source PDF;
+                # the parser captured everything except that final word,
+                # every time, exactly matching this failure. The real
+                # multi-word header block ("cognizable bailable Court
+                # triable", the actual line this filter exists to catch) is
+                # never just one token, so requiring at least 2 doesn't
+                # weaken the catch this was built for.
+                if len(tokens) >= 2 and all(t in header_words for t in tokens):
                     continue
 
                 cols: dict[int, list[str]] = defaultdict(list)
@@ -252,7 +290,15 @@ def reconstruct_rows(raw_lines: list[RawLine], diagnostics: list[dict]) -> list[
         cog_raw, cog_bool, cog_ditto = _resolve_col(buf[3], last_cog_raw, last_cog_bool, "Cognizable", "Non-cognizable")
         bail_raw, bail_bool, bail_ditto = _resolve_col(buf[4], last_bail_raw, last_bail_bool, "Bailable", "Non-bailable")
         court_val = buf[5].strip()
-        court_bare = court_val.rstrip(".")
+        # FIXED (docs/evaluation.md, CrPC Ditto-propagation sizing): stripped
+        # only a trailing "." -- a real "Ditto]." (an amendment-bracket
+        # closing AFTER the word, e.g. s.174A's real second clause) left
+        # "ditto]" behind, which isn't an exact match for "ditto"/"do", so
+        # it fell through as a literal, nonsensical court value instead of
+        # resolving via Ditto. rstrip(".]") strips any trailing run of
+        # EITHER character regardless of order -- "Ditto." still strips to
+        # "ditto" exactly as before (no change for the common case).
+        court_bare = court_val.rstrip(".]")
         court_ditto = court_bare.lower() in ("ditto", "do")
         court = last_court if court_ditto else court_val
         if court_ditto and last_court is None:
@@ -304,10 +350,17 @@ def reconstruct_rows(raw_lines: list[RawLine], diagnostics: list[dict]) -> list[
 
     for idx, rl in enumerate(raw_lines):
         col0 = rl.cols.get(0, "").strip()
-        candidate_new = bool(_SECTION_NO_RE.match(col0)) if col0 else False
+        # cleaned_section is the real section number with any amendment-
+        # bracket prefix stripped (_clean_section_number) -- current_section
+        # and _section_ordinal both operate on THIS, never on raw col0,
+        # so a marker like "1[174A" is never stored as if "1[174A" were
+        # itself the section number, and _section_ordinal never misreads
+        # its leading "1" as the section's own ordinal.
+        cleaned_section = _clean_section_number(col0) if col0 else None
+        candidate_new = cleaned_section is not None
         has_new_section = candidate_new
         if candidate_new and last_ordinal is not None:
-            ordinal = _section_ordinal(col0)
+            ordinal = _section_ordinal(cleaned_section)
             if ordinal is not None and ordinal < last_ordinal:
                 has_new_section = False  # implausible regression -- treat as noise, not a new row
                 diagnostics.append({
@@ -332,13 +385,13 @@ def reconstruct_rows(raw_lines: list[RawLine], diagnostics: list[dict]) -> list[
             buf = {0: "", 1: "", 2: "", 3: "", 4: "", 5: ""}
             court_seen = False
             if has_new_section:
-                current_section = col0
-                ordinal = _section_ordinal(col0)
+                current_section = cleaned_section
+                ordinal = _section_ordinal(cleaned_section)
                 if ordinal is not None:
                     last_ordinal = ordinal
         elif has_new_section and current_section is None:
-            current_section = col0
-            ordinal = _section_ordinal(col0)
+            current_section = cleaned_section
+            ordinal = _section_ordinal(cleaned_section)
             if ordinal is not None:
                 last_ordinal = ordinal
         buf_page = rl.page
@@ -449,10 +502,71 @@ def merge_orphan_fragments(rows: list[ScheduleRow], diagnostics: list[dict]) -> 
     return merged
 
 
-PARSER_VERSION = "crpc-schedule-v3"
+PARSER_VERSION = "crpc-schedule-v4"
+
+# Direct row-level corrections (docs/evaluation.md, CrPC Ditto-propagation
+# sizing) for mechanism (d): column x0-boundary bleed on specific pages,
+# where words land in the wrong column bucket -- confirmed against the
+# tracked source PDF, page by page, e.g. s.117's real triable_by is NOT
+# scrambled in the source ("Court by which offence abetted is triable.",
+# same template as s.109); the EXTRACTION is. Deliberately a direct value
+# patch, not a fix to the shared per-page boundary-detection logic that
+# every row on the same page depends on -- the blast radius of a general
+# fix there isn't worth it for 4-5 rows when the correct values are
+# already known and source-verified. Keyed by (corrected) section_number;
+# applied to EVERY row for that section, so a Ditto-dependent row (e.g.
+# 118, which inherits from 117) gets its own entry too rather than relying
+# on ditto-resolution to propagate a correction made after reconstruction
+# already ran -- it won't, since resolution already happened.
+_KNOWN_COURT_CORRECTIONS: dict[str, str] = {
+    # s.109 was originally attributed to mechanism (a) alone (the header-
+    # word-filter drop) -- fixing that recovered "triable." but exposed a
+    # SECOND, independent mechanism (d) stacked on the same row: "abetted
+    # is" bleeds into column 4 (bailable) rather than staying in column 5.
+    # Found by the regression test itself still failing after (a) landed,
+    # not assumed fixed because one known cause was addressed -- see
+    # docs/evaluation.md for this correction.
+    "109": "Court by which offence abetted is triable.",
+    "110": "Court by which offence abetted is triable.",
+    "117": "Court by which offence abetted is triable.",
+    "118": "Court by which offence abetted is triable.",
+    "174A": "Magistrate of the first class.",
+    "178": ("The Court in which the offence is committed, subject to the provisions of "
+            "Chapter XXVI; or, if not committed in a Court, any Magistrate."),
+    "179": ("The Court in which the offence is committed, subject to the provisions of "
+            "Chapter XXVI; or, if not committed in a Court, any Magistrate."),
+    "181": "Magistrate of the first class.",
+    "373": "Any Magistrate.",
+}
+
+
+def apply_known_corrections(rows: list[ScheduleRow]) -> list[ScheduleRow]:
+    """Applies _KNOWN_COURT_CORRECTIONS in place and returns the same list
+    -- call after reconstruct_rows(), before complete_rows() (a corrected
+    row should be judged on its corrected value, not its pre-correction
+    one). Rows not in the dict are untouched."""
+    for r in rows:
+        correction = _KNOWN_COURT_CORRECTIONS.get(r.section_number)
+        if correction is not None:
+            r.triable_by = correction
+    return rows
 
 
 _MAX_SANE_OFFENCE_LEN = 250  # see docstring below
+
+# s.358's second row is KNOWN-BAD but NOT guessed at. The real source text
+# (page 212-213) reads "...Kidnapping Imprisonment for 7 years and fine.
+# Cognizable Ditto Magistrate of the first class." with a bare "363"
+# printed BETWEEN "fine." and "first class." in the linear text extraction
+# -- meaning this content may genuinely belong to a DIFFERENT section
+# (363) entirely, not be s.358's own second clause; the source PDF's own
+# page layout is ambiguous enough here that text extraction alone can't
+# settle it. Excluded from complete_rows() rather than shipped with a
+# plausible-looking but unverified value or section attribution -- needs
+# direct visual/image inspection of the source page, not resolved here.
+# "An honestly-unresolved row beats a plausible wrong one."
+_KNOWN_UNRESOLVED_SECTION = "358"
+_KNOWN_UNRESOLVED_OFFENCE_PREFIX = "kidnapping"
 
 
 def complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
@@ -484,11 +598,23 @@ def complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     shipping nothing). General, mechanism-based, not a hardcoded exclusion
     of s.498A specifically -- see docs/evaluation.md's known-failures list
     for why s.498A is excluded, not corrected, here.
+
+    A THIRD, deliberately narrow exclusion (2026-09-18): s.358's own
+    "Kidnapping..." second row, specifically -- see
+    _KNOWN_UNRESOLVED_SECTION's own comment for why this one is excluded
+    outright rather than corrected like the rows in
+    _KNOWN_COURT_CORRECTIONS. Matched on section AND an offence-text
+    prefix, not section alone, since s.358's own FIRST row (the real
+    "Assault or use of criminal force..." clause) is fine and must not be
+    excluded along with it.
     """
     def _clean(r: ScheduleRow) -> bool:
         if not r.triable_by.strip() or len(r.offence_description) > _MAX_SANE_OFFENCE_LEN:
             return False
         if r.bailable_raw.strip().startswith("if ") or r.cognizable_raw.strip().startswith("if "):
+            return False
+        if (r.section_number == _KNOWN_UNRESOLVED_SECTION
+                and r.offence_description.strip().lower().startswith(_KNOWN_UNRESOLVED_OFFENCE_PREFIX)):
             return False
         return True
 
@@ -501,6 +627,7 @@ if __name__ == "__main__":
     diags: list[dict] = []
     raw_lines = extract_lines(PDF_PATH, diags)
     rows = reconstruct_rows(raw_lines, diags)
+    rows = apply_known_corrections(rows)
     print(f"rows: {len(rows)}")
 
     complete = complete_rows(rows)

@@ -45,7 +45,20 @@ jobs:
         working-directory: caseiq-fastapi
     env:
       SECRET_KEY: ci-observability-alerts-not-a-real-secret-32-chars-min
+      # FIXED 2026-09-19: this job's own first real run tripped
+      # app.core.config.Settings's DATABASE_URL_DIRECT/DATABASE_URL
+      # agreement validator (docs/evaluation.md) -- DATABASE_URL_DIRECT was
+      # set, DATABASE_URL_RAW was not, so DATABASE_URL (which the script's
+      # import of app.core.config still resolves, even though the script
+      # itself only ever uses MIGRATION_DATABASE_URL) fell through to the
+      # local POSTGRES_* default and disagreed. The exact partial-override
+      # shape as both manual-script incidents the validator was built for
+      # -- this is its first real catch of a CI workflow, not a script.
+      # Both set to the SAME value on purpose: this script never needs the
+      # pooled endpoint, so there's no reason to provision or reference a
+      # second secret just to satisfy the agreement check.
       DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
+      DATABASE_URL_RAW: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
     steps:
       - uses: actions/checkout@v4
 

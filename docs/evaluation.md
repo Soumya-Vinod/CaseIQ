@@ -4681,3 +4681,144 @@ before that one was trusted). Wired into `backend-ci.yml`'s existing `test` job 
 app import -- fits the fast every-push tier, not a new job).
 
 Full suite after all three pieces: 193 passed (178 + 15 new), 0 regressions.
+
+## CrPC Ditto-propagation: the patch, built (2026-09-18)
+
+Built exactly as scoped: (a)/(b)/(c) as narrow parser fixes, (d) as direct row-level patches rather than
+touching the shared per-page column-boundary logic. Real, measured effect: complete rows 249 -> 255/256,
+complete sections 212 -> 221 (56.1%) -- not just fixed values, a net recovery, since 174A didn't count as
+a section with any complete row before this at all.
+
+**(a)** `extract_lines()`'s header-vocabulary fallback filter now requires at least 2 tokens before
+treating a line as noise -- a single real word that happens to sit in the header vocabulary ("triable."
+alone, the tail of a wrapped conditional clause) no longer gets silently dropped. **(b)** `_SECTION_NO_RE`
+gained `(?:\d+\[)?`, tolerating an amendment-bracket-prefixed section number without capturing it, and a
+new `_clean_section_number()` helper is used everywhere `col0` used to be assigned directly to
+`current_section`/`_section_ordinal` -- fixing the regex alone wasn't enough, since raw `col0` ("1[174A")
+was being stored as if THAT were the section number. **(c)** `court_bare = court_val.rstrip(".]")` (was
+`.rstrip(".")` alone) -- tolerates a real `"Ditto]."` (bracket closing after the word) without changing
+the common `"Ditto."` case at all. **(d)** `_KNOWN_COURT_CORRECTIONS`, a direct section-keyed override
+dict applied post-reconstruction, covering both an antecedent AND its Ditto-dependent explicitly (a
+post-hoc patch to an antecedent doesn't retroactively change what a dependent already resolved to during
+the original reconstruction pass -- both need their own entry).
+
+**A real gap in my own root-cause attribution, caught by the regression test itself, not assumed
+correct**: s.109 was originally attributed to mechanism (a) alone. Fixing (a) recovered "triable." but
+the test for s.109 kept failing -- "abetted is" was independently bleeding into column 4 on the SAME row,
+a second, stacked instance of mechanism (d) nobody had checked for because (a) looked like a sufficient
+explanation. Added to `_KNOWN_COURT_CORRECTIONS` once the test surfaced it. The regression suite caught
+two more of its own mistakes before shipping too: a first draft asserted s.184 as a "stays correct"
+control from reading the PDF alone, without checking it against the actual current parser output --
+s.184 (and 185-190) turned out to already have empty `triable_by` for an unrelated, pre-existing reason
+(part of the same known 44%-incomplete gap), not a safe control at all; and a first draft of the s.358
+test asserted its real first row ("Assault...") survives `complete_rows()`, also unchecked -- it
+currently doesn't, same unrelated pre-existing reason. Both corrected before merging, exactly the
+discipline the test file exists to enforce on its own author, not just on the parser.
+
+**s.358 stays deliberately unresolved** (`_KNOWN_UNRESOLVED_SECTION`, `_KNOWN_UNRESOLVED_OFFENCE_PREFIX`):
+the real source text shows "...Kidnapping ... Magistrate of the first class." with a bare "363" printed
+BETWEEN "fine." and "first class." in the linear text extraction -- this content may genuinely belong to
+a different section (363) entirely, and the source page's own layout is ambiguous enough that text
+extraction alone can't settle it. Excluded from `complete_rows()` with a comment naming exactly why and
+what it would take to resolve (direct visual/image inspection of the source page), not shipped with a
+plausible-looking guess. "An honestly-unresolved row beats a plausible wrong one."
+
+**174A not existing as an addressable section, worth its own line, not folded into "the corrupted values"
+finding**: this is a second, independent breakage from the same root cause (an amendment-bracket-prefixed
+number, `1[174A`) as the corpus-completeness finding earlier in this file (`1[376AB.`, section_versions
+ingestion) -- in a completely different parser, with no shared code between them. Two unrelated parsers,
+both broken by the same class of PDF artifact, found independently. **Worth treating as an open question
+whether a third exists**, not assumed closed because these two are now fixed -- neither fix was designed
+with the other in mind, and nothing currently scans this project's various PDF-parsing code for this
+specific pattern as a class.
+
+**Tests**: `tests/test_crpc_schedule_ditto_corruption.py`, 17 cases (was 13 `xfail(strict=True)` before the
+patch, confirmed every one flip to an unexpected pass, then rewritten as plain assertions -- this file's
+job from here on is to fail again if any of this regresses) -- covering every mechanism, every corrected
+row, three "stays correct" controls, and s.358's deliberate exclusion. `PARSER_VERSION` bumped to
+`crpc-schedule-v4`. Full suite: 210 passed, 0 regressions.
+
+**Not yet re-ingested into production**: `scripts/ingest_offence_attributes.py` is wired to call
+`apply_known_corrections()` in the real pipeline, but re-running it against production (replacing the
+existing CrPC First Schedule rows) hasn't happened yet -- a production write, held for the same explicit
+go-ahead as every other one this session.
+
+## The DATABASE_URL/DATABASE_URL_DIRECT validator's first real catch: a CI workflow, not a script (2026-09-19)
+
+`app.core.config.Settings`'s agreement validator (docs/evaluation.md, observability entry) was written in
+response to two manual-script incidents -- one-off local scripts hitting production through a partially
+overridden environment. Its first real catch, one day later, was neither: `observability-alerts.yml`'s
+own first real scheduled run refused to start, correctly, on the exact same shape -- the workflow set
+`DATABASE_URL_DIRECT` (from `secrets.NEON_DATABASE_URL_DIRECT`) but never set `DATABASE_URL_RAW`, so
+`DATABASE_URL` fell through to the local `POSTGRES_*` default and disagreed. `check_observability_
+thresholds.py` only ever uses `MIGRATION_DATABASE_URL` (which correctly resolves via `DATABASE_URL_
+DIRECT`), so the mismatch was never going to cause a wrong-database write -- but the validator doesn't
+know that at the point it runs, and refusing on an ambiguous target it can't yet prove is safe is exactly
+what it was built to do. Third instance of the same partial-override shape, caught before running rather
+than after -- the two manual-script incidents cost a production write each; this one cost nothing, because
+the check ran before the query did. Fixed by setting `DATABASE_URL_RAW` to the same value as `DATABASE_
+URL_DIRECT` in that one workflow (this script never needs the pooled endpoint, so there's no reason to
+provision a second secret just to satisfy the agreement check).
+
+Checked, not assumed, whether the same pattern was latent in the other two workflows using this secret:
+**`db-backup.yml`** sets `DATABASE_URL_DIRECT` too, but its two scripts (`backup_dump.sh`,
+`ci_install_matching_pg_client.sh`) are pure bash -- confirmed directly (grepped for any Python
+invocation, found none) -- and never instantiate `Settings()` at all, so the validator never runs there;
+genuinely unaffected, not lucky. **`nightly-eval.yml`** never sets `DATABASE_URL_DIRECT` in the first
+place (its golden-set job points entirely at its own local ephemeral Postgres via discrete `POSTGRES_*`
+fields), so the validator's early return (`if not self.DATABASE_URL_DIRECT: return self`) applies; also
+genuinely unaffected.
+
+## "Rebuildable" stopped being true the moment the rebuild changed (2026-09-19)
+
+`db-backup.yml`'s own docstring excludes `offence_attributes` from backup scope on stated grounds: "the
+corpus... is NOT here -- it's rebuildable from the tracked PDFs + `scripts/ingest_*`." That reasoning was
+correct when written. It stopped being correct the moment `parse_crpc_schedule.py`'s Ditto-propagation fix
+landed (this file, two entries up) -- "rebuildable" was never an unconditional property of the table, it
+was a claim that ran a script over a tracked PDF, and the SAME script now produces DIFFERENT output than
+what was actually stored. Re-running the "rebuild" wouldn't have restored the pre-fix data; it would have
+silently replaced it with the post-fix data, which is exactly what the real re-ingestion below was
+supposed to do on purpose, not what a RESTORE is supposed to do by accident. A backup taken by running
+`db-backup.yml` at that moment would have created the appearance of coverage while covering nothing --
+worse than no backup, since a missing backup is at least visibly missing. A direct, targeted export of the
+table (249 rows, read before the re-ingestion, kept outside the repo) was the actual safety net; see the
+re-ingestion entry below for what it was for and what happened to it.
+
+**The general form, worth stating because it applies beyond this one table**: "rebuildable from source"
+is only true while the rebuild is deterministic against a FIXED transform -- a parser, a script, a
+pipeline. The moment that transform changes (a bug fix, a version bump, anything), every table marked
+"rebuildable" on the strength of that transform needs the same question asked again, not assumed still
+true because it was true when the exclusion was written. Nothing currently re-checks this automatically;
+a real gap, named here rather than fixed speculatively for a case that hasn't happened yet.
+
+## CrPC First Schedule re-ingested into production, verified against the live DB (2026-09-19)
+
+Backed up first: the real 249 pre-fix rows, read directly and saved outside the repo (not `db-backup.yml`
+-- see the entry above for why that wouldn't have covered this table). `scripts.ingest_offence_attributes
+--yes` run against production; `scripts.lib.production_guard` fired correctly on a real write (printed the
+real Neon host, required the explicit confirmation) -- the guard's own first real production use, not just
+its unit tests. 256 complete rows ingested, `parser_version=crpc-schedule-v4`.
+
+**Verified against the live database directly, not the parser's own printout** -- same discipline as the
+corpus stub-row fix: `s.109` → `'Court by which offence abetted is triable.'`, `s.149`/`s.150` →
+`'The Court by which the offence is triable.'` (both, confirming the Ditto chain resolved correctly in
+production), `s.174A` → two rows, both `'Magistrate of the first class.'`, confirming 174A is now
+addressable as its own section number in the live table, not merged into 174. `s.358` → zero rows
+(neither the real first clause, which independently fails completeness for an unrelated, already-known
+reason, nor the deliberately-excluded Kidnapping row) -- honestly absent, not silently admitted with a
+guessed value.
+
+**Recall@5, checked rather than assumed to move**: `offence_attributes` (what this re-ingestion touches)
+is First-Schedule classification metadata, joined onto already-retrieved sections purely for display
+(`attach_offence_attributes`, called AFTER ranking) -- it never participates in `semantic_search` itself,
+which runs entirely against `section_versions` embeddings and full-text search. Confirmed directly in
+`app/services/retrieval.py` before running anything, not assumed from the module boundary alone. The
+golden set was re-run anyway, against production, for the real number rather than the predicted one:
+**`Recall@5 = 0.909 (40/44)`, `MRR = 0.730`, out-of-scope abstain rate `44/45`, false positives `1/44`** --
+identical to the documented baseline, unmoved, confirming the reasoning rather than just asserting it.
+
+One real mistake made and caught getting to that number: the first attempt at this re-run piped
+`| tail -40` directly into the backgrounded command itself, truncating the real output at the source --
+the exact same mistake this file already has an entry for, from earlier in this project's history,
+repeated here before being caught by the missing summary line rather than avoided from having read that
+entry. Re-run capturing full output to a file instead, no truncation at the source.
