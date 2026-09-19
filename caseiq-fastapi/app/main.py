@@ -17,6 +17,7 @@ from app.core.logging import configure_logging, logger
 from app.core.ratelimit import limiter
 from app.core.sentry import configure_sentry
 from app.db.base import SessionLocal
+from app.db.migration_check import assert_alembic_head_matches_db
 from app.middleware.request_context import RequestContextMiddleware
 from app.services.domain_classifier import assert_domain_gate_matches_embedder
 from app.services.embeddings import assert_embedding_config_matches_corpus, embedder
@@ -68,6 +69,17 @@ async def lifespan(app: FastAPI):
     # just now also watching.
     try:
         async with SessionLocal() as db:
+            # FIXED 2026-09-19 (docs/evaluation.md): checked FIRST, before the
+            # embedder/corpus check below -- a schema the code doesn't match is
+            # the more fundamental problem, and catching it here gives a clean,
+            # specific error instead of letting the embedder check fail with a
+            # confusing raw "relation does not exist" if the corpus tables
+            # themselves were part of what never got migrated. See
+            # app.db.migration_check's own module docstring for the live
+            # incident this closes: 0014_directive_language_stats shipped as
+            # code and 500'd on every real query for as long as its migration
+            # hadn't been run, with nothing watching for that gap.
+            await assert_alembic_head_matches_db(db)
             await assert_embedding_config_matches_corpus(db, embedder)
         # Option B, shipped 2026-09-08 (docs/evaluation.md): the domain-gate
         # classifier's weights are only meaningful against the exact

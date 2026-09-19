@@ -5300,3 +5300,83 @@ failure mode from "nobody built the consumer," and it's the one none of this pro
 passes (this document's own history is full of them) would have caught either, since a
 correct-looking call site next to a correct-looking method signature is exactly what a review reads
 past without opening both files at once.
+
+## Two independent failures stacked, the outer one hiding the inner one, and observability reporting healthy throughout (2026-09-19)
+
+Real chain of events, in order, not reconstructed after the fact:
+
+1. **`ALLOWED_ORIGINS` on Render never included `caseiq-web.vercel.app`** — the frontend's own
+   origin was never in the CORS allow-list from the day that URL went public (2026-08-31). Every
+   real browser `POST /api/v1/legal/query` from the deployed frontend died at the CORS preflight
+   and was never sent — confirmed by reading Starlette's own `CORSMiddleware.preflight_response`,
+   not assumed: a disallowed origin gets a `400` with no `Access-Control-Allow-Origin` header on
+   *both* the preflight and a plain response, so the browser blocks the actual request either way,
+   and a POST endpoint preflights first. **19 days of this.**
+2. **Separately, `alembic` revision `0014_directive_language_stats` shipped as code — imported,
+   wired into `app.api.v1.legal.process_query`'s non-abstained branch, called on every real
+   generation — while the migration that creates its table was never run against Render's Neon
+   database.** Every non-abstained query raised `relation "directive_language_stats" does not
+   exist` inside `record_stats`, uncaught by anything more specific than the generic 500 handler.
+   The abstention short-circuit never calls `record_stats` at all, so an abstained query returned a
+   clean `200` throughout.
+
+Fixing #1 (`ALLOWED_ORIGINS`, same day) is what let real POST traffic reach the backend at all for
+the first time since deploy — and immediately surfaced #2, which had been sitting there, broken,
+since the directive-language commit, entirely undetected. **Neither failure was caused by the
+other; #1 simply meant nothing had exercised the code path #2 broke.** Diagnosing this live, from a
+browser CORS error to `500 (Internal Server Error)`, walked through the exact wrong theory first
+(reasoning-model `content=None` in `LLMService._call`, `app/services/llm.py` — well-reasoned,
+consistent with the symptoms, confirmed *not* fixed before it was ruled out) before Sentry's actual
+captured exception (`relation "directive_language_stats" does not exist`, `app/services/
+directive_language.py:108`) named the real cause. Recorded here rather than only in chat history
+because the near-miss is itself the finding: a plausible, well-evidenced theory that would have
+been the wrong fix, caught only because the fix was held until the real stack trace confirmed it —
+see this document's own recurring "verified at the layer that was tested, broken at the layer
+nobody tested" throughline for why that discipline matters more than any single instance of it.
+
+**Why observability didn't catch #2 either, checked directly, not assumed:**
+- No exception reaches `sentry_sdk` from a *normal-looking* request — this one does, since it's a
+  genuinely unhandled exception (`app/core/exceptions.py`'s catch-all explicitly calls
+  `sentry_sdk.capture_exception`) — so Sentry was in fact the correct, and only, place this was
+  ever going to surface. It worked as designed.
+- `scripts/check_observability_thresholds.py` (2026-09-16 entry, above) only aggregates `429`/`503`
+  rates from `audit_logs`. A `500` isn't one of the two statuses it watches at all — this class of
+  failure was invisible to the threshold job by construction, not by a bug in it.
+- Every curl-based backend check run this week used endpoints or queries that either bypassed CORS
+  entirely (curl isn't browser-enforced) or happened to hit the abstention short-circuit, which
+  never calls `record_stats` — so "the backend is provably correct" was true of every layer actually
+  tested and false of the one that wasn't. Same shape as this project's own recurring lesson, now
+  with two failures stacked instead of one: a check proves what it tests, not what it doesn't.
+
+**Fix, both halves:**
+- `ALLOWED_ORIGINS` corrected on Render; verified via a `/health` field (`app/main.py`) added
+  specifically because production's resolved config had no other externally-visible surface.
+- `0014_directive_language_stats` run against production (backed up first — `scripts/
+  backup_dump.sh`, targeted at the same six tables the 0012/0013 precedent used, not the corpus);
+  verified end-to-end with a real non-abstained query returning `200` and `directive_language_stats
+  .responses_total` incrementing by exactly one.
+- **Structural fix, not just the incident**: `app/db/migration_check.py`, same shape as `app/
+  services/embeddings.py`'s `assert_embedding_config_matches_corpus` — compares alembic's own
+  code-side head against what the database's `alembic_version` actually reports, and crashes
+  startup on a mismatch rather than serving traffic against a schema the code doesn't match. Wired
+  into `app.main`'s `lifespan`, ahead of the embedder/corpus check, same reasoning `0012`/`0013`
+  didn't need this and `0014` did: nothing distinguished "the migration happened to be run before
+  the code shipped" from "the code checked that it had" until this existed. Tested in the failing
+  direction before being trusted, same discipline as the embedder check's own test suite: a stubbed
+  stale-revision DB driven through the *real* FastAPI lifespan (`TestClient(app)` as a context
+  manager, not just the bare function) confirmed the app refuses to enter `__aenter__` at all —
+  `tests/test_migration_check.py`.
+
+**Filed, not fixed in this pass** — real, but not what caused this incident, and deliberately not
+bundled into the same change as a guard this project needs to be able to trust on its own:
+`app/services/llm.py`'s `_call()` accepts an `extra_body` param specifically to pass
+`reasoning_effort` through to Groq's reasoning model (`GROQ_MODEL=openai/gpt-oss-120b`) and avoid
+the model burning its whole `max_tokens` budget on hidden reasoning tokens before emitting visible
+content (`resp.choices[0].message.content` comes back `None`, `.strip()` raises `AttributeError`,
+uncaught by either `except GroqRateLimitError` or `except GroqAPIError` two lines below it). Grepped
+every call site — `process_query` (line 404, the live `/legal/query` path), `detect_language` (470),
+and both `related_questions` calls (546, 564) — **none of them pass `extra_body`**, so this
+mitigation has never actually run. This was the leading theory for the 500 investigated above,
+confirmed wrong once Sentry named the real cause, and is real regardless: a live, currently-unguarded
+failure mode on the one endpoint that matters, flagged in the code itself (`app/services/llm.py`,
+same lines) as well as here.

@@ -138,6 +138,22 @@ port was specified."
 3. **Postgres version**: Neon provisioned 18.4 by default (newer than the 16/17 assumed elsewhere
    in the project's docs) — no compatibility issue found, noting for the record.
 
+   **Reconfirmed 2026-09-19, worth a second note**: running the pre-migration backup for
+   `0014_directive_language_stats` (docs/evaluation.md's same-day entry) hit this again, concretely
+   — `SHOW server_version_num` against the real Neon connection still reports major version 18
+   today, and the dev machine doing the backup had `pg_dump` 17.2 first on `PATH` (18.2 was
+   installed alongside it, just not the one that resolves by default). `resolve_pg_bin`
+   (`scripts/lib/pg_bin.sh`, 2026-09-12) caught the mismatch and refused rather than silently
+   producing a dump with an unverified compatibility guarantee — exactly what it was built for.
+   Whether this is the *same* 18 this note already flagged in 2026-08 or a real point-release move
+   isn't distinguished by anything checked here; what matters operationally is the same either way —
+   **a dev machine's own installed `pg_dump` is not something this project's setup keeps in sync
+   with Neon's actual running version, and nothing announces it when they drift.** Anyone running
+   `backup_dump.sh` (or any future script that shells out to `pg_dump`/`pg_restore`) without going
+   through `resolve_pg_bin` would have produced a dump with no version guarantee at all, silently.
+   If Neon's major version ever moves again, expect this exact friction again — install the matching
+   major locally before it's needed, don't wait for a backup to fail first.
+
 ## Render
 
 - Runtime: Docker (not the Python native runtime) — builds directly from `caseiq-fastapi/Dockerfile`.

@@ -302,6 +302,18 @@ class LLMService:
                     # was diagnosed by reading the raw response's own
                     # finish_reason and completion_tokens_details, not by
                     # changing the prompt and hoping (see docs/evaluation.md).
+                    #
+                    # FLAGGED 2026-09-19, not fixed in this pass (docs/
+                    # evaluation.md, 2026-09-19 stacked-failure entry): this
+                    # plumbing is DEAD. Grepped every call site of _call() --
+                    # process_query (the live /legal/query path), detect_
+                    # language, and both related_questions calls -- none of
+                    # them pass extra_body, so this is always `{}` and
+                    # reasoning_effort is never actually set. The failure mode
+                    # described above is real and currently unguarded on the
+                    # one path that matters; this was investigated as the
+                    # leading theory for a since-confirmed-different 500 and
+                    # ruled out for THAT incident, not for existing at all.
                     extra_body=extra_body or {},
                 )
                 logger.info("groq_call_served", key=key.label)
