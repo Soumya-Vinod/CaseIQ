@@ -192,6 +192,37 @@ from the container's start command — but the underlying compose pattern is sti
 an eventual real deployment and should get a dedicated migration step (e.g. a Render "Job" or a
 CI step that runs once) before this goes beyond a spike.
 
+## Vercel
+
+- Root Directory: `caseiq-web` (the frontend lives in a subdirectory of this monorepo, not at the
+  repo root).
+- Framework preset: Vite, auto-detected once Root Directory is correct.
+
+### GitHub integration was never actually working — found and fixed 2026-09-19
+
+**Root Directory was `./` (the monorepo root), not `caseiq-web`.** Every build Vercel's GitHub
+integration triggered on a push ran its install/build step against the repo root — no
+`package.json` there, so the build had nothing to resolve `vite` against and failed before doing
+anything real. **This means the GitHub-triggered deploy path had never once succeeded** — every
+previously "working" deployment of `caseiq-web.vercel.app` (including the one whose URL went public
+on 2026-08-31, see the Security note above) was pushed from a developer's own machine via the Vercel
+CLI, which uploads the built output directly and never exercises Root Directory resolution or the
+GitHub-triggered install/build path at all. **The GitHub integration being present and "connected"
+in Vercel's dashboard was never evidence it worked** — it had a green checkmark and a broken build
+underneath it, for the same reason `docs/evaluation.md`'s 2026-09-19 entry found Render's own
+Auto-Deploy setting looking correctly configured while a separate, unrelated failure sat one layer
+below it.
+
+Fixed by setting Root Directory to `caseiq-web`. Confirmed, not assumed: a real push to `main`
+triggered a real GitHub-integration build, the install step ran, Vite resolved, the build succeeded,
+and the resulting deploy was checked in a real browser — see `docs/evaluation.md`'s same-day entry
+for why "checked in a real browser," specifically, is the operative phrase here and not incidental.
+
+**Housekeeping status, closed**: "Vercel GitHub integration actually deploys from a push" has been
+on this project's list as *configured but unverified* since the frontend first went live
+(2026-08-31) — nobody had pushed a frontend change and watched it deploy through GitHub rather than
+the CLI in the time since. It is now confirmed working, end to end, as of 2026-09-19.
+
 ## Cost reality
 
 - **$0** — Neon free tier (persists, supports pgvector, autosuspends when idle) + Render free tier:

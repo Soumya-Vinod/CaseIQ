@@ -5380,3 +5380,36 @@ mitigation has never actually run. This was the leading theory for the 500 inves
 confirmed wrong once Sentry named the real cause, and is real regardless: a live, currently-unguarded
 failure mode on the one endpoint that matters, flagged in the code itself (`app/services/llm.py`,
 same lines) as well as here.
+
+### A third instance of the same lesson, same sequence: Vercel's GitHub integration had never once deployed either
+
+Fixing the CORS entry above required a real cross-origin browser request to surface at all —
+`caseiq-web.vercel.app` had to actually be live and actually be hit from a browser, not curl, before
+either of the two stacked backend failures became visible. Verifying that fix the same way (open the
+site, submit a real query, watch it work) surfaced a *third*, completely independent failure in the
+same sequence, on the frontend side this time: **Vercel's Root Directory was `./` (the monorepo
+root), not `caseiq-web`** — every build the GitHub integration ever triggered on a push had no
+`package.json` to install against and failed before Vite ever ran. Every previously "working"
+deployment of the live site, including the one whose URL went public on 2026-08-31, had been pushed
+from a developer's own machine via the Vercel CLI, which builds locally and uploads the result
+directly — a path that never exercises Root Directory resolution or the GitHub-triggered
+install/build step at all. See `docs/deployment.md`'s new `## Vercel` section for the fix and
+confirmation; recorded here because the *shape* of the failure is what belongs next to the entry
+above, not the fix itself.
+
+**The pattern, now three times in one sequence, not two:**
+1. Every backend check this week used curl — CORS is browser-enforced, so curl never exercised it,
+   and the frontend's every real POST died at preflight for 19 days, unnoticed.
+2. Every one of those same curl checks either bypassed the failing code path entirely or happened to
+   hit the abstention short-circuit — so "the backend is provably correct" was true of the one path
+   tested and false of the one that wasn't, for 0014's un-run migration.
+3. Every deployment of the frontend came from the CLI, which doesn't exercise the GitHub-triggered
+   build path at all — so "the frontend deploys successfully" was true of the one path used and
+   false of the one path every future push would actually take, since project inception.
+
+All three are the identical shape: **a verification method that happens to route around the exact
+failure it would otherwise have caught**, discovered only once, in sequence, when someone used the
+system the way an actual user or an actual `git push` does instead of the way this project had been
+checking it. None of the three were caught by review, by a passing test, or by a green dashboard —
+each was only ever going to be found by exercising the real path, and each was found within the same
+few hours specifically *because* fixing the first one forced the real path to finally run.
