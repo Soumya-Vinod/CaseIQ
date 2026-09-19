@@ -5413,3 +5413,156 @@ system the way an actual user or an actual `git push` does instead of the way th
 checking it. None of the three were caught by review, by a passing test, or by a green dashboard —
 each was only ever going to be found by exercising the real path, and each was found within the same
 few hours specifically *because* fixing the first one forced the real path to finally run.
+
+## The sub-clause-merge redesign: scoped properly, declined on evidence (2026-09-19)
+
+**Decision, stated plainly: not building this.** Scoped before any code was written, per the same
+discipline every fix in this document goes through — quantify the affected set, spot-check it
+against the source, name the mechanism and its risk, cite the actual measured precedent rather than
+a general impression — and the scoping itself produced the answer. Recorded here as a decision, not
+a deferred backlog item, because the reasoning is durable even if nobody revisits this for months:
+the next person hitting this shouldn't have to re-derive it from a chat transcript.
+
+### The three convergent reasons
+
+1. **The project's own prior-written conclusion**, already on record before this decision
+   (`docs/evaluation.md`, "sub-clause-merge pattern," 2026-09-18): a real fix needs a positional
+   signal built into `reconstruct_rows()`'s shared core — the exact code every currently-correct
+   complete row depends on — and that is "the shape this project already tried once, at smaller
+   scope, and measured as a real redesign."
+2. **Code-level structure confirms it's the same layer, not a narrower one.** `reconstruct_rows()`
+   (`scripts/parse_crpc_schedule.py:284-430`) does not separate row-*opening* from row-*closing*
+   into distinct functions — both are conditions evaluated in one loop over the same shared mutable
+   state (`buf`, `court_seen`, `current_section`, `last_ordinal`). A row's close and the next row's
+   open are the same transition. There is no way to add a new open-signal without touching the exact
+   mechanism `merge_orphan_fragments` already touched from the close side.
+3. **The directly analogous precedent measured failure at this same layer.**
+   `merge_orphan_fragments` (same file, lines 433-515; not wired into the pipeline, `__main__`
+   explicitly skips it) attacked the close side with a narrower, supposedly safer framing
+   (post-process orphaned fragments rather than change the triggers themselves) and measured **0
+   sections gained, 1 lost** (212/381 → 211/381, s.382 regressed) against the pre-Ditto baseline.
+   Its own docstring names the real defect as `close_row()` closing one line too early on complex
+   multi-line rows, and states plainly that a real fix "risks every row that currently closes
+   correctly, exactly what the s.382 loss demonstrates."
+
+No fourth reason was needed, but a fourth line of evidence showed up anyway: **the absence of a
+defensible recovery-fraction number is itself a signal, not just an inconvenience.** The CrPC
+Ditto-propagation fix (2026-09-19, above) produced a confident number easily, because it was four
+independently-checkable narrow mechanisms — a token-count minimum, a regex tolerance, one stripped
+character, a per-section override dict — none touching shared control flow. This fix has exactly one
+candidate mechanism, inside code already measured failing nearby. A scoping pass that can't produce
+a number it trusts, on a project that has produced trustworthy numbers for every other fix in this
+document, is telling you something.
+
+### The stopping rule, agreed in advance (not triggered — recorded for if this is ever revisited)
+
+- **Any regression among the currently-complete rows reverts, full stop.** Same zero-tolerance floor
+  `merge_orphan_fragments` was already held to — one regressed section was sufficient to call that
+  attempt net negative.
+- **N = 16 of 32 (50%) rows recovered, measured against a full before/after fixture, or revert.** Set
+  above what a cheap patch would need to clear, since this carries regression risk across the whole
+  corpus that the Ditto work never did.
+- No such fixture exists today (checked: `tests/`'s three CrPC-schedule test files together enumerate
+  35 specific known-fixed rows, not a comprehensive snapshot of all complete rows). Building it would
+  be a real prerequisite cost, before any fix attempt, not part of measuring one afterward.
+
+### The 30-minute spike: purely aspirational, not partially implemented
+
+The module's own docstring (`scripts/parse_crpc_schedule.py:31-38`) describes what reads like an
+already-designed sub-clause signal: "track whether the current open row's court column... has
+already received content; the next line that puts fresh content in columns 1-3 after that closes the
+current row and opens a new one, whether or not column 1... is blank."
+
+Read `reconstruct_rows()` directly against that claim. The actual code has exactly two close
+triggers (lines 386-394):
+1. `has_new_section and current_section is not None` — a confirmed, monotonically-sane section
+   number token in column 0.
+2. `court_seen and court_looks_done and not tail_has_content` — the court column (5) has previously
+   received content, its accumulated text matches a closed-vocabulary "looks finished" regex, AND
+   the current line has nothing in columns 3-5.
+
+**Neither trigger inspects columns 1-2 for fresh content at all.** The docstring's described
+mechanism — close and reopen on new offence-description text appearing under a blank section number
+— is not implemented anywhere in the shipped v3 code. It's an intended design that either never got
+built past the comment, or was attempted and dropped without the comment being corrected either way
+— not distinguished here, and not necessary to distinguish for this decision.
+
+This resolves the question the spike was for (nothing to build on, whoever picks this up next starts
+from zero, not from a half-finished mechanism) and adds a fifth data point for *why* the merges
+happen: a genuine new sub-clause (s.500's "Defamation in any other case") only ever triggers a close
+via signal #2 above — which requires the *previous* clause's court text to already look
+grammatically finished. If the new sub-clause's text arrives before that gate fires — or arrives
+with anything transiently present in columns 3-5 from column-boundary bleed, which this parser's own
+history (module docstring's v1/v2 dead ends) shows happens routinely — the new content silently
+folds into the still-open row instead. A real fix needs a genuinely new signal, built from scratch,
+not an extension of anything currently there.
+
+### 258 vs 259, resolved: 259 is correct, confirmed live
+
+Two same-day 2026-09-19 entries disagreed by one row (`docs/evaluation.md`'s row-boundary-collision
+entry: 258; the sub-clause-merge entry, one section later: "~259"). Re-ran `scripts/
+parse_crpc_schedule.py` directly against the real source (`documents/CrPC_1973.pdf`) rather than
+trusting either prose figure:
+
+```
+rows: 740
+complete rows: 259
+distinct sections: 395 total, 222 with >=1 complete row (56.2%)
+diagnostics: 7 (errors=0, warnings=4)
+```
+
+**259 complete rows is the live, authoritative number.** Not chased further: which of the two prior
+entries was stale and why is not resolved here, only which number to trust going forward — the live
+parser run, not either doc's prose, whenever this needs re-confirming.
+
+One more discrepancy surfaced by this same run, flagged rather than silently left standing, but
+explicitly **not chased** — out of scope for today's ask, and the 56.2% figure it produces is
+consistent with the coverage number already in use everywhere else: this run's own `all_sections`
+count is **395**, not the **381** cited consistently elsewhere in this document (including inside
+`merge_orphan_fragments`'s own docstring). `all_sections` here is every distinct `section_number`
+string seen across all 740 raw reconstructed rows, before completeness filtering — plausibly
+inflated by a small number of formatting-variant duplicates the cleaning logic doesn't collapse,
+rather than 14 genuinely distinct real sections nothing has ever accounted for, but that's a guess,
+not a check. Whoever next touches section-count arithmetic in this file should reconcile 395 vs. 381
+before building on either — the same "pin the live number, don't trust prose" lesson this section
+itself is.
+
+### What would have to change for this to be worth revisiting
+
+Not "more time" — the scoping already used the time available honestly. What would actually change
+the answer:
+
+1. **A genuinely new positional signal design**, built from scratch per the spike's finding above —
+   something that can tell "a new sub-clause started, section number blank" apart from "the same
+   clause's text is still wrapping onto a new physical line," which is the open question the module
+   docstring's aspirational version never actually answered either. Both cases put fresh content in
+   columns 1-2 on a line with blank column 0; today's code has no signal that distinguishes them, and
+   neither did the never-built one described in the docstring.
+2. **A measurement path that doesn't require touching `reconstruct_rows()`'s live control flow to
+   get a real number.** Build the new signal as a *diagnostic-only pass* first — run it read-only
+   against the existing raw lines, log everywhere it would have closed/opened a row differently than
+   today's code does, diff that against the frozen fixture from point 3 — and get an actual
+   recoverable-row count from that before ever wiring it into `close_row()`/`reconstruct_rows()` for
+   real. This is what was missing this time: every other fix in this document had a trustworthy
+   number *before* code was written; this one couldn't, because the only way to learn the real count
+   was previously "change the production path and see what breaks," which is the same one-shot bet
+   `merge_orphan_fragments` already lost once.
+3. **The full before/after fixture** (point 3 above), built either way, since a shadow-mode pass
+   still needs something to diff against.
+
+Absent those, the answer stays no.
+
+### User-visible consequence: unchanged, and the existing caveat already covers this
+
+56% CrPC coverage (`caseiq-web/src/data/situationGuides.ts`'s `fir-refused` guide) stands as-is —
+nothing about today's decision changes the coverage number or resolves the unsized Ditto-correctness
+question. Checked whether the guide's own caveat wording already reflects both reasons, per that
+file's own top-of-file comment (lines 38-52, dated 2026-09-07 plus same-day addendum): it does, and
+deliberately so — the comment already documents that the caveat was originally written for coverage
+alone and now also covers "some fraction of that 56%... carries a cognizability/court value silently
+inherited from the WRONG row... not merely absent," and states the existing wording ("can depend on
+details a lawyer or legal aid clinic can check") was judged to cover both in effect without needing
+to spell out the distinction to a reader in crisis. The sub-clause-merge gap decided against fixing
+here is not a third reason — it's part of *why* coverage sits at 56% rather than higher, already
+subsumed under the first reason, not a new failure mode requiring new wording. No change made to
+`situationGuides.ts`.
