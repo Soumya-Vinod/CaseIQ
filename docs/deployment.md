@@ -240,6 +240,52 @@ the CLI in the time since. It is now confirmed working, end to end, as of 2026-0
   portfolio demo), the real fix is redeploying both Neon and Render in a Singapore region — Neon
   has one; Render's region list should be checked — not trying to shave the US-East number down.
 
+## `DEMO_TRIM_MODE` toggle timing — and what actually matters for demo day (2026-09-20)
+
+`settings.DEMO_TRIM_MODE` (`app/core/config.py`) is read once per process at startup via `@lru_cache`
+(see that field's own docstring) — a Render dashboard change only takes effect once the process
+restarts, which Render triggers automatically on save. Two real transitions were timed, not assumed:
+
+- **Toggle ON, cold instance**: ~96s observed gap. Not independently re-logged in this session's own
+  polling (that attempt got rate-limited out — see below — before the transition was captured; the
+  figure comes from watching it directly). At the time, the instance had been idle before the toggle,
+  so the first poll after flipping it is exactly what would also trigger a normal Render free-tier
+  wake-from-sleep.
+- **Toggle OFF, warm instance**, polling started BEFORE the toggle this time, clean and precise:
+  ```
+  21:08:58  up  trim=True
+  21:09:01  up  trim=False
+  ```
+  Zero observed downtime — no failed poll at all between the two, 3 seconds apart. The restart
+  completed inside that window with nothing visibly interrupted.
+
+**Reframes the first measurement, not just adds a second data point**: the ~96s wasn't the cost of
+the env-var-triggered restart itself — it was the cost of the instance being cold going in, the same
+30-60s(+) free-tier wake-from-15-minutes-idle penalty this doc already documents above, layered on
+top of whatever the restart itself costs. On a WARM instance, toggling `DEMO_TRIM_MODE` is
+effectively seamless (sub-3-seconds, per the clean measurement) — genuinely usable as a live,
+mid-demo escape hatch, exactly as it was designed to be used. On a cold one, the toggle is irrelevant
+next to the spin-up penalty you'd pay regardless of what triggered the restart.
+
+**The practical takeaway for demo day is therefore not about the toggle at all — it's that the
+instance has to stay warm through the whole session.** That makes UptimeRobot (see docs/
+evaluation.md's 2026-09-16 entry — configured as an external dashboard setup, not code, and not
+independently re-verified as still active from this repo) the actual demo-critical dependency: if
+it's not really pinging every 5 minutes, the FIRST query of any gap longer than ~15 idle minutes
+pays the cold-start penalty regardless of `DEMO_TRIM_MODE`, rate limits, or anything else tuned this
+session. Confirm it's live before demo day, not just that it was once configured.
+
+**`/health`'s own rate limit, found the costly way**: `/health` carries no `@limiter.limit`
+decorator, so it falls under `app.core.ratelimit`'s bare `default_limits` — **200 requests/hour**,
+keyed per client IP same as every other route. A same-IP polling loop timing the toggle above hit
+this directly (~200 requests in about 6 minutes at a ~1.7s interval trips it well inside the hour,
+`retry-after` then reported ~39 minutes remaining on that window) — a real, self-inflicted
+complication mid-measurement, not a production issue; it only blocked that one testing IP, never
+real traffic. **UptimeRobot's own 5-minute interval is 12 requests/hour — comfortably safe.** Worth
+stating plainly since it wasn't obvious in advance: a future monitoring interval tighter than
+~18 seconds sustained against `/health` specifically would need its own `@limiter.limit` override to
+stay clear of this same ceiling; 5 minutes has over 15x headroom and needs nothing.
+
 ## Security note — rotation deliberately deferred (2026-08-31)
 
 The Neon database password has been exposed on-screen **twice**, before this session: once via an
