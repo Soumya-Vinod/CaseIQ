@@ -206,6 +206,46 @@ class SituationIn(BaseModel):
     situation: str = Field(min_length=1, max_length=2000)
 
 
+class TimelineSectionIn(BaseModel):
+    """One (act, section) the caller already knows about -- meant to be
+    populated from a prior QueryOut.legal_sections entry's own act/section,
+    not a fresh lookup. See app.api.v1.legal's /legal/timeline endpoint for
+    why this reuses retrieval instead of repeating it."""
+    act: str
+    section: str
+
+
+class TimelineIn(BaseModel):
+    # Not redundant with `sections` below -- the query is what tells the
+    # model WHICH of the given sections' time limits are actually relevant
+    # to this situation, the same role payload.query plays in QueryIn.
+    query: str = Field(min_length=1, max_length=2000)
+    sections: list[TimelineSectionIn] = Field(min_length=1, max_length=12)
+    as_of: date | None = None
+
+
+class TimelineStageOut(BaseModel):
+    stage: str
+    description: str
+    act: str
+    section: str
+    # The exact claim string that survived app.services.timeline_verification
+    # -- i.e. confirmed to match a real, extracted time-limit clause in this
+    # section's own text, not the model's unverified first draft.
+    time_limit: str
+
+
+class TimelineOut(BaseModel):
+    stages: list[TimelineStageOut]
+    # How many the model proposed before verification -- stated so a
+    # short/empty `stages` list reads as "most were dropped, un-grounded"
+    # rather than silently looking identical to "the model proposed almost
+    # nothing." See docs/evaluation.md's 2026-09-20 scoping entry for why
+    # this transparency was a design requirement, not an afterthought.
+    stages_proposed: int
+    as_of: date
+
+
 class SectionOut(ORMModel):
     id: UUID
     act: str

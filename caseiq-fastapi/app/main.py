@@ -205,6 +205,26 @@ def create_app() -> FastAPI:
         # why a browser had to find this instead of anything on our side. No
         # secrets in this value (it's a list of public frontend origins),
         # same safety rationale as the rest of this endpoint.
+        #
+        # groq_key_count / demo_trim_mode added 2026-09-20 (docs/
+        # evaluation.md), same blind spot again: a third Groq key was added
+        # to Render's dashboard for a live demo, and there was no way from
+        # outside to confirm it actually resolved inside the running
+        # container versus just being saved. A COUNT only, never the keys
+        # themselves or which numbered slots are filled -- same "config
+        # shape, not secrets" posture as the rest of this endpoint. Computed
+        # directly from settings, not via llm_service._groq_keys, so this
+        # endpoint can never raise the llm_unconfigured AppError that
+        # property does when GROQ_API_KEY is genuinely unset (a valid,
+        # deliberate state on some deployments -- see docs/deployment.md).
+        # demo_trim_mode is exactly the flag that must be impossible to miss
+        # once it's no longer needed -- see its own docstring (app.core.
+        # config) for why /health is where it's surfaced.
+        groq_key_count = sum(
+            1 for k in [settings.GROQ_API_KEY, *(
+                getattr(settings, f"GROQ_API_KEY_{i}", None) for i in range(2, 10)
+            )] if k
+        )
         build = get_build_info()
         return {
             "status": "ok",
@@ -213,6 +233,8 @@ def create_app() -> FastAPI:
             "embedding_dim": settings.EMBEDDING_DIM,
             "embedding_model": embedder.model_id,
             "allowed_origins": settings.ALLOWED_ORIGINS,
+            "groq_key_count": groq_key_count,
+            "demo_trim_mode": settings.DEMO_TRIM_MODE,
             "git_commit": build.get("git_commit"),
         }
 

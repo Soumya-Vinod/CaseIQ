@@ -121,6 +121,40 @@ helpline number or contact list yourself -- a verified one is attached separatel
 Return ONLY valid JSON:
 {{"conversational_summary": "Direct 3-6 sentence answer. Cite sections inline (e.g. 'Under BNS 303...').", "structured_data": {{}}}}"""
 
+# ADDED 2026-09-20 (docs/evaluation.md scoping/build entry): unlike
+# _STRUCTURED_PROMPT/_FOLLOWUP_PROMPT, the excerpts here are pre-filtered by
+# the CALLER (app.api.v1.legal) to only sections that already contain an
+# extractable time-limit clause (app.legal_corpus.parsing.timeline_clause) --
+# there is nothing else in scope to cite, by construction, not just by
+# instruction. Every stage this prompt produces is still run through
+# app.services.timeline_verification afterward; this prompt's own "RULES"
+# section is what keeps the REJECTION rate low, not what makes rejection
+# safe to skip.
+_TIMELINE_PROMPT = """You are CaseIQ, generating a procedural timeline for an Indian criminal-law \
+situation. You may ONLY use the numbered section excerpts below -- never use sequencing, stage \
+names, or time limits from your own training data, even ones you believe are correct. Each excerpt \
+already states a real time limit verbatim from the statute; your job is to select which apply to \
+this situation and put them in chronological order, not to add anything they don't already say.
+
+SECTION EXCERPTS (the ONLY source of stages and time limits -- nothing outside this list exists \
+for this task):
+{sections_block}
+
+USER'S SITUATION: {query}
+
+Return ONLY a valid JSON array, no markdown fences, no preamble, one object per stage, in \
+chronological order as they would actually occur:
+[{{"stage": "short stage name", "description": "1 plain-language sentence", "act": "exact act \
+label as given above", "section": "exact section number as given above", "time_limit_claim": \
+"the time limit AS STATED in that excerpt, e.g. 'within 24 hours' or 'within a period of sixty \
+days'"}}]
+
+RULES: Include a stage ONLY when one of the excerpts above states an explicit time limit that \
+applies to this situation -- never invent a stage, a section, a time limit, or sequencing not \
+given above. If none of the excerpts fit the user's situation, return an empty array []. Every \
+"section" value must be one of the section numbers given above, exactly as written -- never a \
+section number from memory."""
+
 _CRIME_TERMS = {
     "theft", "murder", "assault", "rape", "fraud", "cheating", "robbery", "kidnapping",
     "accident", "domestic", "violence", "harassment", "cybercrime", "defamation", "bail",
@@ -218,23 +252,44 @@ class LLMService:
 
     @property
     def _groq_keys(self) -> list[_GroqKey]:
-        """FIXED 2026-09-07: failover, not load-balancing -- a second key on
-        a second Groq account gives real extra headroom under the SAME
-        8000-TPM-per-key arithmetic (see docs/evaluation.md's concurrency-
-        ceiling entry), not a fix for the arithmetic. `GROQ_API_KEY_2` is
-        optional and purely additive: absent, this list has exactly one
-        entry and `_call` behaves exactly as it did before this existed --
-        one attempt, a 503 on any Groq-side failure, no crash, no new
-        failure mode. Built once and cached (not a fresh list per call) --
-        `cold_until` state has to persist on the SAME `_GroqKey` objects
-        across requests, or every call would see both keys as warm.
+        """FIXED 2026-09-07, GENERALIZED 2026-09-20: failover, not
+        load-balancing -- each extra key on its own Groq account gives real
+        extra headroom under the SAME 8000-TPM-per-key arithmetic (see
+        docs/evaluation.md's concurrency-ceiling entry), not a fix for the
+        arithmetic. Originally hardcoded to GROQ_API_KEY + GROQ_API_KEY_2;
+        walks GROQ_API_KEY_2 through GROQ_API_KEY_9 now (a third key was
+        added for a live demo, and the two-key cap had no principled reason
+        to stay hardcoded once a third existed) -- see app.core.config's own
+        comment on these fields. Every extra key is optional and purely
+        additive: fewer set just means a smaller pool, in the SAME order
+        every time (ascending by suffix) -- absent, this list has exactly
+        one entry and `_call` behaves exactly as it always did with one key,
+        no crash, no new failure mode regardless of how many are configured.
+
+        NO functional primary/secondary/tertiary split exists, and one never
+        really did -- the old "primary"/"secondary" labels described ORDER,
+        not a role: `_call` always tried GROQ_API_KEY first only because it
+        was first in the list, never because anything treated it specially.
+        Generalizing to N keys is that same fact stated plainly: one ordered
+        pool, every member tried in the same way, differing only in WHEN
+        each is reached. Labels are now literally the source env var name
+        (GROQ_API_KEY, GROQ_API_KEY_2, ...) rather than a role word, so a
+        `groq_call_served`/`groq_key_cooldown` log line always names exactly
+        which configured key was used without needing a position->name
+        mapping in the reader's head.
+
+        Built once and cached (not a fresh list per call) -- `cold_until`
+        state has to persist on the SAME `_GroqKey` objects across requests,
+        or every call would see every key as warm.
         """
         if self._keys is None:
             if not settings.GROQ_API_KEY:
                 raise AppError("LLM is not configured (GROQ_API_KEY missing).", code="llm_unconfigured")
-            keys = [_GroqKey("primary", settings.GROQ_API_KEY)]
-            if settings.GROQ_API_KEY_2:
-                keys.append(_GroqKey("secondary", settings.GROQ_API_KEY_2))
+            keys = [_GroqKey("GROQ_API_KEY", settings.GROQ_API_KEY)]
+            for suffix in range(2, 10):
+                extra_key = getattr(settings, f"GROQ_API_KEY_{suffix}", None)
+                if extra_key:
+                    keys.append(_GroqKey(f"GROQ_API_KEY_{suffix}", extra_key))
             self._keys = keys
         return self._keys
 
@@ -256,13 +311,21 @@ class LLMService:
         # transient overload deserves a real retry path, not just an honest
         # error message. Failover, not load-balancing -- see _groq_keys and
         # docs/evaluation.md's concurrency-ceiling entry for why this is
-        # headroom against a tier limit, not a fix for it. At most ONE
-        # rotation attempt: try the first warm key; on a rate limit,
-        # cooldown it and try the next warm key once; anything else (a
-        # non-rate-limit Groq error, or every key already cold/now cold)
-        # goes straight to the same 503 as before -- deliberately never a
-        # retry loop, since retrying against an already-scarce TPM budget
-        # is how the 40-68s failures happened in the first place.
+        # headroom against a tier limit, not a fix for it.
+        #
+        # GENERALIZED 2026-09-20: was `for key in warm[:2]`, a hardcoded cap
+        # matching the two-key pool that existed at the time -- now `for key
+        # in warm`, trying every CURRENTLY WARM key once, in pool order,
+        # never the same key twice in one call. Still never a retry loop in
+        # the sense that mattered originally: each key is a genuinely
+        # separate Groq account/budget, so moving to the next one on a rate
+        # limit is real failover onto fresh capacity, not hammering the same
+        # already-scarce TPM budget the way an actual retry against ONE key
+        # would -- the failure mode `warm[:2]` was never trying to prevent
+        # in the first place. Any non-rate-limit Groq error (timeout,
+        # connection, 5xx) still goes straight to the 503 below without
+        # trying further keys, same as always -- a different key doesn't fix
+        # a per-request failure, regardless of how many keys are configured.
         keys = self._groq_keys
         warm = [k for k in keys if not k.is_cold]
         if not warm:
@@ -283,7 +346,7 @@ class LLMService:
             )
 
         last_exc: GroqRateLimitError | None = None
-        for key in warm[:2]:
+        for key in warm:
             try:
                 resp = await key.client.chat.completions.create(
                     model=settings.GROQ_MODEL,
@@ -614,6 +677,55 @@ class LLMService:
             return [session.restore(x) if isinstance(x, str) else x for x in questions]
         except Exception:
             return []
+
+    async def generate_timeline(self, query: str, sections: list[dict]) -> tuple[list[dict], dict]:
+        """`sections`: [{"act", "section", "text"}, ...] -- the CALLER
+        (app.api.v1.legal) is responsible for pre-filtering this to only
+        sections that actually carry an extractable time-limit clause (see
+        app.legal_corpus.parsing.timeline_clause.extract_time_limit_clauses)
+        before this is ever called: there is no point spending tokens asking
+        the model to ground a stage in a section with nothing dated in it,
+        and doing the filter before generation, not after, is also what
+        makes an empty result here mean "nothing dated matched this query,"
+        not "the model chose not to use what it was given."
+
+        Returns (stages, redaction_map) -- the model's RAW proposed stage
+        list, UNVERIFIED. This method's only job is grounded-INPUT
+        generation, never grounded-OUTPUT truth: the caller MUST run the
+        result through app.services.timeline_verification.verify_timeline_
+        stages before showing anything to a user. Same storage-vs-live-
+        response split as process_query's own redaction_map -- the caller
+        restores real PII into a copy for the one HTTP response, never into
+        anything persisted.
+
+        Deliberately does NOT swallow exceptions the way related_questions
+        does -- a failed generation here IS the entire point of this
+        endpoint's response, not a decorative addition to an
+        already-successful answer, so a genuine Groq failure should surface
+        as the same clean 503 every other Groq-side failure does, not
+        silently read as "no dated procedure exists for this offence."
+        """
+        session = RedactionSession()
+        redacted_query = session.redact(query)
+        if session.had_redactions:
+            logger.info("pii_redacted", endpoint="legal_timeline", counts=session.counts)
+
+        sections_block = "\n\n".join(
+            f'{i + 1}. {s["act"]} section {s["section"]}: "{s["text"]}"'
+            for i, s in enumerate(sections)
+        )
+        raw = await self._call(
+            [{"role": "user", "content": _TIMELINE_PROMPT.format(
+                sections_block=sections_block, query=redacted_query,
+            )}],
+            temperature=0.1, max_tokens=1200,
+        )
+        try:
+            stages = self._parse_json(raw)
+        except (json.JSONDecodeError, AttributeError) as exc:
+            logger.warning("timeline_json_parse_failed", error=str(exc))
+            return [], session.mapping
+        return (stages if isinstance(stages, list) else []), session.mapping
 
 
 llm_service = LLMService()

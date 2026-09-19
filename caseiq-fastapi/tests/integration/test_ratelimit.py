@@ -154,20 +154,25 @@ async def client(_schema_ready, monkeypatch):
 
 
 class TestDecoratedRouteEnforcement:
-    """/legal/query carries @limiter.limit("8/hour") -- see app/api/v1/legal.py."""
+    """/legal/query carries @limiter.limit("40/hour") -- see app/api/v1/legal.py.
+    RAISED from 8/hour, 2026-09-20 (docs/evaluation.md) for a live demo
+    (one presenter, ~120 queries/session, single IP) -- these tests' request
+    counts move with it, same "N+1 requests must produce a 429" shape as
+    before, not just the literal numbers.
+    """
 
     async def test_middleware_actually_enforces_a_limit(self, client):
         # FIXED bug 1: this used to never happen at all -- SlowAPIMiddleware
         # was never added, so nothing capped anything regardless of how
-        # many requests came through. 9 requests against an "8/hour" limit
+        # many requests came through. 41 requests against a "40/hour" limit
         # MUST produce at least one 429 -- if the middleware regresses to
         # inert, every one of these returns 200 and this assertion catches it.
         statuses = []
-        for i in range(9):
+        for i in range(41):
             r = await client.post("/api/v1/legal/query", json={"query": f"theft question {i}"})
             statuses.append(r.status_code)
         assert 429 in statuses, (
-            f"expected a 429 somewhere in 9 requests against an 8/hour limit, got {statuses} -- "
+            f"expected a 429 somewhere in 41 requests against a 40/hour limit, got {statuses} -- "
             f"rate limiting is not enforcing anything"
         )
 
@@ -181,16 +186,16 @@ class TestDecoratedRouteEnforcement:
         # here doesn't show up as a wrong status code, it shows up as this
         # test raising instead of asserting, which is exactly what makes it
         # easy to miss without a test that actually sends real requests.
-        for i in range(8):
+        for i in range(40):
             r = await client.post("/api/v1/legal/query", json={"query": f"theft question {i}"})
             assert r.status_code == 200, f"request {i} should succeed under the limit, got {r.status_code}: {r.text}"
             assert "x-ratelimit-limit" in {k.lower() for k in r.headers}
 
-        r9 = await client.post("/api/v1/legal/query", json={"query": "theft question 9"})
-        assert r9.status_code == 429
-        body = r9.json()
+        r41 = await client.post("/api/v1/legal/query", json={"query": "theft question 41"})
+        assert r41.status_code == 429
+        body = r41.json()
         assert body["error"]["code"] == "rate_limited"
-        assert "Retry-After" in r9.headers
+        assert "Retry-After" in r41.headers
 
 
 class TestDefaultLimitRouteEnvelope:

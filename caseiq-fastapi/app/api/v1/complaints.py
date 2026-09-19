@@ -64,11 +64,22 @@ def _out(c: Complaint, *, download_url: str | None) -> ComplaintOut:
 # against yet. Keyed by app.core.ratelimit's rate_limit_key, not slowapi's
 # IP-only default -- see that module's own docstring for why.
 #
+# RAISED 8 -> 40/hour, 2026-09-20 (docs/evaluation.md): same live-demo
+# reasoning as legal.py's process_query -- a single presenter, ~120 queries
+# across a multi-hour session, all from one IP, would otherwise be blocked
+# from the ninth query on. Still provisional, no more calibrated against
+# real traffic than 8 was -- raised for a specific known event, not a
+# general capacity judgment. Real cost: a single abusive anonymous client
+# can now burn up to 40/hour of the shared Groq TPD budget before slowapi
+# stops it, instead of 8 -- a real, accepted tradeoff for this one event,
+# not a permanent security stance. Revisit downward after the demo unless
+# real traffic gives a reason to keep it here.
+#
 # The `response: Response` parameter is required here too -- see the
 # matching comment on app.api.v1.legal.process_query for why slowapi
 # crashes on every request (not just a 429) without it, found only by
 # actually triggering a live request against /legal/query first.
-@limiter.limit("8/hour")
+@limiter.limit("40/hour")
 async def create_complaint(
     payload: ComplaintIn, db: DB, user: OptionalUser, request: Request, response: Response,
 ):

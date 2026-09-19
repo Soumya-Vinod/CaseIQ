@@ -241,7 +241,25 @@ class Settings(BaseSettings):
     # arithmetic, not a fix for the arithmetic itself. Optional and
     # additive: absent, `LLMService` behaves exactly as it did with one key
     # (see its own docstring) -- no crash, no behaviour change.
+    #
+    # EXTENDED 2026-09-20 (docs/evaluation.md): generalized from a hardcoded
+    # two-key pool to GROQ_API_KEY_2 through GROQ_API_KEY_9 -- a third key
+    # was added for a live demo, and `app.services.llm.LLMService._groq_keys`
+    # now walks this whole numbered range rather than checking `_2` alone.
+    # Each one is independently optional; a gap or a stop anywhere in the
+    # range just means a smaller pool, never a crash -- see that property's
+    # own docstring. No functional "primary/secondary" role split exists or
+    # ever did: every key here is an equal member of one ordered pool, tried
+    # in ascending order, differing only in WHEN each is reached, never in
+    # WHAT it's allowed to do.
     GROQ_API_KEY_2: str | None = None
+    GROQ_API_KEY_3: str | None = None
+    GROQ_API_KEY_4: str | None = None
+    GROQ_API_KEY_5: str | None = None
+    GROQ_API_KEY_6: str | None = None
+    GROQ_API_KEY_7: str | None = None
+    GROQ_API_KEY_8: str | None = None
+    GROQ_API_KEY_9: str | None = None
     # llama-3.3-70b-versatile was retired from Groq's catalog (404 model_not_found,
     # discovered 2026-08-30 -- see docs/deployment.md). This default is a fallback for
     # environments with no GROQ_MODEL env var set; re-check Groq's /models list before
@@ -249,6 +267,21 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_TEMPERATURE: float = 0.1
     GROQ_MAX_TOKENS: int = 3000
+    # ADDED 2026-09-20 (docs/evaluation.md), for a live demo whose real token
+    # cost per query turned out to be ~3,600-4,000, not the ~2,900 originally
+    # assumed -- detect_language and related_questions are each a REAL,
+    # separate Groq call on top of the main generation call, and the
+    # two-key-daily-pool assumption behind the demo's rate-limit increase was
+    # never independently confirmed for TPD (only for TPM). This flag is the
+    # fallback if the daily ceiling turns out lower than expected mid-demo:
+    # True skips both auxiliary calls, dropping real per-query cost back to
+    # ~2,900. See app.api.v1.legal.process_query for exactly what breaks with
+    # this on (language auto-detection and suggested follow-up questions,
+    # nothing else) -- deliberately named DEMO_-prefixed and surfaced on
+    # /health (app/main.py) specifically so it cannot plausibly stay on by
+    # accident after the event it was built for: anyone checking prod config
+    # the way this project already habitually does sees it immediately.
+    DEMO_TRIM_MODE: bool = False
 
     GEMINI_API_KEY: str | None = None
     GEMINI_EMBED_MODEL: str = "models/gemini-embedding-001"

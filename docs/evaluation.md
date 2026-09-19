@@ -5649,3 +5649,239 @@ prose sitting next to code that used to accurately describe it, read by the next
 fact rather than checked against what the code actually does today. Worth remembering as a reason to
 verify a docstring's claim directly before relying on it to scope new work, not just this codebase's
 own instance of it.
+
+## Rate limit raised 8 → 40/hour on `/legal/query` and `/complaints`, for one scheduled live demo (2026-09-20)
+
+**Demo-driven, not recalibrated capacity planning — same provisional discipline the original 8/hour
+was built under, stated as such rather than dressed up as measured.** A scheduled live demo: one
+presenter, ~5-6 queries per batch across ~20 batches over a multi-hour session, ~120 queries total,
+all from a single IP, audience watching rather than querying (no concurrency risk — see below). Under
+8/hour, keyed on `client_ip()` for an anonymous/guest presenter, the ninth query of any batch-hour
+gets a clean `429`, regardless of whether Groq itself has capacity. Raised both Groq-backed endpoints
+(`app/api/v1/legal.py:224`, `app/api/v1/complaints.py:71`) to `40/hour`. No real traffic history
+justifies 40 any more than none justified 8 — chosen to clear this one known event with margin, nothing more.
+
+**The cost, named plainly, not left implicit**: a single anonymous, abusive client can now take up to
+40/hour of the shared Groq daily budget before `slowapi` stops them, up from 8/hour — a 5x increase
+in how much one bad actor can burn before the existing per-route ceiling engages. Accepted for this
+one event; revisit downward afterward unless real traffic gives a reason to keep it here.
+
+**Concurrency was raised as a separate risk and ruled out for this specific event, not by projection
+but by the demo's own shape**: a single presenter querying one-at-a-time is not the 5-10-simultaneous
+scenario the 2026-09-07 concurrency-load measurement (11/20 succeeding at 20 concurrent, two keys)
+was about. That measurement stays relevant for any FUTURE event with real audience concurrency; it
+was checked against and found not to apply here, not ignored.
+
+**Token-budget arithmetic, checked against real numbers rather than the estimate proposed** — this
+is the part worth reading carefully, since it changes the actual risk for this specific demo:
+
+- The 200k figure is real and measured (`docs/deployment.md:503-535`, 2026-09-14 incident: a real
+  `RateLimitError`, "Limit 200000, Used 192747, Requested 7945" on tokens-per-day, confirmed
+  per-organization). Whether `GROQ_API_KEY_2` gives an independently-metered second 200k — making a
+  combined 400k pool, as originally assumed — is **not separately confirmed for TPD** the way it was
+  for TPM (where two real 429s on different org ids proved it); it's a reasonable analogy, not a
+  checked fact.
+- More concretely load-bearing for this demo: `scripts/fidelity_battery.py`'s own comment
+  (line 33-35) confirms eval work runs "on ONE key only (`GROQ_API_KEY_2`)... not spent here on
+  purpose" — meaning `GROQ_API_KEY_2` is reserved as the failover key, and a low-concurrency demo
+  that never triggers failover draws from the **same single ~200k-token daily budget** as the
+  primary key, not a clean separate pool.
+- ~2,886 tokens (`deployment.md:515-517`) is a real, measured figure, but scoped explicitly to the
+  main generation call alone (system prompt + RAG context + completion). Two more real Groq calls
+  happen per query, confirmed directly in `app/api/v1/legal.py`: `detect_language` (line 288, fires
+  whenever `payload.language == "en"` — the default for essentially every guest query) and
+  `related_questions` (line 485, fires on every non-abstained, non-follow-up answer — most demo
+  queries). Both add real tokens on top of the 2,886 figure, not included in it. Realistic per-query
+  total: **~3,600–4,000 tokens**, a ~25–35% upward correction from the ~2,900 estimate, reasoned from
+  `max_tokens` caps and prompt shape (not independently measured the way 2,886 was — stated as an
+  estimate, not re-presented as fact).
+- **Corrected arithmetic: 120 queries × ~3,800 ≈ 456k tokens against a realistic single-key ~200k
+  daily budget — over, not comfortably under**, unless the two-key TPD pool assumption holds (unconfirmed)
+  or the real query mix leans more abstained/follow-up (which skip the extra calls) than assumed.
+  **This is a real, live risk for this specific demo, not a margin-of-safety footnote** — flagged
+  here rather than only in chat, since a mid-demo `503 llm_temporarily_unavailable` is exactly the
+  kind of failure the rate-limit change was meant to prevent, just moved one layer down the stack.
+
+**What does NOT compete with the demo, checked directly**: grepped every `.github/workflows/*.yml`
+for `fidelity_battery`/`calibrate_confidence` — zero matches; that eval script is manual-invocation
+only, never cron-scheduled. The one nightly job that does run automatically (`nightly-eval.yml`,
+03:30 UTC) is pure retrieval evaluation — confirmed by reading `scripts/eval_golden_set.py` directly
+(no `GROQ`/`llm_service` import anywhere) and the workflow's own env block (no `GROQ_API_KEY` set at
+all, runs against an ephemeral CI-local Postgres, never production). **It costs zero Groq tokens.**
+The only way scheduled eval spend competes with a live demo is a person manually running
+`fidelity_battery.py` during the demo window — a procedural risk to avoid on the day, not a
+scheduling collision to guard against in code.
+
+**UptimeRobot, checked and found unverifiable from here, not confirmed fine**: the only record of it
+anywhere in this repo is `docs/evaluation.md`'s own 2026-09-16 entry, headed "UptimeRobot --
+instructions only, no code" — a recommendation for a human to configure a 5-minute HTTP check on
+UptimeRobot's own external dashboard. No API key, config file, or script exists locally, and nothing
+in this repo confirms it was ever actually set up or is still active. This cannot be checked from
+this environment; it can only be confirmed by logging into UptimeRobot's own dashboard directly.
+Silence on this in the docs must not be read as "probably fine" — check it by hand before the demo.
+
+**Tests updated to match, run, passing**: `tests/integration/test_ratelimit.py` hardcoded 8/9
+request counts against the old limit — updated to 40/41 (same shape: N requests succeed, request
+N+1 gets a 429). Could not execute live when this entry was first written (Docker daemon
+unavailable in this environment) — **updated same day once Docker came up**: ran the throwaway test
+Postgres (`docker run ... pgvector/pgvector:pg17`) and the real integration suite against it,
+`tests/integration/test_ratelimit.py` included. Passed live, not just mechanically consistent with
+the decorator. Full non-integration suite: 191 passed; full integration suite (70 tests): passed.
+
+## Groq key pool generalized to N, plus a demo-trim fallback, for the same live demo (2026-09-20)
+
+**A third key was added.** `app.services.llm.LLMService._groq_keys` (and the `_call` rotation loop
+that consumes it) was hardcoded for exactly two: `GROQ_API_KEY` + one optional `GROQ_API_KEY_2`,
+`_call`'s own loop capped at `warm[:2]`. Confirmed by reading it directly before touching anything —
+it was not already a pool, it was a two-key special case with the shape of one. Generalized:
+`app/core/config.py` now declares `GROQ_API_KEY_2` through `GROQ_API_KEY_9` (a bounded but generous
+numbered range, not infinite dynamic env-var discovery — stays inside this project's one-blessed-way
+"everything through the Settings singleton" discipline rather than reading `os.environ` directly for
+credentials); `_groq_keys` walks the whole range, skipping any unset slot, in either the middle or
+the end of it (tested directly — `test_gap_in_the_middle_of_the_range_is_skipped_not_fatal`); `_call`'s
+loop is now `for key in warm`, not `warm[:2]` — every currently-warm key gets one try, in pool order,
+never the same key twice in one call. Absent keys still mean a smaller pool, never a crash, exactly
+as the original two-key version promised — now proven for a gap and for nine, not just for one-or-two
+(`tests/test_llm_key_rotation.py`, `TestThreeKeyPoolGeneralization`, 5 new tests; full file: 11
+passed).
+
+**"Keep key 2's failover role intact, or tell me the distinction no longer makes sense"** — asked
+directly, answered directly rather than guessed: there never was a functional primary/secondary
+ROLE distinction to preserve. Read `_call`'s loop before generalizing it: nothing branches on a key's
+label, nothing treats `GROQ_API_KEY_2` differently from `GROQ_API_KEY` except that it's reached
+second because it's second in the list. "Primary"/"secondary" described ORDER, not behavior. Three
+keys don't break that distinction because there wasn't one to break — the correct generalization is
+what shipped: one ordered pool, every member treated identically, differing only in when each is
+tried. Labels were changed from role words ("primary"/"secondary") to the literal source env var
+name (`GROQ_API_KEY`, `GROQ_API_KEY_2`, `GROQ_API_KEY_3`, ...) for exactly the next requirement:
+
+**"Log which key served each request, so I can see the pool working rather than infer it."** Already
+existed (`logger.info("groq_call_served", key=key.label)`) and needed no new code — it automatically
+carries the new env-var-based labels now, so a real production log line during the demo reads
+`groq_call_served key=GROQ_API_KEY_3`, not a role word requiring a lookup table in the reader's head
+to know which key that was. `/health`'s new `groq_key_count` field (below) is the complementary,
+before-the-fact check: confirms the third key actually resolved inside the running container, the
+same "verify against what's actually running, not what was saved in a dashboard" reasoning every
+other `/health` field added this week already follows.
+
+**The demo-trim fallback, built even though the two-key-daily-pool assumption stays unverified.**
+`settings.DEMO_TRIM_MODE` (`app/core/config.py`, default `False`) skips `detect_language` and
+`related_questions` — the two auxiliary Groq calls the same day's token-arithmetic correction found
+riding on top of the main generation call's own cost, dropping realistic per-query cost from
+~3,600–4,000 back to ~2,900. **What breaks with it on, stated plainly, not left implicit**: a query
+actually typed in Hindi/Marathi/Tamil/Telugu but tagged `"en"` (the frontend's default) gets answered
+in English instead of detected and matched — a real degradation, silent for an English-speaking
+audience, not silent for anyone else; and the "suggested next questions" UI has nothing to show —
+cosmetic only, no correctness risk. Nothing else changes: citations, grounding, and punishment
+verification are untouched, since neither skipped call is part of that path.
+
+**Made hard to leave on by accident, not just named clearly**: surfaced on `/health` as
+`demo_trim_mode` (`app/main.py`) — the same place `allowed_origins` and now `groq_key_count` live,
+specifically because this project has already established, this same week, that a Render dashboard
+env var and what's actually resolved inside the running container are two different facts, and the
+only way to close that gap is to make the running state checkable from outside. Anyone checking prod
+config the way this project has been doing all session sees it immediately; nothing about the flag
+itself times out or reverts on its own, so this is the check that replaces a human needing to
+remember.
+
+**Tested at both the mechanism and the endpoint level, live**: `detect_language`'s skip is proven
+through a real HTTP request against a real (test) database and a real (mocked-at-the-Groq-boundary)
+app instance — `tests/integration/test_demo_trim_mode.py`, asserting the actual call count drops
+from two to one, not just that the flag flips without erroring. `related_questions`' identical skip
+(same file, same flag, next line) was not separately proven live — the test DB's empty corpus makes
+every query abstain, and the abstained path never reaches `related_questions` regardless of the
+flag, so proving that half live would need a seeded, non-empty test corpus, out of this pass's scope.
+Reviewed directly instead: byte-for-byte the same `or settings.DEMO_TRIM_MODE` addition to an
+already-existing ternary, immediately below the line that IS proven live — not an independent code
+path with a failure mode of its own to separately catch, but named here rather than silently assumed
+covered by the sibling test. Full integration suite, run against a real throwaway Postgres
+(`pgvector/pgvector:pg17`) once Docker came up mid-session: 70 passed, including both new tests.
+
+## Legal timeline feature, built as scoped: grounded stages only, deterministic verification, 5 new modules (2026-09-20)
+
+Built exactly the shape the same day's earlier scoping entry accepted: option (a), only emit a
+timeline stage that cites a real section with an explicit time limit, verified deterministically the
+same way punishment claims already are. Nothing here was designed from scratch without checking the
+corpus first — every regex, every test fixture, and the whole "only 66 of 531 BNSS sections carry a
+dated provision" premise was re-verified directly against the live database before any code was
+written on top of it.
+
+**`app/legal_corpus/parsing/timeline_clause.py`** — the extraction module, deliberate mirror of
+`punishment_clause.py`'s own shape and discipline (read that module's docstring first; this one
+follows it on purpose). One combined, alternation-based regex (`within [a period of]`, `not
+exceed[ing] [more than]`, `exceed[ing] [more than]`, `beyond the period of`, `period of`), scanned
+with `finditer` per sentence so a single sentence stating MULTIPLE distinct figures for different
+circumstances — BNSS 187(3)'s custody-extension ladder was the real case this was built against —
+extracts as separate clauses, not just the first match. Verified against real pulled text (BNSS
+58/173/187, not invented): correctly found 24 hours (BNSS 58), 3 and 14 days (BNSS 173), and eight
+distinct figures across BNSS 187 including the compound "one hundred and eighty days" form. **Caught
+one real bug during that verification, before it ever reached a test file**: the compound-number
+parser silently returned 100 instead of 180 because `"eighty"` was simply missing from the number-word
+dict — found by testing against real text, not by code review, fixed immediately (`_NUMBER_WORDS` now
+has fifty/seventy/eighty alongside the pre-existing forty/sixty/ninety).
+
+**Two named, accepted limitations, not fixed in this pass — stated here rather than discovered again
+later:**
+1. BNSS 187(3)'s own `(i)ninety days, where...; (ii)sixty days, where...` list — the single clearest
+   offence-conditional example the scoping entry cited — does NOT extract with its qualifying
+   condition attached, because the trigger phrase ("...exceeding—") sits before the list markers,
+   not immediately adjacent to each number the way this module's trigger-adjacency design requires.
+   The values themselves still get caught via restatements elsewhere in the same section (a
+   sub-section-2 mention and a sub-section-3 callback both restate 60/90 days with proper adjacency),
+   so verification still works for those two numbers specifically — just without the richest
+   available context, and this specific mechanism (list-marker-prefixed bare numbers) isn't handled
+   generally.
+2. **Verification checks that a claimed value+unit is a REAL figure extracted from the cited
+   section — it does NOT check that the figure is paired with the correct qualifying condition.**
+   A stage claiming "90 days" for the wrong offence category (i.e. the right number, wrong
+   circumstance) passes this check, because extraction has no concept of which condition each
+   number belongs to. Named directly in `app/services/timeline_verification.py`'s own module
+   docstring as the same shape as the IPC 408/409 finding that `punishment_verification.py` itself
+   was built to close (checks WHICH section was cited, never WHAT was claimed about it) — this
+   feature has an analogous, not identical, residual gap of its own, surfaced here rather than found
+   again the same way later.
+
+**`app/services/timeline_verification.py`** — one deliberate, named policy difference from
+`punishment_verification.py`, stated in its own docstring because getting it backwards would
+silently reopen the fabrication risk this feature exists to close: punishment verification KEEPS an
+unverifiable claim (most of an answer is still useful with one auxiliary field unconfirmed); this
+module DROPS one instead, because a timeline stage's entire reason to exist IS the time limit it
+claims — nothing to check against means nothing worth showing, not a caveat worth keeping.
+
+**`POST /legal/timeline`** (`app/api/v1/legal.py`) — on-demand, not automatic, exactly as scoped:
+takes the (act, section) pairs a prior `/legal/query` response already returned
+(`TimelineIn.sections`), never runs a fresh `semantic_search`. Pre-filters to only sections that
+already carry an extractable time-limit clause BEFORE calling the LLM — an offence with nothing
+dated in its retrieved sections gets an honest empty-stages abstention with zero Groq tokens spent,
+not a forced generic walkthrough. `_TIMELINE_PROMPT` (`app/services/llm.py`) explicitly forbids the
+model from using anything outside the given excerpts; every stage it proposes still goes through
+`verify_timeline_stages` regardless, since a prompt instruction is never treated as the safety
+mechanism itself, only as what keeps the rejection rate low. Own rate limit (`15/hour`, provisional,
+same "no real traffic history" honesty as every other number in this file) — deliberately separate
+and lower than `/legal/query`'s, since this is an ADDITIONAL Groq call layered on an already-answered
+query, not a replacement for one. No persistence: this endpoint reads and returns, nothing is stored
+— a deliberate scope boundary for this pass, not an oversight (the underlying query that grounds it
+is already stored by `/legal/query` itself).
+
+**Migration `0015_timeline_verification_stats`, NOT yet run against production.** Same exact
+category of risk this whole project already spent a session on (0014's un-run migration, the 500
+that broke every real query for as long as it went unnoticed) — except this time `app.db.
+migration_check.assert_alembic_head_matches_db` exists specifically to make that mistake impossible
+to ship silently: the app will refuse to boot at all if this code deploys ahead of its own schema,
+loudly, before serving a single request, instead of 500ing on first use. Still needs to actually be
+run (backup first, same protocol as 0014) before or with this code's deploy — the guard changes the
+failure from silent to loud, it doesn't remove the step.
+
+**Tested at every layer, all live, none skipped**: `tests/test_timeline_clause.py` (13 pure-function
+tests against real BNSS text, no DB) · `tests/integration/test_timeline_verification.py` (7 tests
+against a real seeded Postgres row, proving the actual production code path — DB fetch, as-of
+filtering, drop-vs-keep decision, counters — not just the parser) · `tests/integration/
+test_legal_timeline_endpoint.py` (3 tests through the real app over real HTTP, LLM mocked at the
+`LLMService._call` boundary: a grounded stage reaching the response, a fabricated one never reaching
+it, and the no-dated-sections path abstaining without spending a Groq call at all). One real
+test-isolation bug found and fixed while building the endpoint suite: this file seeds through its
+own manually-created engine rather than the shared `db` fixture, and without an explicit truncate
+step a second seeding test collided on `acts.act_code`'s unique constraint against the first test's
+still-present row — found live (`UniqueViolationError`), not by inspection, fixed by reusing the same
+TRUNCATE the shared `db` fixture already runs. Full suite once Docker's test Postgres was up: 209
+non-integration + 80 integration, all passed.

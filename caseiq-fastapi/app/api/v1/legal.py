@@ -7,15 +7,18 @@ from uuid import UUID
 
 from app.api.deps import DB, OptionalUser, client_ip
 from app.api.v1.conversations import _session_owner
+from app.core.config import settings
 from app.core.exceptions import BlockedQueryError
 from app.core.ratelimit import limiter
 from app.core.logging import logger
 from app.core.security import hash_ip
+from app.legal_corpus.parsing.timeline_clause import extract_time_limit_clauses
 from app.models.audit import AuditLog
-from app.models.corpus import CorpusVersion
+from app.models.corpus import Act, CorpusVersion, SectionVersion
 from app.models.legal import LegalQuery, QueryResponse, QueryStatus
-from app.schemas.legal import QueryIn, QueryOut, SituationIn
+from app.schemas.legal import QueryIn, QueryOut, SituationIn, TimelineIn, TimelineOut, TimelineStageOut
 from app.services.citation_verification import (
+    normalize_act,
     record_stats,
     scan_free_text_for_citations,
     verify_citations,
@@ -30,6 +33,10 @@ from app.services.llm import llm_service
 from app.services.punishment_verification import (
     record_stats as record_punishment_stats,
     verify_punishments,
+)
+from app.services.timeline_verification import (
+    record_stats as record_timeline_stats,
+    verify_timeline_stages,
 )
 from app.services.pii_redaction import RedactionSession, restore_deep, restore_text
 from app.services.retrieval import (
@@ -210,6 +217,18 @@ async def _history(db: DB, session_id: str, user_id: UUID | None = None) -> list
 # slowapi's own IP-only default -- see that module's own docstring for
 # why the default was wrong behind Render's proxy.
 #
+# RAISED 8 -> 40/hour, 2026-09-20 (docs/evaluation.md): a scheduled live
+# demo -- one presenter, ~120 queries across ~20 batches over a multi-hour
+# session, all from a single IP -- would hit 8/hour's ceiling on the ninth
+# query and stay blocked for the rest of each hour. Still provisional in
+# exactly the same sense 8 was: no real traffic history behind 40 either,
+# chosen for this one known event, not recalibrated capacity planning.
+# Real cost of raising it: a single abusive anonymous client can now take
+# up to 40/hour of the shared Groq TPD budget (see docs/evaluation.md's
+# token-ceiling entries) before slowapi stops them, instead of 8 -- an
+# accepted tradeoff for this specific event, not a new permanent posture.
+# Revisit downward after the demo unless real traffic gives a reason not to.
+#
 # FIXED 2026-09-08, caught only by actually triggering a live request (see
 # docs/evaluation.md): slowapi's per-route decorator injects rate-limit
 # headers onto whatever the wrapped function returns -- but this endpoint
@@ -221,7 +240,7 @@ async def _history(db: DB, session_id: str, user_id: UUID | None = None) -> list
 # parameter below is what gives slowapi something real to write headers
 # onto; FastAPI copies its headers/status onto the actual serialized
 # response afterwards.
-@limiter.limit("8/hour")
+@limiter.limit("40/hour")
 async def process_query(
     payload: QueryIn, db: DB, user: OptionalUser, request: Request, response: Response,
 ):
@@ -272,7 +291,17 @@ async def process_query(
 
     started = time.perf_counter()
     language = payload.language
-    if language == "en":
+    # ADDED 2026-09-20 (docs/evaluation.md): settings.DEMO_TRIM_MODE skips
+    # this auto-detect call entirely -- a real, separate Groq call on every
+    # guest/no-preference query (i.e. most real traffic), not included in
+    # the main generation call's own token cost. What breaks with it on:
+    # a query actually typed in Hindi/Marathi/Tamil/Telugu but tagged "en"
+    # (the frontend's default) gets answered in English instead of detected
+    # and matched -- silent for an English-speaking audience, a real
+    # degradation for anyone who isn't. See DEMO_TRIM_MODE's own docstring
+    # (app/core/config.py) for why this exists and how it's surfaced so it
+    # can't quietly stay on past the event it was built for.
+    if language == "en" and not settings.DEMO_TRIM_MODE:
         language = await llm_service.detect_language(payload.query)
 
     history = await _history(db, payload.session_id, user.id if user else None)
@@ -470,8 +499,14 @@ async def process_query(
         if ungrounded_free_text:
             logger.warning("citation_free_text_ungrounded", sections=sorted(ungrounded_free_text))
 
-    related = [] if abstained or result["is_followup"] else await llm_service.related_questions(
-        payload.query, result["conversational_summary"]
+    # DEMO_TRIM_MODE (2026-09-20, docs/evaluation.md): same skip as
+    # detect_language above -- related_questions is a real, separate Groq
+    # call on every non-abstained, non-follow-up answer (most real
+    # traffic). What breaks with it on: the "suggested next questions" UI
+    # never gets anything to show -- cosmetic, no correctness risk, unlike
+    # the language-detection skip above.
+    related = [] if abstained or result["is_followup"] or settings.DEMO_TRIM_MODE else (
+        await llm_service.related_questions(payload.query, result["conversational_summary"])
     )
 
     # C8: make the routing visible, not just correct -- computed here, from
@@ -539,3 +574,90 @@ async def process_query(
             payload.query, fallback_on_empty="15100" if abstained else None,
         ),
     )
+
+
+async def _fetch_section_text_for_timeline(db: DB, act: str, section: str, as_of: date) -> str | None:
+    # Same query shape as app.services.punishment_verification/
+    # timeline_verification's own _fetch_section_text -- not imported from
+    # either (both are private to their own module), kept as its own local
+    # copy here rather than introduced as new shared cross-module
+    # infrastructure not already established by this codebase's own pattern
+    # (process_query's retrieval and verify_punishments' own re-fetch are
+    # already two independent DB round trips over the same data; this is a
+    # third, not a new kind of duplication).
+    stmt = (
+        select(SectionVersion.section_text)
+        .join(Act, SectionVersion.act_id == Act.id)
+        .where(
+            Act.act_code == act, SectionVersion.section_number == section,
+            SectionVersion.valid_from <= as_of,
+            (SectionVersion.valid_to.is_(None)) | (SectionVersion.valid_to > as_of),
+        )
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+@router.post("/timeline", response_model=TimelineOut)
+# ADDED 2026-09-20 (docs/evaluation.md scoping/build entry): on-demand, not
+# automatic -- called only when a user asks to see a timeline for an
+# already-answered query, reusing that query's own (act, section) pairs
+# (TimelineIn.sections) rather than running a fresh semantic_search. Same
+# `response: Response` requirement as process_query/create_complaint, same
+# reason (slowapi's per-route decorator needs something real to write
+# headers onto). Rate limit is a SEPARATE, deliberately lower provisional
+# number from process_query's -- this is an additional Groq call on top of
+# whatever already-run query it's attached to, not a replacement for one,
+# and has no real traffic history behind it either, same honesty as every
+# other number in this file.
+@limiter.limit("15/hour")
+async def generate_timeline(
+    payload: TimelineIn, db: DB, user: OptionalUser, request: Request, response: Response,
+):
+    as_of = payload.as_of or date.today()
+
+    # Only sections that ALREADY carry an extractable time-limit clause are
+    # worth spending tokens on -- see app.services.llm.LLMService.
+    # generate_timeline's own docstring for why this filter runs BEFORE
+    # generation, not after: an empty result here means "nothing dated
+    # applies to this situation," not "the model declined to use what it
+    # was given."
+    dated_sections: list[dict] = []
+    for s in payload.sections:
+        act = normalize_act(s.act)
+        section_text = await _fetch_section_text_for_timeline(db, act, s.section, as_of)
+        if section_text is None or not extract_time_limit_clauses(section_text):
+            continue
+        dated_sections.append({"act": s.act, "section": s.section, "text": section_text})
+
+    if not dated_sections:
+        # The honest abstention this feature was scoped to prefer over a
+        # fabricated generic walkthrough -- no LLM call spent on a request
+        # with nothing groundable to answer from.
+        return TimelineOut(stages=[], stages_proposed=0, as_of=as_of)
+
+    try:
+        raw_stages, redaction_map = await llm_service.generate_timeline(payload.query, dated_sections)
+    except Exception as exc:
+        logger.exception("legal_timeline_failed", error=str(exc))
+        raise
+
+    verified_stages, counters = await verify_timeline_stages(db, raw_stages, as_of)
+    await record_timeline_stats(db, counters)
+
+    # Same storage-vs-live-response restore-on-a-copy split as
+    # process_query's own conversational_summary/structured_data -- nothing
+    # from this endpoint is persisted, so there is no "stored" side to keep
+    # redacted; this restores directly into what's returned.
+    stages_out = [
+        TimelineStageOut(
+            stage=restore_text(str(s.get("stage", "")), redaction_map),
+            description=restore_text(str(s.get("description", "")), redaction_map),
+            act=str(s.get("act", "")),
+            section=str(s.get("section", "")),
+            time_limit=restore_text(str(s.get("time_limit_claim", "")), redaction_map),
+        )
+        for s in verified_stages
+    ]
+
+    return TimelineOut(stages=stages_out, stages_proposed=len(raw_stages), as_of=as_of)
