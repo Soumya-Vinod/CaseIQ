@@ -291,33 +291,63 @@ class LLMService:
                     temperature=settings.GROQ_TEMPERATURE if temperature is None else temperature,
                     max_tokens=max_tokens,
                     # Passthrough for params this SDK version (0.13.1) doesn't
-                    # have a typed kwarg for yet -- e.g. `reasoning_effort`,
-                    # needed for callers of a reasoning model (GROQ_MODEL is
-                    # openai/gpt-oss-120b) where the default effort can burn
-                    # the entire max_tokens budget on hidden reasoning tokens
-                    # and return finish_reason="length" with ZERO visible
-                    # content. Found live, not guessed: scripts/
-                    # fidelity_battery.py's judge calls returned empty
-                    # content 4/4 attempts on two different cases before this
-                    # was diagnosed by reading the raw response's own
-                    # finish_reason and completion_tokens_details, not by
-                    # changing the prompt and hoping (see docs/evaluation.md).
+                    # have a typed kwarg for yet. `reasoning_effort="low"` is a
+                    # DEFAULT here, not opt-in -- every caller of _call() needs
+                    # it, not just the one that happened to add it first (see
+                    # FIXED 2026-09-19 below), and a default a caller can still
+                    # override (via extra_body, spread AFTER the default so an
+                    # explicit key wins) can't be silently skipped the way an
+                    # opt-in passthrough already was for five months.
                     #
-                    # FLAGGED 2026-09-19, not fixed in this pass (docs/
-                    # evaluation.md, 2026-09-19 stacked-failure entry): this
-                    # plumbing is DEAD. Grepped every call site of _call() --
-                    # process_query (the live /legal/query path), detect_
-                    # language, and both related_questions calls -- none of
-                    # them pass extra_body, so this is always `{}` and
-                    # reasoning_effort is never actually set. The failure mode
-                    # described above is real and currently unguarded on the
-                    # one path that matters; this was investigated as the
-                    # leading theory for a since-confirmed-different 500 and
-                    # ruled out for THAT incident, not for existing at all.
-                    extra_body=extra_body or {},
+                    # FOUND 2026-09-19 (docs/evaluation.md): scripts/
+                    # fidelity_battery.py's judge calls returned empty content
+                    # 4/4 attempts on two different cases -- diagnosed by
+                    # reading the raw response's own finish_reason and
+                    # completion_tokens_details, not by changing the prompt
+                    # and hoping. Both showed finish_reason="length" with
+                    # reasoning_tokens=1498 of a 1500 cap: GROQ_MODEL
+                    # (openai/gpt-oss-120b) is a reasoning model that can spend
+                    # its ENTIRE token budget on hidden reasoning before ever
+                    # writing the visible answer. Fixed there with
+                    # reasoning_effort="low", verified directly:
+                    # reasoning_tokens dropped 1498 -> 452, finish_reason
+                    # became "stop", real content both times.
+                    #
+                    # FLAGGED same day, fixed same day: that fix was applied
+                    # at fidelity_battery.py's own call site, never here, so
+                    # every REAL caller of _call() -- process_query (the live
+                    # /legal/query path), detect_language, both
+                    # related_questions calls -- ran with Groq's own default
+                    # effort the whole time, unguarded, on the one endpoint
+                    # that matters. Made a default instead of adding it to
+                    # four call sites individually so a fifth caller later
+                    # can't reintroduce the exact same gap by omission.
+                    extra_body={"reasoning_effort": "low", **(extra_body or {})},
                 )
                 logger.info("groq_call_served", key=key.label)
-                return resp.choices[0].message.content.strip()
+                content = resp.choices[0].message.content
+                if content is None:
+                    # Defense in depth, not redundant with the default above:
+                    # "low" makes this rare, not impossible -- a sufficiently
+                    # long/complex prompt could still exhaust the budget, and
+                    # nothing about a None here is specific to reasoning
+                    # effort as the cause. Before this, `.strip()` on `None`
+                    # raised a bare AttributeError -- caught by neither of the
+                    # two except clauses below (both key on Groq's own
+                    # exception types, and this isn't one), so it reached
+                    # app.core.exceptions's generic 500 handler uncaught, on
+                    # every real query, indistinguishable from a genuine bug
+                    # rather than a known, already-named Groq failure mode.
+                    # Same clean 503 every other Groq-side failure in this
+                    # function already gets, not a special case.
+                    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+                    logger.warning("groq_empty_content", key=key.label, finish_reason=finish_reason)
+                    sentry_sdk.capture_message("groq_empty_content", level="warning")
+                    raise AppError(
+                        "The legal-assistant service is temporarily unavailable -- please try again in a moment.",
+                        code="llm_temporarily_unavailable", status_code=503,
+                    )
+                return content.strip()
             except GroqRateLimitError as exc:
                 retry_after = _parse_retry_after(exc)
                 key.cold_until = time.monotonic() + retry_after

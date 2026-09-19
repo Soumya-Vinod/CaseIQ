@@ -52,7 +52,7 @@ decorated number. Full five-stage trace of that one query, with a measurement at
 | **Out-of-scope abstain rate**, 10 real wrong-domain questions | **5/10 (50%)** — see below; this is not the same capability Recall@5 measures |
 | Corpus | 2,155 sections, BNS + BNSS + BSA + IPC + CrPC — criminal law and procedure only |
 | Judicial status | IPC §497 (adultery) excluded as struck down; IPC §377 flagged read-down, both with real citations |
-| Offence classification (cognizable/bailable/court), parsed from source, never LLM output | IPC (CrPC's First Schedule): **212/381 sections (56%)**. BNS (BNSS's First Schedule, currently in-force law): **398/434 sections (92%)** — same table, different source document, different result. Partial by measured coverage, not by omission; the rest are absent, not guessed |
+| Offence classification (cognizable/bailable/court), parsed from source, never LLM output | IPC (CrPC's First Schedule): **222/395 sections (56%)**. BNS (BNSS's First Schedule, currently in-force law): **398/434 sections (92%)** — same table, different source document, different result. Partial by measured coverage, not by omission; the rest are absent, not guessed |
 | Test suite | 106 passed, 0 failed |
 
 **The sharpest single finding, and its resolution.** A civil-law question this corpus has nothing

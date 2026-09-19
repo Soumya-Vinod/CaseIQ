@@ -561,7 +561,7 @@ export interface components {
             results: components["schemas"]["OffenceResultOut"][];
             /**
              * Coverage Note
-             * @default Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC is partial (212 of 381 sections) -- a section not found here may still be real; it may simply not be in this table yet.
+             * @default Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC is partial (222 of 395 sections) -- a section not found here may still be real; it may simply not be in this table yet.
              */
             coverage_note: string;
         };

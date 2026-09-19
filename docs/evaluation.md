@@ -5515,17 +5515,30 @@ diagnostics: 7 (errors=0, warnings=4)
 entries was stale and why is not resolved here, only which number to trust going forward — the live
 parser run, not either doc's prose, whenever this needs re-confirming.
 
-One more discrepancy surfaced by this same run, flagged rather than silently left standing, but
-explicitly **not chased** — out of scope for today's ask, and the 56.2% figure it produces is
-consistent with the coverage number already in use everywhere else: this run's own `all_sections`
-count is **395**, not the **381** cited consistently elsewhere in this document (including inside
-`merge_orphan_fragments`'s own docstring). `all_sections` here is every distinct `section_number`
-string seen across all 740 raw reconstructed rows, before completeness filtering — plausibly
-inflated by a small number of formatting-variant duplicates the cleaning logic doesn't collapse,
-rather than 14 genuinely distinct real sections nothing has ever accounted for, but that's a guess,
-not a check. Whoever next touches section-count arithmetic in this file should reconcile 395 vs. 381
-before building on either — the same "pin the live number, don't trust prose" lesson this section
-itself is.
+**Resolved 2026-09-20, chased this time: 395 is correct, 381 is stale, not a rounding artifact.**
+Bisected the regex history directly (`git log --follow` on `parse_crpc_schedule.py`) and re-ran the
+parser under the pre-bracket-tolerance version of `_SECTION_NO_RE` against the same PDF: it
+reproduces exactly 381. Diffed the two section sets — **14 extra in 395, zero missing, a clean
+superset** — and spot-checked all 14 against the parser's own raw `col0` output before any regex
+filtering, not assumed: every one is a genuine amendment-bracket-prefixed section number
+(`1[166A`, `1[174A`, `1[195A`, `1[228A`, `2[229A`, `1[304B`, `1[326A`, `2[354`, `1[364A`, `2[370`,
+`1[ 2[376` — the already-documented stacked-bracket case — `3[376AB`, `1[376DA`, `2[377`), the same
+failure mode this document already named for 174A specifically ("the whole of 174A silently merged
+into the PRECEDING section's row — INVISIBLE data"), thirteen more instances of it that were never
+individually counted. None are noise, OCR artifacts, or formatting duplicates.
+
+**The rounded headline never moved — 212/381 = 55.6% and 222/395 = 56.2% both round to "56%" — which
+is exactly why a stale exact denominator survived unnoticed inside a live, user-facing string**
+(`app/schemas/cognizability.py`'s `coverage_note` default, served on every real `/cognizability`
+response) for however long it had been wrong: the one number anyone would actually notice drifting
+never drifted. Fixed there, in its two frontend mirrors (`caseiq-web/src/api/schema.d.ts`,
+`CognizabilityPage.tsx`), and in `README.md`'s feature table — all now read **222 of 395**. The
+`212/381` and `221/381` figures elsewhere in this document (the C1 entry above, the
+merge-orphan-fragments entry, and others) are left exactly as they were: each is an explicit,
+dated, point-in-time measurement ("as of this writing," or a specific day's before/after
+comparison) describing what a real run actually showed on that day, not a running total this
+document keeps current — rewriting them would misrepresent history, not correct it. Going forward,
+**395** is the number to build on.
 
 ### What would have to change for this to be worth revisiting
 
@@ -5566,3 +5579,73 @@ to spell out the distinction to a reader in crisis. The sub-clause-merge gap dec
 here is not a third reason — it's part of *why* coverage sits at 56% rather than higher, already
 subsumed under the first reason, not a new failure mode requiring new wording. No change made to
 `situationGuides.ts`.
+
+## BNSS/BSA missing-section detection: already built; merged-content detection is a permanent limit (2026-09-20)
+
+Scoped whether anything can detect a missing or silently-absorbed section in BNSS/BSA, given neither
+has an extractable ToC (confirmed directly: searched every page of both source PDFs for
+`parsing/toc.py`'s own `_TOC_HEADING_RE` — zero matches in either, 249 and 47 pages respectively).
+
+**A first pass at this scoping produced a false alarm, corrected before anything was built on it —
+worth recording precisely, since it's this project's own "verify against the live system" rule
+catching a real miss, not just a reminder of it.** An initial spike reported BSA's own final section
+(170, "Repeal and savings") as silently missing from `GazetteParser`'s output, root-caused to
+`_HEADER_RE`'s marginal-note-prefix group failing against a digit-led footnote-citation prefix. That
+finding was **wrong** — an artifact of testing `GazetteParser()` with its *default* engine
+(`pdfplumber`) instead of the engine BSA is actually configured to use in the real pipeline
+(`registry.py`: `GazetteParser(engine="pymupdf")` — pdfplumber garbles BSA's final pages, see the
+class's own `__init__` docstring). Re-run with the correct engine: section 170 parses cleanly, no
+prefix issue, no gap anywhere in 1–170. Confirmed three ways, not just re-asserted: the corrected
+parser run (170/170, zero missing), a live query against production (`section_versions` already has
+BSA §170, `LEFT(section_text, 50)` = "REPEAL AND SAVINGS 170. (1) The Indian Evidence Ac..."), and
+`documents/provenance.json`'s own hand-verified `highest_section_number` for BSA (170) agreeing with
+both. No `_HEADER_RE` change needed. No re-ingestion needed — nothing was ever wrong in the live
+corpus. **No code fix was made for a bug that doesn't exist.**
+
+**What the missing-section question actually resolves to: already built, just never tested
+directly.** `validate.py`'s `range_fallback` branch — triggered automatically whenever
+`extract_expected_entries` can't bound a ToC (BNSS/BSA's real, permanent shape) and
+`documents/provenance.json` has a recorded `highest_section_number` for that act — constructs the
+expected set as a plain contiguous `{1..highest}` and feeds it through the exact same `enforce_gate`
+gap check a real ToC's expected set would go through. This already catches both shapes the scoping
+question asked about: a mid-sequence gap (a number absent between two present ones) and the
+act's own highest number being absent (this pass's own false alarm would have been caught by
+this mechanism too, had it been real). The branch's own comment already states the caveat this
+scoping pass would otherwise have had to add: sound only for "a freshly enacted Act with
+contiguous numbering and no lettered insertions" — i.e. BNSS/BSA specifically, never IPC/CrPC,
+which have real ToCs and never reach this branch at all.
+
+What was actually missing: **zero direct test coverage.** Nothing exercised `range_fallback` except
+a full real-PDF ingestion run — exactly the gap that let the wrong-engine false alarm above go
+unnoticed as a *test* failure; only tracing it by hand caught it. Closed with
+`tests/test_bnss_bsa_completeness_gate.py` (5 tests, synthetic sections, no PDF/DB dependency): a
+missing-highest-number case, a mid-sequence-gap case, a complete-and-passing case, and a boundary
+guard confirming a real ToC always wins over the fallback (protects the "never IPC/CrPC" caveat from
+being silently crossed later).
+
+**The permanent limit, stated plainly rather than left implied**: neither `range_fallback` nor
+anything else available for BNSS/BSA can detect a section that's *present* with *merged or wrong*
+content — only a section that's fully *absent*. The ToC-based check IPC/CrPC get has a second half
+for exactly that case (a section's accepted text shorter than its own ToC listing implies truncation
+— `parsing/completeness.py`, `check_completeness`), and that half has no equivalent here, because it
+needs a ToC's own per-entry listing text to compare against, which is the one thing BNSS/BSA don't
+have to offer. This is not a backlog item — there is no known signal to build it from. If BNSS/BSA
+content-completeness ever needs the same guarantee IPC/CrPC's coverage has, it requires a source this
+project doesn't currently have (an independent per-section reference text, not just a count), not
+more engineering against the same two documents.
+
+**A related docstring correction, and a pattern worth naming, not just fixing quietly**:
+`gazette_parser.py`'s own module docstring claimed all three Gazette acts "each carry a clean
+ARRANGEMENT OF SECTIONS/CLAUSES table of contents" — false for BNSS/BSA, confirmed above, and
+directly contradicted `parsing/toc.py`'s own (correct) docstring one file away. Fixed. While fixing
+it, found a second, related staleness in the same area: `provenance.get_highest_section_number`'s
+own docstring said this value is used "only as an informational sanity check... never as the primary
+coverage gate" — true when written, false once `range_fallback` started using it as exactly that.
+Fixed too. **Third stale docstring found in this codebase in two days**, after `reconstruct_rows`'s
+aspirational sub-clause signal (2026-09-19) that was never actually implemented. Not the same defect
+each time — one described a mechanism that was never built, these two described a mechanism's
+original scope that a later, separate change silently outgrew — but the same underlying hazard:
+prose sitting next to code that used to accurately describe it, read by the next person as current
+fact rather than checked against what the code actually does today. Worth remembering as a reason to
+verify a docstring's claim directly before relying on it to scope new work, not just this codebase's
+own instance of it.

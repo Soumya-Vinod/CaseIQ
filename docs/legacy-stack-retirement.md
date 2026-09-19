@@ -133,20 +133,52 @@ starting from the API schema alone:
 - **`components/ai/LegalTimeline.jsx`** — renders `generate_legal_timeline`'s array (`phase`,
   `event`, `description`, `law_reference`, `time_frame`, `status`) as a vertical stepper with
   completed/current/upcoming states, connecting line, and a badge per event for its law reference.
+  The array arrives wrapped under a top-level `timeline` key (`views.py:210`,
+  `ChatPage.jsx:292` reads `res.data.timeline`), never returned flat — a rebuild reading only the
+  field list above would otherwise get the response shape wrong on the first try.
 - **`components/ai/RightsCard.jsx`** — renders `generate_rights_card`'s shape (`situation_title`,
-  `rights[]` — each with `right`/`explanation`/`law_reference`/`what_to_say`, `emergency_contacts[]`,
-  `important_warning`) as a shareable card with a one-click "copy as text" action.
+  `rights[]` — each with `right`/`explanation`/`law_reference`/`what_to_say`, `emergency_contacts[]`
+  — each with `name`/`number` (the backend also sends a third field, `when`, which the component
+  never rendered — a real, harmless omission, not a bug), `important_warning`) as a shareable card
+  with a one-click "copy as text" action. Same wrapper-key shape as LegalTimeline: the response
+  arrives under a top-level `rights_card` key, not flat.
 - **`components/ai/ScenarioSimulator.jsx`** — a free-text "what if" input plus four preset prompts
   (*"What if I don't file the FIR?"*, etc.), calls `simulateScenario`, renders `scenario_title` /
-  `legal_outcome` / `what_to_do` from the response.
+  `legal_outcome` / `what_to_do` from the response (wrapped under a top-level `simulation` key, same
+  pattern as the two above). **An explicit decision point for whoever rebuilds this, not just a
+  documentation gap**: the real backend schema (`groq_service.py:451-471`) computes four MORE fields
+  this component silently never rendered — `likelihood`, `consequences[]`, `laws_involved[]`,
+  `risk_level`. The old UI was a genuine, working, but partial view of what the backend already
+  computed. Rebuilding "the same panel" by reading only the old component's own render logic would
+  silently re-choose the partial version without anyone deciding that on purpose — the real choice
+  (keep it minimal, or build out the fuller schema that was already being computed and thrown away)
+  needs to be made explicitly, not inherited by accident from what the old JSX happened to `.map()`
+  over.
 - **`components/ai/CitationVerifier.jsx`** — the UI for `verify_citation`; not previously traced to
   a frontend before this pass — found only by grepping every reference to the endpoint name, the
   same "check the call site, not the method list" discipline as everything else in Part 1.
+  **Response shape, undocumented until now**: on success, `{verified: true, act, section_number,
+  section_title, section_text, simplified_text, category, keywords}` (`groq_service.py:487-507`); on
+  failure, `{verified: false, message}`. The component only ever rendered `verified` /
+  `section_title` / `section_text` / `message` — `act`/`section_number` come from its own input
+  props instead of the response, and `simplified_text`/`category`/`keywords` were never rendered at
+  all, real fields silently left unused, not absent from the API. **The call itself is also the one
+  outlier of the four**: `verifyCitation` is a `GET` with query params (`api.js:73-74`), not a
+  `POST`/JSON body like the other three.
 
-All four are wired into `pages/ChatPage.jsx` as collapsible tool panels beneath the chat, triggered
-by buttons in a toolbar row (`"What-If Simulator"`, etc.) — the toggling/collapse state management
-around them (`toolsCollapsed`, `activeTool`) is itself real UI logic, not just the four leaf
-components in isolation, if this is ever picked back up as a reference.
+LegalTimeline, RightsCard, and ScenarioSimulator are wired into `pages/ChatPage.jsx` as collapsible
+tool panels beneath the chat, triggered by buttons in a toolbar row (`"What-If Simulator"`, etc.) —
+the toggling/collapse state management around them (`toolsCollapsed`, `activeTool`) is itself real UI
+logic, not just the three leaf components in isolation, if this is ever picked back up as a
+reference. **CitationVerifier does not share this shape, and the difference matters for a
+rebuild**: it is not toolbar-triggered and carries no `toolsCollapsed`/`activeTool` state at all. It
+opens as a full-screen modal, triggered by an `onVerifyCitation` callback from a citation badge
+rendered inside a completely different component, `StructuredLegalCard`, gated on its own
+`verifyingCitation` state (`ChatPage.jsx:536,701-706`). Reading this file's own earlier general
+description of "four collapsible tool panels" as covering all four, without checking
+CitationVerifier's actual trigger site, would rebuild the wrong interaction pattern for it
+specifically — confirmed by re-reading the real retired source directly, not assumed from the
+component's name or its place in this list.
 
 ## Hand-authored content with no `caseiq-web` equivalent
 

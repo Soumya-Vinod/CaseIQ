@@ -1,9 +1,23 @@
 """Parser for the Gazette-of-India-Extraordinary enacted-Act format: BNS, BNSS,
-BSA. All three are single-column, no Bill-style line-number gutter, but each
-carries a clean "ARRANGEMENT OF SECTIONS/CLAUSES" table of contents ahead of
-the operative text, and marginal notes are sometimes fused onto the same line
-as the section number with no space before a following "(" (e.g. BNSS's
-"Definitions. 2.(1) In this Sanhita...").
+BSA. All three are single-column, no Bill-style line-number gutter, and
+marginal notes are sometimes fused onto the same line as the section number
+with no space before a following "(" (e.g. BNSS's "Definitions. 2.(1) In this
+Sanhita...").
+
+CORRECTED 2026-09-20 (docs/evaluation.md): this docstring previously claimed
+all three "each carry a clean ARRANGEMENT OF SECTIONS/CLAUSES table of
+contents" -- false for two of the three, confirmed directly by searching every
+page of each source PDF for parsing/toc.py's own `_TOC_HEADING_RE`: BNS
+matches (page index 2); BNSS (249 pages) and BSA (47 pages) have zero matches
+each. `parsing/toc.py`'s own docstring already had this right ("Not every
+source document has an extractable ToC (BNSS/BSA's Gazette originals don't
+carry one at all -- see gazette_parser.py's docstring)") -- it was pointing at
+a docstring that contradicted it. BNSS/BSA fall back to `validate.py`'s
+range_fallback coverage check instead (a contiguous 1..highest_section_number
+expected set from `documents/provenance.json`) -- see that module's own
+docstring for why this fallback is sound for these two specific acts
+(freshly-enacted 2023 codifications, no amendment history yet) and not a
+general substitute for a real ToC.
 """
 from __future__ import annotations
 

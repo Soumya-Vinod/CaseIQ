@@ -69,12 +69,25 @@ def get_highest_section_number(act: str) -> int | None:
     last section is 511), or None if not yet recorded. This is NOT a count of
     sections -- a 165-year-old Act with lettered insertions (124A, 498A, ...)
     and repealed ranges has more distinct entries than its highest number, and
-    fewer than its highest number once repeals are excluded. It's used only as
-    an informational sanity check in the validation report (does the highest
-    accepted number roughly match what the document itself claims as its last
-    section?), never as the primary coverage gate -- that's
-    parsing/toc.py's expected_section_numbers, a set derived from the
-    document's own table of contents.
+    fewer than its highest number once repeals are excluded.
+
+    CORRECTED 2026-09-20 (docs/evaluation.md): this docstring previously said
+    this value is used "only as an informational sanity check... never as the
+    primary coverage gate" -- true for IPC/CrPC, which have a real ToC
+    (parsing/toc.py's expected_section_numbers) and never reach this fallback.
+    False for BNSS/BSA, which have no extractable ToC at all: `validate.py`'s
+    `range_fallback` branch uses this value as the PRIMARY, GATING expected
+    set (`{1..highest}`, checked by `enforce_gate` exactly like a real ToC's
+    set would be) whenever no ToC could be bounded. Stale relative to that
+    later addition, not wrong when written -- third docstring in this
+    codebase found lagging behind a real implementation change in the same
+    week (see `reconstruct_rows`'s aspirational sub-clause signal and
+    `gazette_parser.py`'s false ToC claim, both docs/evaluation.md,
+    2026-09-19/20) -- worth treating as a pattern, not three unrelated typos:
+    a comment describing a mechanism's ORIGINAL scope is exactly the kind of
+    thing a later, structurally-separate change (a new fallback branch, a new
+    signal, a new caveat) can silently outdate without anyone touching the
+    comment itself.
     """
     entry = load_manifest().get(act) or {}
     return entry.get("highest_section_number")

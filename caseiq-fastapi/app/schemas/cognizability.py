@@ -54,13 +54,22 @@ class CognizabilitySearchOut(BaseModel):
     mode: str  # "section_number" | "name"
     results: list[OffenceResultOut]
     # Stated on every response, not just in documentation -- see
-    # docs/evaluation.md: BNS is 398/434 sections (92%), IPC/CrPC is 249
-    # rows covering 212/381 sections (56%). A name search returning nothing
+    # docs/evaluation.md: BNS is 398/434 sections (92%), IPC/CrPC is 259
+    # rows covering 222/395 sections (56%). A name search returning nothing
     # for a real IPC offence is very plausibly a coverage gap, not proof
     # the offence doesn't exist -- the UI states this on-screen rather than
     # letting an empty result read as more confident than it is.
+    #
+    # FIXED 2026-09-20 (docs/evaluation.md): the exact figures here were
+    # "212 of 381" for an unknown stretch of time while the live parser
+    # actually reported 222/395 -- 381 predated a bracket-tolerance regex
+    # fix that recovered 14 genuine amendment-numbered sections
+    # (e.g. "1[174A") the old pattern couldn't see at all. The ROUNDED
+    # "56%" never changed (212/381 and 222/395 both round to 56%), which is
+    # exactly why this went unnoticed in a string real users see on every
+    # response -- the headline was right while its own basis was stale.
     coverage_note: str = (
         "Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC is partial "
-        "(212 of 381 sections) -- a section not found here may still be real; it may "
+        "(222 of 395 sections) -- a section not found here may still be real; it may "
         "simply not be in this table yet."
     )
