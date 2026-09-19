@@ -185,6 +185,14 @@ def create_app() -> FastAPI:
         # Deliberately no request-body echo, no secrets -- config shape
         # only, safe to leave public on a project with no user data at
         # stake in an env var name.
+        # allowed_origins added 2026-09-19: same blind spot as the rest of this
+        # endpoint's docstring, applied to CORS specifically -- a Render
+        # dashboard env var being saved and a deploy completing are both
+        # externally observable, but "what did settings.ALLOWED_ORIGINS
+        # actually resolve to inside the running container" was not, which is
+        # why a browser had to find this instead of anything on our side. No
+        # secrets in this value (it's a list of public frontend origins),
+        # same safety rationale as the rest of this endpoint.
         build = get_build_info()
         return {
             "status": "ok",
@@ -192,6 +200,7 @@ def create_app() -> FastAPI:
             "embedding_provider": settings.EMBEDDING_PROVIDER,
             "embedding_dim": settings.EMBEDDING_DIM,
             "embedding_model": embedder.model_id,
+            "allowed_origins": settings.ALLOWED_ORIGINS,
             "git_commit": build.get("git_commit"),
         }
 
