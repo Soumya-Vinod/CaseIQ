@@ -38,11 +38,44 @@ CRITICAL, same rule as punishment_clause.py: this module never guesses. A
 section whose text matches no recognised template returns an EMPTY list --
 callers (app.services.timeline_verification) must treat that as "cannot
 ground a stage against this section", never as "nothing to flag".
+
+FOUND LIVE, 2026-09-20, first real production call to POST /legal/timeline
+(docs/evaluation.md): a genuinely correct claim -- BNSS 58's real 24-hour
+limit, restated by the model as "twenty-four hours" -- was dropped as a
+MISMATCH, not because the number was wrong, but because the model used
+U+2011 NON-BREAKING HYPHEN, not ASCII HYPHEN-MINUS, in the compound word.
+The claim regex's word-token group only matches an ASCII hyphen between two
+word halves, so the non-breaking-hyphen form split into two pieces -- an
+unconsumed "twenty" and a separately-matched bare "four" -- and the parser
+read the claim as 4 hours, not 24. Confirmed both live-observed stages that
+call produced hit this identically (twenty-four misread as 4, twice), not a
+one-off.
+The statute side has never observed this (source PDFs are plain ASCII), but
+`_normalize_hyphens` is applied to BOTH sides defensively -- the failure
+mode is specific to which character a WRITER used, not which side of the
+comparison is reading it, and there's no reason to assume the statute side
+can't hit an equivalent typographic-PDF-extraction artifact later.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+
+# U+2010 HYPHEN, U+2011 NON-BREAKING HYPHEN, U+2012 FIGURE DASH, U+2013 EN
+# DASH, U+2014 EM DASH, U+2212 MINUS SIGN -- every one of these reads as a
+# hyphen to a human and to an LLM's own tokenizer, but only ASCII U+002D
+# matches this module's own `-` regex literals. Normalizing BEFORE matching
+# (not widening the regex to a character class) keeps every existing pattern
+# unchanged and correct for the common case, and fixes every current and
+# future compound-number match site in this file at once, not just the one
+# already found.
+_HYPHEN_VARIANTS = str.maketrans({
+    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "−": "-",
+})
+
+
+def _normalize_hyphens(text: str) -> str:
+    return text.translate(_HYPHEN_VARIANTS)
 
 # Same closed-vocabulary philosophy as punishment_clause.py's own
 # _NUMBER_WORDS -- extended, not generalised, to the specific values the
@@ -125,6 +158,7 @@ def extract_time_limit_clauses(section_text: str) -> list[TimeLimitClause]:
     a bug to work around by guessing; see this module's own docstring.
     """
     clauses: list[TimeLimitClause] = []
+    section_text = _normalize_hyphens(section_text)
     for sentence in _SENTENCE_SPLIT_RE.split(section_text):
         for m in _TIME_LIMIT_RE.finditer(sentence):
             value = _to_int(m.group(1))
@@ -161,6 +195,7 @@ def extract_claim_time_limit(claim_text: str) -> TimeLimitClause | None:
     """
     if not claim_text:
         return None
+    claim_text = _normalize_hyphens(claim_text)
     m = _CLAIM_TIME_LIMIT_RE.search(claim_text)
     if m is None:
         return None

@@ -101,6 +101,24 @@ class TestExtractClaimTimeLimit:
         assert extract_claim_time_limit("as soon as reasonably practicable") is None
         assert extract_claim_time_limit("") is None
 
+    def test_real_production_unicode_hyphen_in_compound_number(self):
+        # FOUND LIVE, 2026-09-20 (docs/evaluation.md): the exact real claim
+        # text the model produced on the first real production call to
+        # /legal/timeline -- U+2011 NON-BREAKING HYPHEN, not ASCII, in
+        # "twenty‑four". Previously misparsed as 4 hours, not 24 --
+        # a genuinely correct claim wrongly dropped as a mismatch.
+        claim = extract_claim_time_limit(
+            "not exceed more than twenty‑four hours exclusive of the time necessary for the journey"
+        )
+        assert claim is not None
+        assert claim.value == 24 and claim.unit == "hours"
+
+    def test_en_dash_and_em_dash_variants_also_normalise(self):
+        # Same failure class, different Unicode dash characters -- not
+        # assumed fixed just because the one observed variant was.
+        assert extract_claim_time_limit("within twenty–four hours").value == 24
+        assert extract_claim_time_limit("within twenty—four hours").value == 24
+
 
 class TestClaimMatchesClause:
     def test_real_grounded_claim_matches(self):

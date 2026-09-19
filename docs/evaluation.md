@@ -5885,3 +5885,59 @@ step a second seeding test collided on `acts.act_code`'s unique constraint again
 still-present row — found live (`UniqueViolationError`), not by inspection, fixed by reusing the same
 TRUNCATE the shared `db` fixture already runs. Full suite once Docker's test Postgres was up: 209
 non-integration + 80 integration, all passed.
+
+## Migration 0015 run against production; first real call found a genuine bug, fixed same session (2026-09-20)
+
+Backup confirmed green, `alembic upgrade 0015_timeline_verification_stats` run against
+`DATABASE_URL_DIRECT`. `/health` immediately after: `{"status":"ok", ..., "git_commit":
+"a703472f..."}` — booted cleanly. (One false alarm on the way, corrected before it went anywhere:
+briefly suspected the running instance would crash-loop on its next cold start, code-behind-schema in
+the OPPOSITE direction from the 0014 incident — local `git log` showed an older `HEAD` than what
+was actually live. Wrong: the deploy had already happened, the local checkout was just stale. Worth
+recording as a reminder that "my local branch" and "what's actually deployed" are two different facts
+this project has now been burned by confusing in both directions, not just once.)
+
+**First real call to `POST /legal/timeline` against production** (query: "How long can police keep
+someone in custody after arrest before producing them before a magistrate?", real retrieved sections
+from a real `/legal/query` call feeding it) returned `{"stages":[],"stages_proposed":4}` —
+everything dropped. `timeline_verification_stats` after that one call: `4 proposed, 0 grounded, 3
+dropped_unverifiable, 1 dropped_mismatch`. Verification demonstrably DID drop things, exactly the
+behaviour asked to be confirmed — but reproducing the model's exact raw output locally (same real
+Groq call, same two pre-filtered sections, BNSS 58 and CrPC 167 — the only two of six retrieved
+sections that passed the extractable-time-limit pre-filter) showed the reason was not a genuine
+fabrication catch.
+
+**The real cause, found by reproducing rather than guessing**: the model wrote "twenty‑four hours"
+using U+2011 NON-BREAKING HYPHEN, not ASCII hyphen-minus. `extract_claim_time_limit`'s word-token
+regex only matches an ASCII hyphen joining a compound number, so "twenty‑four" split into an
+unconsumed "twenty" and a separately-matched bare "four" — the parser read a correct claim of 24
+hours as 4, which then correctly (given the wrong input) failed to match BNSS 58's real 24-hour
+clause. Both live-observed stages hit this identically. **A false mismatch, not a caught
+fabrication** — the model got the law right; this project's own parser was wrong about what the
+model said.
+
+Fixed in `app/legal_corpus/parsing/timeline_clause.py`: `_normalize_hyphens` translates the six
+common Unicode hyphen/dash variants (U+2010/2011/2012/2013/2014, U+2212) to ASCII before either
+extraction function runs, applied to both the claim side (where this was observed) and the statute
+side (never observed there — source PDFs are plain ASCII — but the failure mode is about which
+character a WRITER used, not which side of the comparison reads it, so both are covered rather than
+just the one that happened to break first). Verified against the exact real failing claim text
+captured from the live call, not a synthetic reconstruction: both stages now parse to `(24, "hours")`
+and pass `claim_matches_clause` against BNSS 58's and CrPC 167's real extracted clauses. Two new
+regression tests (`tests/test_timeline_clause.py`) — the exact real claim text, plus en-dash/em-dash
+variants to confirm the fix isn't narrowly matched to only the one character observed. Full suite:
+211 passed (209 + 2 new).
+
+**Not yet deployed** — this fix exists only in the local working tree as of this entry. Production
+is still running the version that mis-parses non-breaking hyphens, meaning any real `/legal/timeline`
+call whose model output happens to use one will currently under-report grounded stages (fails safe —
+it drops a correct stage rather than showing a wrong one — but it's still a real, now-understood
+defect, not a mystery to route around). Needs a commit + push before the fix is live.
+
+**Genuine confirmation that verification catches real fabrication, not just this bug, comes from the
+mocked integration tests, not the live call**: `tests/integration/test_legal_timeline_endpoint.py::
+test_fabricated_stage_never_reaches_the_response` forces an exact known-wrong claim (48 hours against
+BNSS 58's real 24) through the real endpoint and confirms it's dropped — that's the clean proof this
+mechanism does its actual job. The live call proved something else, arguably more valuable this
+early: that shipping against real, unpredictable model output surfaces failure modes a hand-written
+test fixture won't think to construct.
