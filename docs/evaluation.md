@@ -5886,58 +5886,68 @@ still-present row — found live (`UniqueViolationError`), not by inspection, fi
 TRUNCATE the shared `db` fixture already runs. Full suite once Docker's test Postgres was up: 209
 non-integration + 80 integration, all passed.
 
-## Migration 0015 run against production; first real call found a genuine bug, fixed same session (2026-09-20)
+## Standing operational gap: "what my local branch shows" vs. "what's actually deployed" (2026-09-20)
 
-Backup confirmed green, `alembic upgrade 0015_timeline_verification_stats` run against
-`DATABASE_URL_DIRECT`. `/health` immediately after: `{"status":"ok", ..., "git_commit":
-"a703472f..."}` — booted cleanly. (One false alarm on the way, corrected before it went anywhere:
-briefly suspected the running instance would crash-loop on its next cold start, code-behind-schema in
-the OPPOSITE direction from the 0014 incident — local `git log` showed an older `HEAD` than what
-was actually live. Wrong: the deploy had already happened, the local checkout was just stale. Worth
-recording as a reminder that "my local branch" and "what's actually deployed" are two different facts
-this project has now been burned by confusing in both directions, not just once.)
+Migration `0015` was run against production (backup confirmed green first) while the code that
+migration belongs to had already been pushed and deployed — but the sequencing wasn't checked before
+running it, so for a window the actual state of "is the code live yet" was assumed rather than
+verified. `/health` immediately after the migration confirmed a clean boot (`{"status":"ok", ...,
+"git_commit": "a703472f..."}`, the commit containing migration 0015) — no harm done — but a false
+alarm was raised on the way there: local `git log` showed an older `HEAD` than what was actually
+running, misread as evidence the LIVE instance was about to crash-loop on its next cold start
+(schema ahead of code, the mirror image of the 0014 incident). Wrong: the deploy had already
+happened: the local checkout was simply stale, never fetched. Corrected the moment `git fetch` was
+actually run, not assumed.
 
-**First real call to `POST /legal/timeline` against production** (query: "How long can police keep
-someone in custody after arrest before producing them before a magistrate?", real retrieved sections
-from a real `/legal/query` call feeding it) returned `{"stages":[],"stages_proposed":4}` —
-everything dropped. `timeline_verification_stats` after that one call: `4 proposed, 0 grounded, 3
-dropped_unverifiable, 1 dropped_mismatch`. Verification demonstrably DID drop things, exactly the
-behaviour asked to be confirmed — but reproducing the model's exact raw output locally (same real
-Groq call, same two pre-filtered sections, BNSS 58 and CrPC 167 — the only two of six retrieved
-sections that passed the extractable-time-limit pre-filter) showed the reason was not a genuine
-fabrication catch.
+**Both real incidents this project has now had in this exact area were the same underlying gap,
+approached from opposite directions**: 0014 shipped CODE ahead of the SCHEMA it depended on, with
+nothing checking whether the migration had run (closed by `app.db.migration_check`'s startup guard,
+2026-09-19). This one nearly had a migration run ahead of confirming the CODE was actually live to
+receive it — caught by chance (the code turned out to already be deployed), not by a check. **The
+standing rule going forward: a migration must never run ahead of the deploy it belongs to — it
+follows the deploy, or ships in the same step, never before it is independently confirmed live.**
+Unlike 0014, there is no structural guard for THIS direction yet (the startup check only catches a
+process that's already trying to boot against a mismatched schema — it says nothing about the window
+before that process next restarts, which on Render's free tier could be minutes away or could be the
+next deploy). Worth naming as a real gap rather than assuming this project's own tooling already
+covers it just because a related-looking guard exists nearby.
 
-**The real cause, found by reproducing rather than guessing**: the model wrote "twenty‑four hours"
-using U+2011 NON-BREAKING HYPHEN, not ASCII hyphen-minus. `extract_claim_time_limit`'s word-token
-regex only matches an ASCII hyphen joining a compound number, so "twenty‑four" split into an
-unconsumed "twenty" and a separately-matched bare "four" — the parser read a correct claim of 24
-hours as 4, which then correctly (given the wrong input) failed to match BNSS 58's real 24-hour
-clause. Both live-observed stages hit this identically. **A false mismatch, not a caught
-fabrication** — the model got the law right; this project's own parser was wrong about what the
-model said.
+## The Unicode hyphen bug: the verifier misread the model, not the other way round (2026-09-20)
 
-Fixed in `app/legal_corpus/parsing/timeline_clause.py`: `_normalize_hyphens` translates the six
-common Unicode hyphen/dash variants (U+2010/2011/2012/2013/2014, U+2212) to ASCII before either
-extraction function runs, applied to both the claim side (where this was observed) and the statute
-side (never observed there — source PDFs are plain ASCII — but the failure mode is about which
-character a WRITER used, not which side of the comparison reads it, so both are covered rather than
-just the one that happened to break first). Verified against the exact real failing claim text
-captured from the live call, not a synthetic reconstruction: both stages now parse to `(24, "hours")`
-and pass `claim_matches_clause` against BNSS 58's and CrPC 167's real extracted clauses. Two new
-regression tests (`tests/test_timeline_clause.py`) — the exact real claim text, plus en-dash/em-dash
-variants to confirm the fix isn't narrowly matched to only the one character observed. Full suite:
-211 passed (209 + 2 new).
+**First real call to `POST /legal/timeline` against production** (a genuine arrest/custody query,
+real retrieved sections feeding it) returned `{"stages":[],"stages_proposed":4}` — everything
+dropped. `timeline_verification_stats` after that one call: `4 proposed, 0 grounded, 3
+dropped_unverifiable, 1 dropped_mismatch`. Reproducing the model's exact raw output locally (same
+real Groq call, same two sections that passed the pre-filter — BNSS 58 and CrPC 167) showed the drop
+was not a caught fabrication.
 
-**Not yet deployed** — this fix exists only in the local working tree as of this entry. Production
-is still running the version that mis-parses non-breaking hyphens, meaning any real `/legal/timeline`
-call whose model output happens to use one will currently under-report grounded stages (fails safe —
-it drops a correct stage rather than showing a wrong one — but it's still a real, now-understood
-defect, not a mystery to route around). Needs a commit + push before the fix is live.
+**The real cause**: the model wrote "twenty‑four hours" using U+2011 NON-BREAKING HYPHEN, not ASCII
+hyphen-minus. `extract_claim_time_limit`'s word-token regex only matched an ASCII hyphen joining a
+compound number, so "twenty‑four" split into an unconsumed "twenty" and a separately-matched bare
+"four" — a correct claim of 24 hours was read as 4, which then correctly (given the corrupted input)
+failed to match BNSS 58's real clause. Both live-observed stages hit this identically. **A false
+mismatch, not a genuine one — the model got the law right; this project's own verifier was wrong
+about what the model had actually said**, not the other way round. It fails safe (a correct stage
+silently withheld is a materially better failure than a wrong one shown), but until this ships, the
+`stages_dropped_mismatch` counter is not a reliable signal of real fabrication — it can't be told
+apart from this class of parsing artifact by the number alone.
 
-**Genuine confirmation that verification catches real fabrication, not just this bug, comes from the
-mocked integration tests, not the live call**: `tests/integration/test_legal_timeline_endpoint.py::
-test_fabricated_stage_never_reaches_the_response` forces an exact known-wrong claim (48 hours against
-BNSS 58's real 24) through the real endpoint and confirms it's dropped — that's the clean proof this
-mechanism does its actual job. The live call proved something else, arguably more valuable this
-early: that shipping against real, unpredictable model output surfaces failure modes a hand-written
-test fixture won't think to construct.
+Fixed: `_normalize_hyphens` (`app/legal_corpus/parsing/timeline_clause.py`) translates six common
+Unicode hyphen/dash variants to ASCII before either extraction function runs, applied to both the
+claim side (where this was observed) and the statute side (never observed there — source PDFs are
+plain ASCII — covered anyway, since the failure is about which character a WRITER used, not which
+side reads it). Verified against the exact real failing claim text captured from the live call, not
+a reconstruction: both stages now parse to `(24, "hours")` and ground correctly. Two regression tests
+added — the real claim text, plus en-dash/em-dash variants so the fix isn't narrowly tied to the one
+character actually observed. Full suite: 211 passed.
+
+**Why this is worth stating alongside the mocked fabrication test, not instead of it**:
+`test_fabricated_stage_never_reaches_the_response` forces an exact known-wrong claim (48 hours
+against BNSS 58's real 24) through the real endpoint and proves the DECISION mechanism works — a
+genuine mismatch really does get dropped. It says nothing about whether the mechanism reads its own
+inputs correctly first. **No hand-written fixture would have contained U+2011** — that character
+only showed up because a real model, generating real text, made a real typographic choice nobody
+scripted. Real unpredictable output found a defect a constructed test structurally could not have
+been written to find, since writing it would require already knowing the exact failure in advance.
+Both kinds of test are necessary and neither substitutes for the other: one proves the logic is
+correct, the other proves the logic is being fed what it thinks it's being fed.

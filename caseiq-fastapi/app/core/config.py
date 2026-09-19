@@ -281,6 +281,21 @@ class Settings(BaseSettings):
     # /health (app/main.py) specifically so it cannot plausibly stay on by
     # accident after the event it was built for: anyone checking prod config
     # the way this project already habitually does sees it immediately.
+    #
+    # HOW A CHANGE ACTUALLY TAKES EFFECT, confirmed 2026-09-20 (docs/
+    # evaluation.md), stated precisely because this is meant to work as a
+    # mid-demo escape hatch: `settings` (this file's bottom) is a single
+    # `@lru_cache`d object read from the environment ONCE at process start
+    # -- toggling this on Render's dashboard does NOT reach an already-
+    # running process; it takes effect only once the process actually
+    # restarts and re-imports this module. Render does trigger that restart
+    # automatically when an env var is saved (no git push, no new build), so
+    # this is still usable live without a deploy in that sense -- but it is
+    # a real process restart, not an instantaneous in-place flip, and this
+    # project has no measured timing for that specific restart path (as
+    # opposed to the well-documented 30-60s wake-from-15-minutes-idle cold
+    # start). Expect a brief interruption when toggling this mid-demo, not
+    # a silent, zero-disruption change.
     DEMO_TRIM_MODE: bool = False
 
     GEMINI_API_KEY: str | None = None
