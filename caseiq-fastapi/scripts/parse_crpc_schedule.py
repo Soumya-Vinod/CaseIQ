@@ -515,7 +515,11 @@ def merge_orphan_fragments(rows: list[ScheduleRow], diagnostics: list[dict]) -> 
     return merged
 
 
-PARSER_VERSION = "crpc-schedule-v4"
+PARSER_VERSION = "crpc-schedule-v7"  # v7: complete_rows() tightened to require cognizable_raw/
+# bailable_raw too, not just triable_by -- 395->373 (22 sections whose only row(s) are
+# row-count mismatches drop out entirely; real content, not guessed at, just not yet
+# attachable to a correct row). v6: apply_cognizable_bailable_verification() added. v5:
+# apply_first_schedule_transcription() added, 222->395.
 
 # Direct row-level corrections (docs/evaluation.md, CrPC Ditto-propagation
 # sizing) for mechanism (d): column x0-boundary bleed on specific pages,
@@ -632,8 +636,18 @@ _KNOWN_ROW_REPLACEMENTS: dict[str, list[dict]] = {
             "offence_description": "Unlawful compulsory labour.",
             "punishment": "Imprisonment for 1 year, or fine, or both.",
             "cognizable_raw": "Cognizable", "cognizable": True,
-            "bailable_raw": "Non-bailable", "bailable": False,
-            "triable_by": "Court of Session.",
+            # CORRECTED 2026-09-20 (docs/evaluation.md, cognizable/bailable hand-verification
+            # entry): this dict's own original hand-verification had BOTH bailable AND
+            # triable_by wrong for s.374 -- found by the independent cognizable/bailable
+            # verification pass disagreeing with this already-shipped value, confirmed
+            # directly against page 214: column 5 reads "Bailable" (a fresh, distinct printed
+            # value, not "Ditto" -- 373's own bailable chains to Non-bailable via Ditto from
+            # 371, but 374 breaks that chain with its own explicit value), column 6 reads
+            # "Any Magistrate." (also a fresh printed value, not "Ditto" chaining to 373's
+            # "Court of Session."). Originally recorded as Non-bailable/Court of Session,
+            # apparently transcribed from the row ABOVE it rather than 374's own row.
+            "bailable_raw": "Bailable", "bailable": True,
+            "triable_by": "Any Magistrate.",
         },
     ],
     "376": [
@@ -701,6 +715,194 @@ def apply_known_row_replacements(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     return kept
 
 
+def apply_first_schedule_transcription(rows: list[ScheduleRow]) -> list[ScheduleRow]:
+    """The 173-section hand transcription (docs/evaluation.md, 2026-09-20
+    "First Schedule transcription" entry) -- scripts/
+    _crpc_first_schedule_transcription.py, kept in its own file rather than
+    folded into _KNOWN_ROW_REPLACEMENTS above given the difference in
+    scale: that dict is a small, growing set of individually-diagnosed
+    one-off defects; this is one large, single batch read directly from
+    page images to close the row-boundary-detection gap `reconstruct_rows()`
+    structurally cannot close on its own (see that function's own docstring
+    history) -- every section here has an EMPTY triable_by from the
+    automated extraction, not a wrong one, so there is nothing already
+    accepted for these sections to conflict with.
+
+    Same replace-not-merge contract and construction as
+    apply_known_row_replacements -- call in the same place, order between
+    the three `apply_*` functions doesn't matter, they touch disjoint
+    section sets (confirmed: this function's own transcription source
+    asserts its own section set is disjoint from _KNOWN_ROW_REPLACEMENTS
+    and exactly equal to complete_rows()'s own "missing" set at the time
+    this was built -- see tests/test_crpc_first_schedule_transcription.py).
+    source_page is left as whatever reconstruct_rows() already assigned the
+    section (or 0 if the section had no raw candidate at all) -- unlike
+    _KNOWN_ROW_REPLACEMENTS's two sections, these 173 don't share one page.
+    """
+    from scripts._crpc_first_schedule_transcription import _ALL_RAW, resolve_first_schedule_transcription
+
+    # Antecedents for Ditto-chain resolution must be what complete_rows() ITSELF accepts as
+    # correct -- not a weaker inline re-check of just triable_by -- or a section complete_rows()
+    # would reject (the length filter, the "if "-leak filter) could feed a wrong antecedent into
+    # this resolution without either check ever seeing the disagreement.
+    #
+    # complete_rows()'s own _clean() exempts any section in _ALL_RAW from the length/"if "-leak
+    # checks (so the transcribed replacement rows themselves, once substituted in, aren't
+    # rejected for exceeding _MAX_SANE_OFFENCE_LEN) -- but that exemption is keyed on section
+    # number alone, with no awareness of whether the substitution has actually happened yet. Fed
+    # the PRE-transcription `rows` here, it would let an old, still-garbled row for one of these
+    # 173 sections (e.g. s.358's "Kidnapping..." fragment, non-empty but wrong triable_by) pass as
+    # "complete" -- which would both feed a wrong antecedent AND, via the `number in
+    # complete_rows_by_section` branch in resolve_first_schedule_transcription(), cause that
+    # section to be skipped from `transcribed` entirely, silently keeping the old garbled rows in
+    # the output. None of these 173 sections' PRE-transcription rows are ever legitimate
+    # antecedents -- that they need transcribing at all is exactly the reason complete_rows()
+    # exempts them -- so they're excluded here before the baseline is built.
+    # A Ditto-shaped row inherits the value of the row immediately above it, which for a
+    # multi-row baseline section is its LAST printed row, not its first -- "set once, keep
+    # the first" silently fed the wrong antecedent into every downstream Ditto chain through
+    # a multi-row baseline section whose first and last rows disagree. Found via
+    # apply_cognizable_bailable_verification()'s independent page-read cross-checking this
+    # same data and disagreeing with what this function had already shipped (s.354D: first
+    # row Bailable/True, last row Non-bailable/False -- s.355-358 all Ditto-chain through
+    # it and had been silently resolving to the FIRST row's value instead of the real one).
+    #
+    # But "always use the last stored row" isn't right either when the STORED row count
+    # itself is wrong -- a section the row-boundary heuristic over-split (e.g. s.110: parser
+    # stores 2 rows, only 1 is real; the second is a wrapped-line fragment with empty
+    # cog/bail) has a phantom "last row" that isn't real content, and using it regressed
+    # 111/113/114's antecedent from a real conditional value to empty (caught by re-running
+    # the full corpus diff after the first version of this fix, not shipped on the strength
+    # of the 354D case alone). scripts._crpc_cognizable_bailable_verification's
+    # compute_row_count_mismatches() already knows, from this session's own fresh page-reads,
+    # which baseline sections are over-split -- for those, the FIRST stored row is the real
+    # one; every other multi-row section uses its LAST, per genuine Ditto semantics.
+    from scripts._crpc_cognizable_bailable_verification import compute_row_count_mismatches
+    mismatches = compute_row_count_mismatches(rows)
+    over_split_sections = {s for s, v in mismatches.items() if v["shape"] == "over_split"}
+
+    # _structurally_complete_rows, NOT complete_rows -- this runs BEFORE cognizable_raw/
+    # bailable_raw are populated (that's apply_cognizable_bailable_verification's own job,
+    # later in the pipeline), so the public complete_rows()'s now-stricter all-three-fields
+    # check would see most baseline sections as having zero rows at this point and break
+    # this antecedent computation the same way it broke apply_cognizable_bailable_
+    # verification's own row-count counting -- see _structurally_complete_rows's docstring.
+    complete_by_section: dict[str, tuple[str, bool | None, str, bool | None, str]] = {}
+    for r in _structurally_complete_rows(rows):
+        if r.section_number in _ALL_RAW:
+            continue
+        if r.section_number in over_split_sections and r.section_number in complete_by_section:
+            continue  # keep the first (real) row; later ones are phantom fragments
+        # A genuine (non-Ditto) court value can legitimately end in "]" -- a multi-row
+        # amendment span's closing bracket (e.g. s.354D's own real second row, "Any
+        # Magistrate.]", closing the bracket "354"/"²[354" opened four rows earlier) -- real
+        # printed content for THAT row, but not part of the court name a downstream "Ditto"
+        # should inherit. Found live: switching this antecedent to the last row (the fix
+        # above) newly exposed s.354D as 355-358's antecedent, and without this, the bracket
+        # leaked into their inherited triable_by ("Any Magistrate.]") even though their own
+        # court column just says "Ditto." Stripped only from what's STORED as the antecedent
+        # here, matching the existing rstrip(".]") convention `_resolve_col` already uses to
+        # detect a ditto-shaped value elsewhere in this file -- s.354D's own row keeps its
+        # real bracketed text unchanged.
+        triable_by_for_antecedent = r.triable_by.rstrip("]") if r.triable_by.endswith("]") else r.triable_by
+        complete_by_section[r.section_number] = (
+            r.cognizable_raw, r.cognizable, r.bailable_raw, r.bailable, triable_by_for_antecedent,
+        )
+    existing_page: dict[str, int] = {}
+    for r in rows:
+        existing_page.setdefault(r.section_number, r.source_page)
+
+    transcribed = resolve_first_schedule_transcription(complete_by_section)
+    replaced_sections = set(transcribed)
+    kept = [r for r in rows if r.section_number not in replaced_sections]
+    for section_number, specs in transcribed.items():
+        for spec in specs:
+            kept.append(ScheduleRow(
+                section_number=section_number,
+                offence_description=spec["offence_description"],
+                punishment_text="",
+                cognizable_raw=spec["cognizable_raw"], cognizable=spec["cognizable"],
+                bailable_raw=spec["bailable_raw"], bailable=spec["bailable"],
+                triable_by=spec["triable_by"],
+                source_page=existing_page.get(section_number, 0),
+            ))
+    return kept
+
+
+def apply_cognizable_bailable_verification(rows: list[ScheduleRow]) -> list[ScheduleRow]:
+    """Cognizable/bailable hand-verification pass (docs/evaluation.md,
+    2026-09-20 "Cognizable/bailable hand-verification" entry):
+    complete_rows() has only ever validated triable_by, so 192 of the 395
+    sections it accepts as "complete" turned out to have no usable
+    cognizable and/or bailable value at all. scripts/_crpc_cognizable_
+    bailable_verification.py holds every row read directly off the source
+    PDF for pages 196-223 (the First Schedule's full extent); this wires
+    that data into the pipeline.
+
+    Narrower than apply_first_schedule_transcription: PATCHES cognizable_raw/
+    cognizable/bailable_raw/bailable on EXISTING ScheduleRow objects in
+    place (matched by section_number + row order) rather than replacing
+    whole rows -- offence_description/punishment_text/triable_by/source_page
+    are already correct for every section here and are left untouched.
+
+    Structurally immune to the exemption-masking bug apply_first_schedule_
+    transcription hit and fixed this same session (a stale, not-yet-replaced
+    row silently accepted as a valid antecedent): unlike that pass, this one
+    never treats the PRE-fix rows/DB state as an antecedent source at all --
+    every row's resolved value comes entirely from _ALL_RAW's own freshly-
+    read, printed-order data (every row on every page was read, not just the
+    ones that started out empty), so there is no "already complete" baseline
+    computed from stale data for a masking bug to hide behind.
+
+    Sections where the number of printed rows doesn't match the number of
+    ScheduleRow objects already stored for that section are EXCLUDED from
+    the patch (compute_row_count_mismatches/resolve_cognizable_bailable) --
+    patching in place assumes 1:1 row correspondence, and where that doesn't
+    hold, guessing which stored row a printed clause's data belongs to would
+    be exactly the "looks resolved but isn't" outcome this pass exists to
+    avoid. 38 of 373 sections read (~10%) fall into this bucket -- real,
+    reported separately, not silently dropped from the count. A cognizable/
+    bailable coverage claim after this function runs is 395 minus that
+    excluded set, not 395; complete_rows() is not tightened here to enforce
+    that distinction -- see the module's own __main__ block / docs/
+    evaluation.md for when and why that comes later, deliberately not in
+    this function.
+    """
+    from scripts._crpc_cognizable_bailable_verification import (
+        compute_row_count_mismatches, resolve_cognizable_bailable,
+    )
+
+    mismatches = compute_row_count_mismatches(rows)
+    resolved = resolve_cognizable_bailable(set(mismatches))
+
+    # Built from _structurally_complete_rows(rows), NOT raw `rows` and NOT the public
+    # complete_rows() -- compute_row_count_mismatches() counts against this same structural
+    # signal (a section can have a raw row that's already excluded upstream, e.g. s.202's
+    # second row, empty triable_by; counting from raw `rows` would silently skip every such
+    # section on a false count disagreement that isn't a real row-count mismatch at all --
+    # found live testing s.202). complete_rows() itself is the wrong signal here too, now
+    # that it also requires cognizable_raw/bailable_raw -- at this point in the pipeline
+    # those are exactly what's still missing for most rows, so complete_rows() would see
+    # nearly every section as having zero rows (confirmed live: coverage collapsed to 276).
+    # _structurally_complete_rows returns the SAME row objects (filtered, not copied), so
+    # mutating them here still updates what's in `rows`.
+    by_section: dict[str, list[ScheduleRow]] = {}
+    for r in _structurally_complete_rows(rows):
+        by_section.setdefault(r.section_number, []).append(r)
+
+    patched_ids: set[int] = set()
+    for section_number, specs in resolved.items():
+        section_rows = by_section.get(section_number, [])
+        if len(section_rows) != len(specs):
+            continue  # shouldn't happen (mismatches already excluded), but never patch on a count disagreement
+        for row, (cog_raw, cog_bool, bail_raw, bail_bool) in zip(section_rows, specs):
+            row.cognizable_raw, row.cognizable = cog_raw, cog_bool
+            row.bailable_raw, row.bailable = bail_raw, bail_bool
+            patched_ids.add(id(row))
+
+    return rows
+
+
 _MAX_SANE_OFFENCE_LEN = 250  # see docstring below
 
 # s.358's second row is KNOWN-BAD but NOT guessed at. The real source text
@@ -766,9 +968,58 @@ def complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     signal a real merge would trigger. Ground truth overrides the proxy,
     for these specific, named sections only -- not a general loosening of
     the threshold, which stays doing its job for everything else.
+
+    SAME EXEMPTION, same reasoning, extended 2026-09-20 to the 173-section
+    First Schedule transcription (scripts/_crpc_first_schedule_
+    transcription.py): several of those hand-verified rows combine two or
+    three real sub-clauses into one offence_description (e.g. s.213/214's
+    three graded conditions, s.115/116's two-row entries) and genuinely
+    exceed 250 chars for the same reason s.376 does -- real content, not a
+    merge artifact. Found live, not assumed: wiring the transcription in
+    without this exemption first dropped coverage to 386/395, not the
+    intended 395/395, because this exact filter rejected the legitimately
+    long ones. Checked against the transcription module's own section set,
+    not a separate hardcoded list, so it can never drift out of sync with
+    what that module actually covers.
     """
+    # TIGHTENED 2026-09-20 (docs/evaluation.md, cognizable/bailable hand-verification
+    # entry): a row is no longer "complete" on triable_by alone -- cognizable_raw and
+    # bailable_raw must be non-empty too. Unconditional, not exempted for
+    # _KNOWN_ROW_REPLACEMENTS/_FIRST_SCHEDULE_TRANSCRIBED the way the length/"if "-leak
+    # checks in _structurally_complete_rows are -- those exemptions exist because length
+    # is a PROXY that sometimes over-fires on real, long, hand-verified content; an empty
+    # string is never legitimate content regardless of hand-verification status, so
+    # there's nothing for an exemption to protect here. Coverage measured against this
+    # requirement is 373/395, not 395 -- 22 sections whose only row(s) are excluded by
+    # scripts._crpc_cognizable_bailable_verification's own row-count-mismatch tracking
+    # (real content, not guessed at, just not yet attachable to a correct row) drop out
+    # entirely. That 373, not 395, is the honest number for "cognizable/bailable verified"
+    # coverage -- see this file's own module docstring history and docs/evaluation.md for
+    # why 395 alone was already shown to measure the wrong thing once.
+    #
+    # Layered on TOP of _structurally_complete_rows rather than folded into its own _clean()
+    # -- apply_cognizable_bailable_verification() and compute_row_count_mismatches() both
+    # need the STRUCTURAL signal (does a real row exist, with a real triable_by) BEFORE
+    # cognizable_raw/bailable_raw have been populated at all, which is exactly the state
+    # they run in. Folding this check into _structurally_complete_rows would have every row
+    # needing this pass's own fix look like it doesn't exist yet, at the exact moment
+    # apply_cognizable_bailable_verification asks "how many rows does this section already
+    # have" -- confirmed live, not assumed safe: coverage collapsed to 276 before this was
+    # split out, not the expected 373.
+    return [r for r in _structurally_complete_rows(rows) if r.cognizable_raw.strip() and r.bailable_raw.strip()]
+
+
+def _structurally_complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
+    """The triable_by-only completeness check complete_rows() used exclusively before
+    2026-09-20 -- still needed on its own by apply_cognizable_bailable_verification() and
+    compute_row_count_mismatches(), which run BEFORE cognizable_raw/bailable_raw are
+    populated and need to know "does a real row already exist here" independent of that.
+    complete_rows() itself is this plus the cognizable/bailable requirement layered on top.
+    """
+    from scripts._crpc_first_schedule_transcription import _ALL_RAW as _FIRST_SCHEDULE_TRANSCRIBED
+
     def _clean(r: ScheduleRow) -> bool:
-        if r.section_number in _KNOWN_ROW_REPLACEMENTS:
+        if r.section_number in _KNOWN_ROW_REPLACEMENTS or r.section_number in _FIRST_SCHEDULE_TRANSCRIBED:
             return bool(r.triable_by.strip())
         if not r.triable_by.strip() or len(r.offence_description) > _MAX_SANE_OFFENCE_LEN:
             return False
@@ -790,6 +1041,17 @@ if __name__ == "__main__":
     rows = reconstruct_rows(raw_lines, diags)
     rows = apply_known_corrections(rows)
     rows = apply_known_row_replacements(rows)
+    # Must run AFTER apply_known_row_replacements (disjoint section sets, but
+    # apply_first_schedule_transcription's own antecedent-resolution pass wants
+    # 374/376 already in their final form if a chain ever depended on them) and
+    # BEFORE complete_rows() (its whole job is to make complete_rows() accept
+    # sections that would otherwise still be missing).
+    rows = apply_first_schedule_transcription(rows)
+    # Must run AFTER apply_first_schedule_transcription (patches cognizable_raw/bailable_raw
+    # on the rows that step produces, including the newly-transcribed 173) and BEFORE
+    # complete_rows() (complete_rows() now requires all three fields, not just triable_by --
+    # this is what supplies cognizable/bailable for the rows that check actually validates).
+    rows = apply_cognizable_bailable_verification(rows)
     print(f"rows: {len(rows)}")
 
     complete = complete_rows(rows)

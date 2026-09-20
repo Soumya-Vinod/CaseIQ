@@ -5886,6 +5886,196 @@ still-present row — found live (`UniqueViolationError`), not by inspection, fi
 TRUNCATE the shared `db` fixture already runs. Full suite once Docker's test Postgres was up: 209
 non-integration + 80 integration, all passed.
 
+## First Schedule transcription: 222/395 → 395/395, plus a latent exemption-scope bug it exposed (2026-09-20)
+
+Picked back up the First Schedule coverage gap sized in "CrPC First Schedule re-ingested into
+production, verified against the live DB" (2026-09-19): 173 of 395 sections had no complete row at
+all (empty `triable_by`, or filtered out by `complete_rows()`'s length/"if "-leak checks), not
+because the source is ambiguous but because `reconstruct_rows()`'s column-position extraction
+structurally cannot resolve every row-boundary case on its own. Standard set going in: complete
+coverage, not a better caveat — no value guessed to force a round number, anything unreadable with
+confidence stays unverifiable rather than filled in.
+
+**Method**: 4 parallel subagents, each given a page range and its section list, read the source PDF
+(`documents/CrPC_1973.pdf`, printed pages 197–224) directly as page images — not the automated text
+extraction — and reported the 6-column data per section. Two small gaps between the agents' ranges
+(195/199/200/201/203; 404/406/407/408/409/413/418/419/423/424) were filled by a same-session direct
+read of the missing pages. Result: `scripts/_crpc_first_schedule_transcription.py`, 173 sections,
+resolved through the same Ditto-chain-walk logic (`_resolve_col`) the rest of the schedule already
+uses, wired in via `apply_first_schedule_transcription()` in `parse_crpc_schedule.py`. **Result:
+395/395 (100%) sections with at least one complete row**, up from 222/395.
+
+**Two findings along the way, both real, both fixed:**
+
+1. **s.358's second row was previously excluded on purpose**, not just incomplete —
+   `_KNOWN_UNRESOLVED_SECTION` treated it as possibly genuinely misattributed from s.363 in the
+   source itself (the linear text extraction shows "...fine. **363** Magistrate of the first
+   class." — a bare section number sitting where it shouldn't be). Two independent direct reads of
+   the actual page (one transcription agent, one same-session follow-up spot-check) found the real
+   row is fully coherent — "Assault or use of criminal force on grave and sudden provocation..." —
+   with no s.363 bleed at all. The garbling was the automated parser's own artifact, not a real
+   source ambiguity. `_KNOWN_UNRESOLVED_SECTION` itself is left in place (it would still catch an
+   equivalent case for some other section), just no longer exercised by s.358.
+   `tests/test_crpc_schedule_ditto_corruption.py`'s `TestS358NowResolvedByHandTranscription`
+   replaces the old "stays excluded" test with the new "resolves correctly" one.
+
+2. **A masking bug found via the regression check itself, not assumed clean because the section
+   count round-tripped.** `complete_rows()` already exempts `_KNOWN_ROW_REPLACEMENTS` sections from
+   its length/"if "-leak checks (so a hand-verified whole-row replacement can't be rejected for
+   being long); the same exemption was extended to the new 173-section set for the same reason —
+   some transcribed rows legitimately combine multiple real sub-clauses past `_MAX_SANE_OFFENCE_LEN`
+   (250 chars). That exemption is keyed on section number alone, with no awareness of whether the
+   real transcribed replacement has actually been substituted in yet. Fed the raw, *pre*-transcription
+   rows — which is exactly what `apply_first_schedule_transcription()` does internally, to compute
+   the antecedent baseline its own Ditto-chain walk needs — the exemption let 9 sections' **old,
+   still-garbled** rows (non-empty but wrong `triable_by`: 116, 120B, 175, 201, 225A, 358, 404, 498A,
+   511) pass as "already complete." That silently fed a wrong antecedent into the chain walk for
+   those sections, and — because `resolve_first_schedule_transcription()` skips replacing any
+   section already in its "complete" input — caused all 9 to be silently skipped from replacement
+   entirely, keeping the garbled text in the final output even though the correct transcribed text
+   was sitting right there in `_ALL_RAW`. Caught by a regression diff that should have shown a
+   222-section "before" baseline and instead showed 231 — investigated rather than dismissed as
+   off-by-something. Fixed by excluding `_ALL_RAW`'s own section set from the rows
+   `apply_first_schedule_transcription()` feeds into `complete_rows()` when building that baseline:
+   none of the 173 sections' pre-transcription rows are ever legitimate antecedents — needing
+   transcription at all is exactly why they're exempted in the first place. All 9 confirmed
+   individually, post-fix, to resolve to their real transcribed text rather than the stale one.
+   Regression-tested directly: `tests/test_crpc_first_schedule_transcription.py`'s
+   `TestNoSectionSilentlyMaskedByExemption`.
+
+**A third finding, deliberately not fixed as a side effect — flagged instead.** While tracing why
+s.203 (which Ditto-chains through s.202) came out empty, found s.202 itself — already "complete"
+per `complete_rows()` before this work started, not one of the 173 — has empty
+`cognizable_raw`/`bailable_raw` despite the real printed values being "Ditto"/"Ditto" (confirmed via
+`pdfplumber` word coordinates: "Ditto" at x0=437.4, on the same line as "Court of Session."
+elsewhere on the same page, confirming the column). `complete_rows()` never catches this because it
+only validates `triable_by`, never cognizable/bailable correctness. Chain-repaired **only** for
+s.203's own resolution (`_CHAIN_REPAIR_ANTECEDENTS` in `_crpc_first_schedule_transcription.py`) —
+s.202's own stored row is deliberately left exactly as buggy as it started, since fixing
+pre-existing "complete" data is out of scope for a transcription whose job was the 173 sections with
+no complete row at all. `tests/test_crpc_first_schedule_transcription.py`'s
+`TestChainRepairScopedCorrectly` asserts precisely that boundary: s.203 resolves correctly, s.202
+itself is untouched. **This means the 222-section "already complete" baseline itself may carry other
+latent cognizable/bailable defects of the same shape**, undetectable by the one check
+`complete_rows()` actually runs — s.202 was found by accident, while tracing an unrelated chain, not
+by any systematic sweep. Not sized or fixed here; a real open question for whoever next has reason
+to trust that baseline's cognizable/bailable columns specifically, not just its `triable_by`.
+
+**Verification, in full**: full parser run confirms 395/395 (100%); a regression diff correctly
+excluding the 173 transcribed sections from the "before" comparison shows the true baseline is 222
+sections with zero changes; `tests/test_crpc_schedule_ditto_corruption.py` (35 tests, including the
+rewritten s.358 test) and the new `tests/test_crpc_first_schedule_transcription.py` (10 tests: source
+shape, full coverage, the 9-section masking-bug regression, the s.202/s.203 chain-repair boundary,
+zero regression on the 222 previously-complete sections) both pass; the full non-integration backend
+suite (211 tests) passes with no unrelated breakage. Not yet re-ingested into the production
+database — pending the user's own review, per this project's standing "backup first, verify live"
+discipline for prior schedule/section ingestions.
+
+## First Schedule transcription re-ingested into production, verified against the live DB (2026-09-20)
+
+Same discipline as the 2026-09-19 re-ingestion above. Targeted backup first: the real 259 pre-fix rows
+(222 distinct sections, matching the confirmed baseline exactly), read directly and saved outside the
+repo. `ingest_offence_attributes.py` updated to call the new `apply_first_schedule_transcription()` step
+(it hadn't been wired in yet -- would otherwise have re-ingested the old 222-section coverage under a new
+parser_version string and silently discarded this session's own work). `PARSER_VERSION` bumped
+`crpc-schedule-v4` → `crpc-schedule-v5` for the real behaviour change. `scripts.ingest_offence_attributes
+--yes` run against production; `confirm_writable_target` fired correctly on the real Neon host. 445
+complete rows ingested (up from 259), `parser_version=crpc-schedule-v5`.
+
+**Verified against the live database directly, not the parser's own printout**: `distinct sections =
+395` (up from 222). `s.358` → 1 clean row, "Assault or use of criminal force..." -- not the old excluded
+state, not the garbled Kidnapping fragment. `s.202` → still 1 row with empty `cognizable_raw`/
+`bailable_raw` -- the pre-existing bug confirmed still honestly present in production, not silently
+patched by this write. `s.203` → resolves correctly (`Non-cognizable`/`False`, `Bailable`/`True`, `Any
+Magistrate.`) despite s.202's own bug, confirming the chain-repair took effect in production. `s.174A` →
+2 rows, addressable under its own section number. `s.511` → present (one of the 9 sections the
+exemption-scope bug this session found and fixed would otherwise have silently left un-replaced).
+
+**Coverage percentage on a field nobody validated is not the same as verified correctness** -- flagged
+directly to the user rather than presented as a finished win: `complete_rows()` only ever validates
+`triable_by`; a row can reach "complete" with an empty or otherwise-unchecked `cognizable`/`bailable`
+pair, exactly as s.202 demonstrates. Whether that's a one-off or a real pattern across the 395 is the
+next thing sized, not assumed either way -- see the entry immediately following this one.
+
+## 395/395 measured the wrong field: a metric can be honest and still not mean what it's read as (2026-09-20)
+
+The First Schedule transcription entry above reports `395/395 (100%)` truthfully -- every number in it
+is real, source-verified, and reproduced against the live database. It is also not the number the
+coverage caveat this table exists for was ever about. `complete_rows()` validates exactly one field,
+`triable_by`; cognizable and bailable -- the two fields `offence_attributes` exists to answer ("can this
+person be arrested without a warrant," "can they get bail") -- were never checked by anything. 395/395
+measures "does every section have a court" while the caveat it retires reads as "is the classification
+data complete." Those are different claims, and the second one was never true: a same-session query found
+**192 of the 395 "complete" sections have no usable value for cognizable, bailable, or both** --
+`cognizable_raw`/`bailable_raw` is a bare empty string, not a genuinely-conditional real value. Not a new
+defect this session introduced: 119 of the 192 are sections that were ALREADY in the pre-existing
+222-section baseline, untouched by anything built this session -- the gap predates this work and nothing
+before now had a way to see it, because `complete_rows()` was never asked the question.
+
+**Root cause, traced, not assumed**: the same close-row-heuristic-fires-early defect class already
+documented five times over for `triable_by` (ditto_corruption.py's mechanisms (a)-(d)) turns out to apply
+to the cognizable/bailable columns too, and worse there -- `_resolve_col`'s Ditto-carry-forward state
+(`last_cog_raw`/`last_bail_raw` in `reconstruct_rows()`) is updated unconditionally after every row,
+including ones whose own column text extracted as genuinely blank (a row-boundary fragment, not a real
+second table row). One blank row poisons every subsequent "Ditto"-shaped row until the next row with a
+real value resets it. Traced exhaustively across all 581 raw rows (not just the final 395): **103 distinct
+break points for cognizable, 105 for bailable** -- not a small number of roots whose fix cascades broadly,
+but dozens of scattered, mostly-independent breaks, most sitting on fragment rows that never surface as
+their own section in the final output at all. The "fix a handful of roots, the rest resolves for free"
+shortcut does not meaningfully hold here; sized properly in the scoping pass that follows this entry.
+
+**The honest framing, stated plainly**: a metric being real, reproducible, and independently verified does
+not make it the RIGHT metric. 395/395 answers a question nobody asked ("does every section have SOME
+complete row") while leaving the question the caveat exists for ("is cognizable/bailable trustworthy")
+completely unmeasured. Both of those facts belong in the same sentence, not just the first one. Full
+cognizable/bailable hand-verification, scoped immediately below, is what actually closes this -- until
+then `complete_rows()` stays exactly as it is (still validating only `triable_by`) rather than tightening
+partway and dropping production coverage while the real fix is in progress.
+
+## Cognizable/bailable hand-verification: scoped before starting (2026-09-20)
+
+Query, not a read-through, run directly against the live database: of 395 sections, **147 have zero
+usable cognizable data anywhere** (every row's `cognizable_raw` empty), **148 have zero usable bailable
+data**, **192 have no row where both are simultaneously present** -- the number that matters, since
+`complete_rows()` validates per-row. A further ~10 sections have non-empty but visibly garbled raw text
+(column-bleed fragments: `"10"`, `"in"`, `"years, According as..."`), the same defect class
+`complete_rows()` already excludes on length/`"if "`-leak grounds for other columns, just not yet checked
+for these two.
+
+**Provenance, not just count**: 119 of the 192 are pre-existing baseline sections (not touched by this
+session's transcription work) with their own empty `cognizable_raw`/`bailable_raw` -- a gap that predates
+this session entirely. 71 of the 173 sections just transcribed are genuinely printed as "Ditto" in the
+source (confirmed against `_ALL_RAW`'s own stored raw values) and only show empty because their Ditto
+chain's antecedent traces back to one of those 119 broken baseline rows -- the transcription itself is
+correct; the row it says "same as" was never real.
+
+**Why "fix the root, get the rest free" doesn't collapse the scope as hoped**: traced exhaustively, not
+assumed, by instrumenting `_resolve_col` across the full 581-row raw extraction (see the entry above).
+There are 103 (cognizable) / 105 (bailable) independent break points scattered through the whole
+document, not a handful of roots feeding one long chain -- confirmed by simulating a fix at every
+detected break point (a non-real sentinel value, discarded immediately after measuring, never treated as
+real data) and finding the propagation reach far short of "fix a few, the rest heals." Most of these
+break points sit on row-boundary fragments that never surface as their own section in the final 395 at
+all -- the same over-eager close-row heuristic already named five times for `triable_by`, just never
+checked for these two columns until this pass.
+
+**Real scope**: 211 rows across ~192 sections currently show empty cognizable/bailable in the live data,
+plus ~10 sections with garbled-but-nonempty values -- call it ~200-210 rows needing a direct page read.
+Comparable row-count to the 173-row triable_by transcription, but narrower per row (2 columns to read and
+confirm, not 6; offence text, punishment, and triable_by are already correct and don't need re-reading),
+over the same ~28-page span (pp.196-224) already read once this session, with column-position calibration
+and known failure patterns already in hand from that pass. Same verification discipline required: values
+read directly off the source PDF page images, the exemption-masking bug found and fixed this session
+(a static section-number-keyed exemption silently trusting stale pre-fix data) treated as a known trap to
+design around from the start rather than rediscover, and a regression check confirming the 203 sections
+whose cognizable/bailable already resolve correctly today don't move.
+
+`complete_rows()` is NOT being tightened yet -- doing so now would drop production from 395 to 203
+distinct sections while the real fix is in progress, making the product visibly worse for a caveat that
+already existed. It stays exactly as-is (`triable_by` only) until the cognizable/bailable data is
+actually there, then gets extended to require all three fields, with the number expected to hold at 395
+once it is.
+
 ## Standing operational gap: "what my local branch shows" vs. "what's actually deployed" (2026-09-20)
 
 Migration `0015` was run against production (backup confirmed green first) while the code that
@@ -5951,3 +6141,141 @@ scripted. Real unpredictable output found a defect a constructed test structural
 been written to find, since writing it would require already knowing the exact failure in advance.
 Both kinds of test are necessary and neither substitutes for the other: one proves the logic is
 correct, the other proves the logic is being fed what it thinks it's being fed.
+
+## Cognizable/bailable hand-verification: completed, with a smaller final number than scoped (2026-09-20)
+
+The pass scoped immediately above this entry completed. Every page of the First Schedule
+(pp.196-223, 373 sections' worth read directly, 397 total rows recorded including context needed for
+correct Ditto-chain resolution) was read as page images by parallel subagents, cross-checked against
+what the parser already had, and patched in. Final, honest numbers, stated the way the scoping entry
+insisted on rather than rounded to the number that was hoped for going in:
+
+| | Count |
+|---|---|
+| Sections structurally present (real `triable_by`) | 395 |
+| **Sections with cognizable AND bailable individually verified against the source** | **373 (94%)** |
+| Sections with a genuine row-count mismatch (parser's stored rows don't match what's printed) | 40 (6 over-split, 34 under-split) |
+| Of those 40, sections with ZERO surviving row (drop out of "complete" entirely) | 22 |
+| Of those 40, sections with at least one clean row (partially resolve, e.g. an over-split section's real first row) | 18 |
+
+**373, not 395 — the number that matters is the one the scoping entry warned against losing.** The
+22 fully-dropped sections are real, specific, and listed (not estimated): 119, 120, 134, 153, 153A,
+153B, 171F, 177, 187, 188, 195A, 211, 212, 213, 214, 221, 222, 235, 294A, 307, 451, 454. Each is a
+genuine row-boundary defect -- a printed row the parser merged with another or fragmented -- not a
+blank cell nobody looked at. Fixing them means the same row-boundary/close-heuristic redesign this
+project has repeatedly sized and repeatedly declined as too broad a change for the rows it would fix
+(see the sub-clause-merge entries, 2026-09-18/19), not a hand-verification task.
+
+**Two real defects found during the pass, both with live-production consequences, both fixed:**
+
+1. **`apply_first_schedule_transcription()`'s own antecedent-building bug**, found by this pass's
+   independent page-read disagreeing with an already-shipped value, not by inspection. Its
+   `complete_by_section` kept only the FIRST row of a multi-row baseline section as the Ditto-chain
+   antecedent for the 173-section transcription, not the LAST -- real Ditto semantics need the value
+   immediately above, which for a multi-row section is its last printed row. This had silently shipped
+   a wrong bailable value for s.355-358 (all four Ditto-chain through s.354D, whose real second row is
+   Non-bailable, not its first row's Bailable) in THIS SESSION's own earlier re-ingestion, hours
+   earlier. Fixed with a necessary refinement, not the naive swap: an over-split baseline section (the
+   parser stores more rows than are printed, e.g. s.110) has a phantom "last row" that isn't real
+   content, so those specifically keep using their first (real) row -- confirmed by re-diffing the
+   full corpus after the naive version regressed three unrelated sections (111/113/114) from a real
+   conditional value to empty, not shipped on the s.354D case alone.
+
+2. **`_KNOWN_ROW_REPLACEMENTS["374"]`'s own hand-verification, from an earlier session, was wrong** --
+   bailable recorded as Non-bailable/Court of Session; the real page (214, read directly to settle the
+   disagreement) shows Bailable/Any Magistrate, both fresh printed values, not chained from the row
+   above. Apparently transcribed from s.373 (the row directly above) rather than s.374's own row.
+   Confirmed by direct read, not by trusting either source; both the corpus test asserting the old
+   values and `_KNOWN_ROW_REPLACEMENTS` itself were fixed together.
+
+**A smaller, non-live-consequential class of fix**: five sections (117, 229A, 352, plus downstream
+475-477A chaining through a since-corrected s.474) had old raw text with column-bleed garbage that
+happened to still match a keyword regex and resolve to a boolean that looked complete but was
+unverified — a blind spot the pre-pass scoping entry itself named ("this is a blind spot in my own
+quality-scoping") and this pass's full-page-read methodology closed by construction, not by design.
+
+**Verification discipline held throughout, the way the scoping entry committed to**: values read
+directly off source page images by parallel subagents (checkpointed every few pages, not just at the
+end -- three genuine row-count-mismatch escalation points surfaced mid-pass and were resolved before
+continuing, not discovered after all 27 pages); the exemption-masking trap named going in was designed
+around from the start (`apply_cognizable_bailable_verification()`'s antecedent baseline explicitly
+excludes the sections being fixed, the same pattern already proven in `apply_first_schedule_
+transcription()`); every currently-empty row after the pass traced to a reported mismatch, none
+unexplained. `tests/test_crpc_cognizable_bailable_verification.py` (14 tests) plus updates to the
+existing CrPC suite for the two fixed defects (59 tests total across all CrPC schedule test files, 235
+across the full non-integration backend suite) all pass.
+
+**Re-ingested into production, backed up first, same discipline as every prior write in this
+project**: two re-ingestions this session, not one, because `complete_rows()`'s own tightening (below)
+happened after the first. `parser_version=crpc-schedule-v6` (445 rows, 395 sections, cognizable/
+bailable populated for the clean set) then `crpc-schedule-v7` (412 rows, 373 sections, the tightened
+definition applied) -- each preceded by a targeted backup read directly from the live table, each
+verified against the live database directly afterward, not the parser's own printout.
+
+## `complete_rows()` tightened to require all three fields; 373/395 confirmed live (2026-09-20)
+
+The change flagged as deliberately NOT made in the scoping entry above -- until cognizable/bailable
+data actually existed, dropping coverage from 395 to a partial number would have made the product
+visibly worse for a caveat that already existed. That condition is now met. `complete_rows()`
+requires `cognizable_raw` and `bailable_raw` non-empty, unconditionally -- not exempted for
+`_KNOWN_ROW_REPLACEMENTS`/the transcribed 173 the way the length/`"if "`-leak checks are, since an
+empty string is never legitimate content regardless of hand-verification status, unlike length, which
+is a proxy that sometimes over-fires on real long content.
+
+**A real trap, hit and fixed before it shipped**: `apply_first_schedule_transcription()` and
+`apply_cognizable_bailable_verification()` both run BEFORE cognizable/bailable exist for most rows --
+feeding either through the newly-strict `complete_rows()` for their own internal antecedent/row-count
+bookkeeping made every not-yet-fixed row look like it didn't exist yet, collapsing coverage to 276
+(confirmed live, not caught by inspection). Fixed by splitting out `_structurally_complete_rows()` --
+the original triable_by-only check, still exactly what those two functions need -- with the public
+`complete_rows()` now layering the cognizable/bailable requirement on top of it. Both internal
+callers, and `compute_row_count_mismatches()`'s own, switched to the structural check; the full
+pipeline re-verified afterward, not assumed fixed from the isolated repro alone.
+
+**Confirmed live**: 373 distinct sections, 412 rows, zero rows with empty `cognizable_raw` or
+`bailable_raw`, the 22 fully-excluded sections confirmed absent from the table (spot-checked s.119,
+120, 195A directly against the live database, not just the local parser run).
+
+## Cognizability coverage caveat: rewritten to say what's true, made per-response where it's cheap (2026-09-20)
+
+Two places carried the stale "222 of 395" framing, not one: `app/schemas/cognizability.py`'s
+`coverage_note` Pydantic default, and a second, independent hardcoded copy in `caseiq-web/src/pages/
+CognizabilityPage.tsx` (the frontend's own pre-search fallback, shown before any API response exists
+to read a note from). Both updated to the real number -- but the more substantial change is structural,
+not just numeric.
+
+**Checked, per the standing instruction, whether the API can tell at response time whether a specific
+looked-up section is verified or not, before deciding how to word anything**: yes, cheaply.
+`lookup_by_section()`'s existing `has_data` flag (built for an unrelated reason -- distinguishing "real
+section, no classification row" from "genuinely conditional classification") already carries exactly
+this signal, since the 22 excluded sections now simply have no row in `offence_attributes` at all,
+identical in shape to a section the First Schedule never covered. `search_by_name()` can only ever
+match a row that already exists in the table, so any non-empty name-search result is inherently
+already-verified data.
+
+**Redesigned from a static blanket string to `coverage_note_for(mode, results)`
+(`app/services/cognizability.py`), computed per response**: silent (empty string) whenever every
+result actually shown is verified data; populated only when there's a concrete reason to doubt it --
+a `section_number` lookup where any result has `has_data=False`, or a `name` search returning zero
+results (which can't rule out the real offence being one of the 22 rather than genuinely absent).
+`search_offences()`'s return signature grew a third element accordingly; its one caller (`GET /
+knowledge/cognizability`) updated, no other callers existed. The schema default emptied out entirely
+-- the route is now the only thing that decides when this fires, not a fallback nobody re-derives.
+
+**A user who gets no answer can now tell which kind of "no answer" it is** -- the exact distinction
+the standing instruction asked for: a verified section's card shows no caveat at all; an unverified
+section's card says so specifically ("This section's cognizable/bailable classification hasn't been
+independently verified... it's one of a known, tracked set of gaps"); a name search returning nothing
+gets the blanket coverage figure, since that specific ambiguity (genuinely absent vs. one of the 22)
+can't be resolved without a result to inspect. The frontend's own empty-result message
+(`CognizabilityPage.tsx`) reads `coverage_note`'s presence to choose between "may not be classified
+yet" and "doesn't appear to be in this table" rather than always hedging.
+
+The `fir-refused` situation guide's own caveat (`caseiq-web/src/data/situationGuides.ts`) is a static
+page with no live query to condition on, so it necessarily stays a blanket hedge -- but its
+justifying code comment was rewritten to state the current, not the 2026-09-07, numbers: 373/395
+(94%) individually verified, several confirmed silent-wrong-value instances found and fixed (not just
+the one originally logged), the remaining 22 a known bounded set rather than an unsized fraction of a
+much larger gap. The caveat itself was NOT removed -- 22 real gaps remain and the underlying defect
+class isn't eliminated, only bounded -- rewriting it to claim otherwise would repeat, one layer up,
+the exact mistake this whole entry is about.

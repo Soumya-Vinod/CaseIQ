@@ -145,15 +145,25 @@ class TestS374WholeRowCorrect:
         assert "Imprisonment for 1 year, or fine, or both." in target["offence_description"]
 
     def test_s374_court_value_is_its_own_not_stolen(self, rows):
+        # CORRECTED 2026-09-20 (docs/evaluation.md, cognizable/bailable hand-verification
+        # entry): "Court of Session." was itself the WRONG value here -- this test's own
+        # name is about the court value not being stolen from a neighbouring row, and the
+        # original hand-verification for s.374 (this file's own subject) had in fact
+        # transcribed 373's chained court value instead of 374's own. Confirmed directly
+        # against page 214: 374's own column 6 prints "Any Magistrate.", a fresh value, not
+        # "Ditto" chaining from 373's "Court of Session."
         values = _values_for(rows, "374")
         target = next(v for v in values if v["offence_description"].startswith("Unlawful compulsory labour."))
-        assert target["triable_by"] == "Court of Session."
+        assert target["triable_by"] == "Any Magistrate."
 
     def test_s374_classification_correct(self, rows):
+        # Bailable corrected 2026-09-20 (docs/evaluation.md, cognizable/bailable
+        # hand-verification entry): originally recorded as Non-bailable/False, itself wrong
+        # -- confirmed directly against page 214, column 5 prints "Bailable", a fresh value.
         values = _values_for(rows, "374")
         target = next(v for v in values if v["offence_description"].startswith("Unlawful compulsory labour."))
         assert target["cognizable"] is True
-        assert target["bailable"] is False
+        assert target["bailable"] is True
 
     def test_s374_survives_complete_rows(self, rows):
         complete = complete_rows(rows)

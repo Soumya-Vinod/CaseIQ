@@ -199,8 +199,49 @@ async def lookup_by_section(db: AsyncSession, section_number: str) -> list[dict]
     return results
 
 
-async def search_offences(db: AsyncSession, q: str) -> tuple[str, list[dict]]:
+_BLANKET_COVERAGE_NOTE = (
+    "Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC cognizable/bailable "
+    "classification is individually verified against the source law for 373 of 395 "
+    "sections -- the other 22 are a known, specific gap (not a general shortfall), so this "
+    "search finding nothing may be one of those rather than proof the offence doesn't exist."
+)
+
+_PER_SECTION_COVERAGE_NOTE = (
+    "This section's cognizable/bailable classification hasn't been independently verified "
+    "against the source law yet -- it's one of a known, tracked set of gaps, not a guess "
+    "presented as fact. A free legal aid clinic can confirm it for you. NALSA: 15100."
+)
+
+
+def coverage_note_for(mode: str, results: list[dict]) -> str:
+    """Computes docs/evaluation.md's cognizable/bailable coverage caveat PER RESPONSE
+    instead of stating it unconditionally on every response -- silent (empty string) when
+    everything actually shown is verified data, populated only when there's a concrete
+    reason to doubt what's on screen:
+
+      - section_number mode: any result with has_data=False means this specific section
+        has no verified row (it may be one of the 22 known cognizable/bailable gaps, or a
+        section the First Schedule never covered at all -- either way, nothing to show for
+        it). Note attaches to that response; a response where every result has_data=True
+        needs no caveat at all.
+      - name mode: search_by_name() can only ever match a row that EXISTS in
+        offence_attributes, so any non-empty result set is inherently already-verified data
+        -- silent. An EMPTY result set is exactly the ambiguous case the caveat protects
+        against: a real offence among the 22 known gaps would produce zero matches here,
+        indistinguishable from "not in the corpus at all" without this note.
+    """
+    if mode == "section_number":
+        if any(not r.get("has_data", True) for r in results):
+            return _PER_SECTION_COVERAGE_NOTE
+        return ""
+    # mode == "name"
+    return "" if results else _BLANKET_COVERAGE_NOTE
+
+
+async def search_offences(db: AsyncSession, q: str) -> tuple[str, list[dict], str]:
     mode, section_number = detect_mode(q)
     if mode == "section_number":
-        return mode, await lookup_by_section(db, section_number)
-    return mode, await search_by_name(db, q)
+        results = await lookup_by_section(db, section_number)
+    else:
+        results = await search_by_name(db, q)
+    return mode, results, coverage_note_for(mode, results)

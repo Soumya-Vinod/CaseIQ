@@ -96,12 +96,13 @@ async def cognizability_search(
 ):
     """"Can I be arrested for this?" -- pure DB lookup over offence_attributes
     (CrPC/BNSS First Schedule data, C1), never an LLM. See
-    app/services/cognizability.py for the search logic and docs/evaluation.md
-    for the coverage numbers this endpoint states on every response.
+    app/services/cognizability.py for the search logic, and its own
+    coverage_note_for() for when/why the coverage caveat is attached to a
+    given response rather than stated unconditionally on every one.
     """
     q = q.strip()
-    mode, results = await search_offences(db, q)
-    return {"query": q, "mode": mode, "results": results}
+    mode, results, coverage_note = await search_offences(db, q)
+    return {"query": q, "mode": mode, "results": results, "coverage_note": coverage_note}
 
 
 @router.post("/semantic-search", response_model=list[RetrievedSection])

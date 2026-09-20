@@ -39,17 +39,31 @@
  * guide, bookending it (`entitlementsIntro` up top, `closingNote` at the
  * bottom), not two separate guides -- is NOT a generic hedge -- don't
  * simplify or remove it without re-reading docs/evaluation.md's "HEADLINE
- * RESULT 3" entry (2026-09-07) first. It was written for one reason
- * (CrPC's First Schedule is only 56% parsed -- an unclassified section is
- * a real, honest gap) and now stands for a second, distinct one found
- * later the same day: some fraction of that 56% -- unsized, at least one
- * confirmed instance -- carries a cognizability/court value silently
- * inherited from the WRONG row via a parser bug, not merely absent. The
- * caveat's existing wording ("can depend on details a lawyer or legal aid
- * clinic can check") already covers both cases in effect, but the two are
- * different failure modes -- one is missing data, the other is confident,
- * specific, wrong data -- and only the coverage half was true when this
- * caveat was first written.
+ * RESULT 3" entry (2026-09-07) and the "Cognizable/bailable hand-
+ * verification" entry (2026-09-20) first. UPDATED 2026-09-20: it was
+ * written for two reasons, both real at the time -- CrPC's First Schedule
+ * only 56% parsed (an unclassified section was a diffuse, honest gap), and
+ * a confirmed-but-unsized risk that some fraction of that 56% carried a
+ * cognizability/court value silently inherited from the WRONG row via a
+ * parser bug, not merely absent. Neither reason reads the same now. A
+ * dedicated hand-verification pass individually confirmed cognizable/
+ * bailable against the source law for 373 of 395 sections (94%, not 56%);
+ * several confirmed instances of the silent-wrong-value failure mode were
+ * found and fixed along the way (not just the one this entry originally
+ * logged); and the remaining 22 unverified sections are now a KNOWN,
+ * bounded, tracked set (scripts._crpc_cognizable_bailable_verification's
+ * own row-count-mismatch list) rather than an unsized unknown fraction of
+ * a much larger gap. The caveat still stands -- 22 real gaps remain, and
+ * the underlying row-boundary defect class isn't eliminated, only bounded
+ * -- but it's no longer protecting against a diffuse, unmeasured risk.
+ * app/services/cognizability.py's `coverage_note_for()` reflects this
+ * directly: the equivalent caveat on the Cognizability Lookup page is now
+ * computed PER RESPONSE (silent when what's shown is verified, explicit
+ * only when a specific result actually isn't) rather than stated on every
+ * response unconditionally, which is what this static situation-guide
+ * page cannot do -- it has no live query to condition on, so its own
+ * caveat stays a blanket one by necessity, not because the per-response
+ * version wasn't considered.
  */
 
 export interface GuideEntitlement {

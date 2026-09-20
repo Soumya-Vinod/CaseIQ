@@ -87,20 +87,34 @@ export function CognizabilityPage() {
         aria-label="Search by offence name or section number"
       />
 
-      <p className={styles.coverageNote}>
-        {result?.coverage_note ??
-          "Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC is partial " +
-            "(222 of 395 sections) -- a section not found here may still be real; it may " +
-            "simply not be in this table yet."}
-      </p>
+      {/* coverage_note is now computed PER RESPONSE by the backend (see
+          app/services/cognizability.py's coverage_note_for()) -- empty/absent
+          whenever what's actually on screen is verified data, so this only
+          renders when there's a concrete reason to doubt it. Before any
+          search, there's no response yet to judge that from, so this shows a
+          neutral, number-accurate placeholder rather than either silence
+          (which would misleadingly look like "everything's verified") or the
+          old static per-response caveat (which is no longer a true
+          description of a page that hasn't run a query yet). Not rendered at
+          all when there's nothing to say -- .coverageNote has a visible
+          border/padding, so an empty string would still show as a blank box. */}
+      {(!result || result.coverage_note) && (
+        <p className={styles.coverageNote}>
+          {result?.coverage_note ??
+            "IPC/CrPC cognizable/bailable classification is individually verified for " +
+              "373 of 395 sections; BNS is near-complete (398 of 434 sections)."}
+        </p>
+      )}
 
       {loading && <p className={styles.loading}>Searching…</p>}
       {error && <div className={styles.errorBox}>{error}</div>}
 
       {!loading && !error && result && result.results.length === 0 && (
         <p className={styles.empty}>
-          No match in this table for "{result.query}". Given the coverage above, that may mean
-          it genuinely isn't classified yet, not that it doesn't exist.
+          No match in this table for "{result.query}".
+          {result.coverage_note
+            ? " Given the note above, that may mean it genuinely isn't classified yet, not that it doesn't exist."
+            : " That offence doesn't appear to be in this table."}
         </p>
       )}
 
