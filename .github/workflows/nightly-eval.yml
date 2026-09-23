@@ -225,7 +225,40 @@ jobs:
         # turn) through the real dry_run()/execute_deletes() functions every
         # night, not just on push. Same caseiq_integration_test database the
         # punishment-suppression check above already uses.
-        run: pytest tests/integration/test_retention_cleanup.py -m integration -v
+        #
+        # THIS IS CURRENTLY THE ONLY THING PROVING THE PREDICATE STILL WORKS,
+        # not a supplement to production evidence: real production has had
+        # nothing eligible to delete since retention-cleanup.yml's schedule
+        # was promoted to real deletion (docs/evaluation.md, 2026-09-23) --
+        # every scheduled run so far has been a genuine no-op, not a run that
+        # happened to find nothing. A canary that can silently not-run and
+        # still report success is worse than none (per instruction) -- pytest
+        # exits 0 if every test in this file is SKIPPED (e.g. the test
+        # Postgres service becomes unreachable), which would look identical
+        # to "ran clean" in this step's own exit code alone. The check below
+        # parses pytest's own summary line and fails the step explicitly if
+        # anything was skipped, or if fewer than the known 13 tests passed --
+        # a quiet skip must be loud here, not indistinguishable from success.
+        run: |
+          pytest tests/integration/test_retention_cleanup.py -m integration -v -rs | tee retention_canary_output.txt
+          python -c "
+          import re, sys
+          text = open('retention_canary_output.txt').read()
+          skipped = re.search(r'(\d+) skipped', text)
+          passed = re.search(r'(\d+) passed', text)
+          if skipped:
+              print(f'FAILED: {skipped.group(1)} retention canary test(s) were SKIPPED, not run -- '
+                    f'likely the test Postgres was unreachable. A skipped canary proves nothing '
+                    f'about whether the session-ownership predicate still works; this must fail '
+                    f'loudly, not pass quietly.')
+              sys.exit(1)
+          if not passed or int(passed.group(1)) < 13:
+              got = passed.group(1) if passed else '0'
+              print(f'FAILED: expected 13 passed retention canary tests, got {got}.')
+              sys.exit(1)
+          print(f'Retention canary: {passed.group(1)} passed, 0 skipped -- '
+                f'session-ownership logic verified live tonight.')
+          "
 
       - name: Pre-flight -- ungrounded-response detection branch can still fire
         # Same reasoning as the punishment-suppression check just above,

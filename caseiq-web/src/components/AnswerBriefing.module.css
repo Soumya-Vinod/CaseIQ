@@ -92,6 +92,29 @@
   flex-shrink: 0;
 }
 
+/* Deliberately NOT the --gold caution treatment .ungroundedNotice above uses -- that vocabulary
+   means "verify this yourself, the data quality here is uncertain". Carrying sections forward
+   from a prior turn isn't a data-quality caution, it's a neutral fact about where this answer's
+   evidence came from -- a calmer, muted surface says that without implying something's wrong. */
+.carriedForwardNotice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.carriedForwardIcon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .block {
   display: flex;
   flex-direction: column;

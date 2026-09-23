@@ -515,9 +515,20 @@ def merge_orphan_fragments(rows: list[ScheduleRow], diagnostics: list[dict]) -> 
     return merged
 
 
-PARSER_VERSION = "crpc-schedule-v7"  # v7: complete_rows() tightened to require cognizable_raw/
-# bailable_raw too, not just triable_by -- 395->373 (22 sections whose only row(s) are
-# row-count mismatches drop out entirely; real content, not guessed at, just not yet
+PARSER_VERSION = "crpc-schedule-v9"  # v9: apply_row_mismatch_transcription() moved to run BEFORE
+# apply_first_schedule_transcription(), not after -- v8's ordering corrupted 7 rows' court values
+# (13 of the 173-module's own sections chain from one of these 40; running this pass second fed
+# their antecedent-building logic stale, pre-fix data). Found spot-checking v8's own production
+# ingestion, not by review. Also adds a chain-repair for s.352 (out-of-scope baseline section, own
+# independent column-bleed defect corrupting s.353's antecedent) via the same mechanism already
+# proven for s.202/s.203. 398/398 distinct sections complete, same coverage as v8, corrected values.
+# v8: apply_row_mismatch_transcription() added -- hand-fixes the
+# 40 row-count-mismatch sections (6 over-split, 34 under-split, including 3 previously-missing
+# sections: 153AA/353/363) that v7's tightening had excluded from complete_rows() entirely; 373->
+# expected 395 once these rejoin cleanly, since their cognizable/bailable now resolve directly
+# instead of falling out via the mismatch exclusion. v7: complete_rows() tightened to require
+# cognizable_raw/bailable_raw too, not just triable_by -- 395->373 (22 sections whose only row(s)
+# are row-count mismatches drop out entirely; real content, not guessed at, just not yet
 # attachable to a correct row). v6: apply_cognizable_bailable_verification() added. v5:
 # apply_first_schedule_transcription() added, 222->395.
 
@@ -582,6 +593,33 @@ _KNOWN_COURT_CORRECTIONS: dict[str, str] = {
     "133": "Magistrate of the first class.",
     "134": "Magistrate of the first class.",
 }
+# NOT in this dict, despite carrying the exact mechanism-(d) column-bleed defect this dict exists
+# for: s.352 (and s.452, same shape). Found 2026-09-23 spot-checking the freshly re-ingested s.353
+# against production -- its court resolved to a literal, garbled "Ditto. Ditto.", traced to s.352's
+# own STORED triable_by (also "Ditto. Ditto.", a column-bleed duplicate -- confirmed against the
+# real page 212: the true printed value is a single "Ditto.", correctly chaining s.347's real "Any
+# Magistrate." through s.348).
+#
+# A first version of this fix DID add "352" here -- caught before shipping, not after: correcting
+# s.352's triable_by via this dict applies to EVERY row for that section, including its own
+# over-split PHANTOM fragment row (empty cog/bail, previously excluded from
+# `_structurally_complete_rows` specifically BECAUSE its triable_by was empty). Giving that phantom
+# row a non-empty triable_by made it look like a second REAL row, which flipped `compute_row_count_
+# mismatches()`'s verdict on s.352 itself from "clean" to "over-split" -- excluding s.352 from
+# `apply_cognizable_bailable_verification()`'s own patch, which had been correctly resolving its
+# cognizable/bailable all along. Fixing 353's antecedent this way would have silently broken 352's
+# own already-working resolution -- exactly the "one fix cancelling another" class of bug this
+# project keeps being asked to design around, not rediscover. Fixed instead via
+# `_CHAIN_REPAIR_ANTECEDENTS` in scripts/_crpc_row_mismatch_transcription.py -- the same mechanism
+# already proven for s.202/s.203, which substitutes only what a downstream resolution WALK sees for
+# a section, never touches what's actually stored on its own row(s).
+#
+# s.452 needed no equivalent fix at all, chain-repair or otherwise -- see apply_row_mismatch_
+# transcription()'s own docstring for why: it's a target of apply_first_schedule_transcription(),
+# and reordering that pass to run AFTER apply_row_mismatch_transcription() (found necessary for a
+# separate, wider reason -- 13 of the 173-module's own sections chain from one of these 40) means it
+# now naturally resolves through s.451's own freshly-corrected two-row split instead of s.451's old,
+# merged, garbled one. No corpus-wide "Ditto" artifact remains for it once that reorder is in place.
 
 
 def apply_known_corrections(rows: list[ScheduleRow]) -> list[ScheduleRow]:
@@ -829,6 +867,98 @@ def apply_first_schedule_transcription(rows: list[ScheduleRow]) -> list[Schedule
     return kept
 
 
+def apply_row_mismatch_transcription(rows: list[ScheduleRow]) -> list[ScheduleRow]:
+    """The 40-section row-count-mismatch hand transcription (docs/evaluation.md, "row-mismatch
+    transcription" entry) -- scripts/_crpc_row_mismatch_transcription.py. A structural extension of
+    apply_first_schedule_transcription()'s own PATTERN (same replace-not-merge contract, same
+    Ditto-chain walk built on `_resolve_col`, same antecedent-baseline discipline), copied into its
+    own module and its own function rather than sharing code with that one -- refactoring the
+    already-shipped 173-section resolution path to extract a shared helper is the wrong risk to
+    take for ~60 duplicated lines on a project that has already had one fix silently cancel another
+    (the exemption-masking bug this exact antecedent-building logic was built to avoid repeating).
+
+    Must run BEFORE apply_first_schedule_transcription() -- REVERSED from this function's own first
+    version, which ran it after. Found wrong, not assumed right, by spot-checking the freshly
+    re-ingested corpus against production (docs/evaluation.md, row-mismatch-transcription entry):
+    the two section sets (this pass's 40, the sibling module's 161) are interleaved throughout the
+    document, not cleanly separated by page range. 13 of the 173-module's OWN target sections have
+    an immediate antecedent that's one of these 40 (e.g. s.452 chains from s.451; s.308 from s.307;
+    s.215 from s.214; s.507 from s.506) -- running this function SECOND meant apply_first_schedule_
+    transcription() built its own antecedents from these 40 sections' STILL-BROKEN pre-fix rows,
+    producing literal corrupted text like "Any Magistrate. Ditto." (two court values concatenated)
+    in the 173-module's own output. Confirmed by a corpus-wide scan for a literal "ditto" surviving
+    in any FINAL triable_by after the full pipeline -- 7 rows failed it under the original order (s.
+    215, 308 x2, 452, 453, 454, 507), all traced to exactly this cause, all resolved to 0 once this
+    function was moved first. The REVERSE direction was checked too, not assumed safe by symmetry:
+    13 of these 40 have an immediate antecedent that's one of the 173-module's OWN targets --
+    reordering was verified, not just reasoned about, to leave that direction clean (apply_first_
+    schedule_transcription() doesn't exclude sections outside its own _ALL_RAW from being used as an
+    antecedent, so once this function has already run, its fresh output is simply available to be
+    read, the same as any other already-complete section).
+
+    Must run BEFORE apply_cognizable_bailable_verification() (unaffected by the reorder above, still
+    correct for the same reason as before): once these 40 are fixed here, they naturally drop out of
+    THAT function's own mismatch set (row counts now agree with what's printed) and get their
+    cognizable_raw/bailable_raw independently re-verified by its own, separately-read data -- the
+    same thing that already, today, happens to every one of the 173 sections (apply_cognizable_
+    bailable_verification()'s own _ALL_RAW already has entries for sections the 173 pass also
+    covers, e.g. s.358, and nothing currently excludes that overlap). Not a new precedence rule
+    invented for this function -- the existing, tested "downstream independent-read pass is
+    authoritative for cog/bail, upstream pass supplies everything else" pattern, extended to 40 more
+    sections for free. tests/test_crpc_row_mismatch_transcription.py's TestOrderDependenceSafe
+    asserts the actual safety property this ordering needs (see that class's own docstring for why
+    "must never change a value" turned out to be the wrong thing to assert).
+
+    One out-of-scope baseline section (s.352, not in either module's _ALL_RAW) has its OWN
+    independent column-bleed defect in its stored triable_by, unrelated to and unfixed by this
+    reorder -- see `_CHAIN_REPAIR_ANTECEDENTS` below and `_KNOWN_COURT_CORRECTIONS`'s own comment in
+    this file for why that one specific case needed a third mechanism, not this reorder and not that
+    dict.
+    """
+    from scripts._crpc_cognizable_bailable_verification import compute_row_count_mismatches
+    from scripts._crpc_row_mismatch_transcription import _ALL_RAW, resolve_row_mismatch_transcription
+
+    # Same antecedent-baseline construction as apply_first_schedule_transcription(), same reasons:
+    # _structurally_complete_rows (not complete_rows(), not raw `rows`) because cognizable_raw/
+    # bailable_raw aren't populated yet at this pipeline stage; over-split BASELINE sections (not in
+    # THIS module's own _ALL_RAW) use their first (real) row as antecedent, every other multi-row
+    # section uses its last, per genuine Ditto semantics; any section in THIS module's own _ALL_RAW
+    # is excluded from the baseline entirely -- its pre-fix row is never a legitimate antecedent,
+    # that it needs transcribing at all is exactly why.
+    mismatches = compute_row_count_mismatches(rows)
+    over_split_sections = {s for s, v in mismatches.items() if v["shape"] == "over_split"}
+
+    complete_by_section: dict[str, tuple[str, bool | None, str, bool | None, str]] = {}
+    for r in _structurally_complete_rows(rows):
+        if r.section_number in _ALL_RAW:
+            continue
+        if r.section_number in over_split_sections and r.section_number in complete_by_section:
+            continue
+        triable_by_for_antecedent = r.triable_by.rstrip("]") if r.triable_by.endswith("]") else r.triable_by
+        complete_by_section[r.section_number] = (
+            r.cognizable_raw, r.cognizable, r.bailable_raw, r.bailable, triable_by_for_antecedent,
+        )
+    existing_page: dict[str, int] = {}
+    for r in rows:
+        existing_page.setdefault(r.section_number, r.source_page)
+
+    transcribed = resolve_row_mismatch_transcription(complete_by_section)
+    replaced_sections = set(transcribed)
+    kept = [r for r in rows if r.section_number not in replaced_sections]
+    for section_number, specs in transcribed.items():
+        for spec in specs:
+            kept.append(ScheduleRow(
+                section_number=section_number,
+                offence_description=spec["offence_description"],
+                punishment_text="",
+                cognizable_raw=spec["cognizable_raw"], cognizable=spec["cognizable"],
+                bailable_raw=spec["bailable_raw"], bailable=spec["bailable"],
+                triable_by=spec["triable_by"],
+                source_page=existing_page.get(section_number, 0),
+            ))
+    return kept
+
+
 def apply_cognizable_bailable_verification(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     """Cognizable/bailable hand-verification pass (docs/evaluation.md,
     2026-09-20 "Cognizable/bailable hand-verification" entry):
@@ -1017,9 +1147,17 @@ def _structurally_complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     complete_rows() itself is this plus the cognizable/bailable requirement layered on top.
     """
     from scripts._crpc_first_schedule_transcription import _ALL_RAW as _FIRST_SCHEDULE_TRANSCRIBED
+    from scripts._crpc_row_mismatch_transcription import _ALL_RAW as _ROW_MISMATCH_TRANSCRIBED
 
     def _clean(r: ScheduleRow) -> bool:
-        if r.section_number in _KNOWN_ROW_REPLACEMENTS or r.section_number in _FIRST_SCHEDULE_TRANSCRIBED:
+        # SAME EXEMPTION, same reasoning as _FIRST_SCHEDULE_TRANSCRIBED, extended to the 40-section
+        # row-mismatch pass (docs/evaluation.md, "row-mismatch transcription" entry): several of
+        # these hand-verified rows also combine real sub-clauses past _MAX_SANE_OFFENCE_LEN (e.g.
+        # s.212/213/214's three graded conditions). Missing this a second time is exactly the
+        # exemption-masking bug class the 173 pass already found and fixed once -- added here
+        # deliberately, not rediscovered after wiring the new pass in and watching coverage drop.
+        if (r.section_number in _KNOWN_ROW_REPLACEMENTS or r.section_number in _FIRST_SCHEDULE_TRANSCRIBED
+                or r.section_number in _ROW_MISMATCH_TRANSCRIBED):
             return bool(r.triable_by.strip())
         if not r.triable_by.strip() or len(r.offence_description) > _MAX_SANE_OFFENCE_LEN:
             return False
@@ -1041,11 +1179,15 @@ if __name__ == "__main__":
     rows = reconstruct_rows(raw_lines, diags)
     rows = apply_known_corrections(rows)
     rows = apply_known_row_replacements(rows)
-    # Must run AFTER apply_known_row_replacements (disjoint section sets, but
-    # apply_first_schedule_transcription's own antecedent-resolution pass wants
-    # 374/376 already in their final form if a chain ever depended on them) and
-    # BEFORE complete_rows() (its whole job is to make complete_rows() accept
-    # sections that would otherwise still be missing).
+    # Must run AFTER apply_known_row_replacements (disjoint section sets, but 374/376 should
+    # already be in final form if anything ever chains through them) and BEFORE
+    # apply_first_schedule_transcription -- see apply_row_mismatch_transcription()'s own docstring
+    # for exactly why this order, not just that it works (13 of the 173-module's own target
+    # sections chain from one of these 40; running this function second produced corrupted court
+    # text for several of them, found by spot-checking production, not by review).
+    rows = apply_row_mismatch_transcription(rows)
+    # Must run AFTER apply_row_mismatch_transcription (see above) and BEFORE complete_rows() (its
+    # whole job is to make complete_rows() accept sections that would otherwise still be missing).
     rows = apply_first_schedule_transcription(rows)
     # Must run AFTER apply_first_schedule_transcription (patches cognizable_raw/bailable_raw
     # on the rows that step produces, including the newly-transcribed 173) and BEFORE

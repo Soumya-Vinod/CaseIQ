@@ -22,6 +22,14 @@
   padding: 0.1rem 0.55rem;
 }
 
+.carriedForwardLabel {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 .list {
   list-style: none;
   margin: 0;

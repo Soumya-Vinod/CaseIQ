@@ -102,7 +102,8 @@ export function CognizabilityPage() {
         <p className={styles.coverageNote}>
           {result?.coverage_note ??
             "IPC/CrPC cognizable/bailable classification is individually verified for " +
-              "373 of 395 sections; BNS is near-complete (398 of 434 sections)."}
+              "398 of 398 sections the First Schedule covers (100%); BNS is near-complete " +
+              "(398 of 434 sections)."}
         </p>
       )}
 

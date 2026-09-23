@@ -170,6 +170,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/legal/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Timeline */
+        post: operations["generate_timeline_api_v1_legal_timeline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/legal/conversations": {
         parameters: {
             query?: never;
@@ -277,8 +294,9 @@ export interface paths {
          * Cognizability Search
          * @description "Can I be arrested for this?" -- pure DB lookup over offence_attributes
          *     (CrPC/BNSS First Schedule data, C1), never an LLM. See
-         *     app/services/cognizability.py for the search logic and docs/evaluation.md
-         *     for the coverage numbers this endpoint states on every response.
+         *     app/services/cognizability.py for the search logic, and its own
+         *     coverage_note_for() for when/why the coverage caveat is attached to a
+         *     given response rather than stated unconditionally on every one.
          */
         get: operations["cognizability_search_api_v1_knowledge_cognizability_get"];
         put?: never;
@@ -561,7 +579,7 @@ export interface components {
             results: components["schemas"]["OffenceResultOut"][];
             /**
              * Coverage Note
-             * @default Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC is partial (222 of 395 sections) -- a section not found here may still be real; it may simply not be in this table yet.
+             * @default
              */
             coverage_note: string;
         };
@@ -938,6 +956,11 @@ export interface components {
             related_questions: string[];
             /** Is Followup */
             is_followup: boolean;
+            /**
+             * Sections Carried Forward
+             * @default false
+             */
+            sections_carried_forward: boolean;
             /** Processing Time Ms */
             processing_time_ms: number;
             /**
@@ -1124,6 +1147,53 @@ export interface components {
              * Format: date-time
              */
             detected_at: string;
+        };
+        /** TimelineIn */
+        TimelineIn: {
+            /** Query */
+            query: string;
+            /** Sections */
+            sections: components["schemas"]["TimelineSectionIn"][];
+            /** As Of */
+            as_of?: string | null;
+        };
+        /** TimelineOut */
+        TimelineOut: {
+            /** Stages */
+            stages: components["schemas"]["TimelineStageOut"][];
+            /** Stages Proposed */
+            stages_proposed: number;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+        };
+        /**
+         * TimelineSectionIn
+         * @description One (act, section) the caller already knows about -- meant to be
+         *     populated from a prior QueryOut.legal_sections entry's own act/section,
+         *     not a fresh lookup. See app.api.v1.legal's /legal/timeline endpoint for
+         *     why this reuses retrieval instead of repeating it.
+         */
+        TimelineSectionIn: {
+            /** Act */
+            act: string;
+            /** Section */
+            section: string;
+        };
+        /** TimelineStageOut */
+        TimelineStageOut: {
+            /** Stage */
+            stage: string;
+            /** Description */
+            description: string;
+            /** Act */
+            act: string;
+            /** Section */
+            section: string;
+            /** Time Limit */
+            time_limit: string;
         };
         /** Tokens */
         Tokens: {
@@ -1454,6 +1524,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_timeline_api_v1_legal_timeline_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimelineIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineOut"];
                 };
             };
             /** @description Validation Error */

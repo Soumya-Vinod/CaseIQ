@@ -207,6 +207,44 @@ async def _history(db: DB, session_id: str, user_id: UUID | None = None) -> list
     return history
 
 
+async def _last_retrieved_sections(
+    db: DB, session_id: str, user_id: UUID | None = None,
+) -> list[dict]:
+    """Follow-up-continuity carry-forward (docs/evaluation.md, follow-up-continuity entry):
+    the most recent PROCESSED turn in this session that actually retrieved something, walked
+    back from the newest row -- not just the literal immediately-previous turn, so a chain of
+    several vocabulary-free follow-ups in a row all carry forward the SAME original sections
+    rather than the second one inheriting nothing from the first's own carry-forward miss.
+    Works transitively for free: a turn that itself carried sections forward stores them in its
+    own `retrieved_sections` (see process_query below), so the next follow-up finds them here
+    exactly like any other turn's real retrieval.
+
+    Same session-ownership contract as `_history()` above (reusing its own exact `user_filter`
+    shape, not reimplemented) -- a stale shared session_id must never leak a different real
+    user's retrieved sections into this turn's answer, the same leak `_history()` itself was
+    fixed for.
+    """
+    if not session_id:
+        return []
+    owner_id = await _session_owner(db, session_id)
+    user_filter = LegalQuery.user_id.is_(None)
+    if owner_id is not None and user_id == owner_id:
+        user_filter = or_(user_filter, LegalQuery.user_id == owner_id)
+    rows = (await db.execute(
+        select(QueryResponse)
+        .join(LegalQuery, QueryResponse.query_id == LegalQuery.id)
+        .where(
+            LegalQuery.session_id == session_id, LegalQuery.status == QueryStatus.PROCESSED,
+            user_filter,
+        )
+        .order_by(LegalQuery.created_at.desc())
+    )).scalars().all()
+    for r in rows:
+        if r.retrieved_sections:
+            return r.retrieved_sections
+    return []
+
+
 @router.post("/query", response_model=QueryOut)
 # FIXED 2026-09-08 (docs/evaluation.md): the one endpoint this project's
 # whole shared Groq TPM budget runs through, and nothing capped how much
@@ -306,6 +344,14 @@ async def process_query(
 
     history = await _history(db, payload.session_id, user.id if user else None)
     as_of = payload.as_of or date.today()
+    # Hoisted from inside llm_service.process_query() (docs/evaluation.md, follow-up-
+    # continuity entry) -- that call only happens AFTER retrieval and the abstention gate
+    # below, so it was never in a position to help decide whether THIS turn's own (possibly
+    # weak) retrieval should be trusted. Static, pure, no Groq call -- computing it twice
+    # (here and again inside llm_service.process_query()) costs nothing and can never
+    # disagree, so llm_service.process_query() is left as-is rather than restructured to
+    # accept this as a parameter.
+    new_topic = llm_service.is_new_topic(payload.query, history)
 
     # C8: ask BEFORE generating, not after -- a query that reads as
     # describing something that already happened, with no incident_date and
@@ -346,6 +392,46 @@ async def process_query(
     # threshold catches the former without also catching the latter two. The
     # civil-phrase check is a second, narrower net for exactly that gap.
     civil_scope_mismatch = is_civil_scope_mismatch(payload.query)
+
+    # Follow-up-continuity carry-forward (docs/evaluation.md, follow-up-continuity entry):
+    # found live -- "what is the punishment for defamation" followed by "what happens if I am
+    # the one doing it" abstained on the second turn, because that query carries no legal
+    # vocabulary of its own and retrieval ran on it alone, with no awareness that it continues
+    # the first turn's subject. Trigger is deliberately narrow: is_new_topic()==False (this
+    # turn continues the prior subject -- see app.services.llm.is_new_topic's own comment for
+    # the bag-of-words bug that had to be fixed before this signal was trustworthy) AND this
+    # turn's OWN retrieval would abstain specifically on WEAK EVIDENCE -- not on civil-scope
+    # mismatch, an ambiguous top hit, or a classifier flag, none of which a borrowed section
+    # set from an unrelated prior turn should be allowed to override.
+    #
+    # Deliberately VISIBLE, not silent (per instruction -- "an answer that looks freshly
+    # retrieved but isn't is the shape this project keeps finding"): `sections` itself becomes
+    # the carried-forward set, so `rag_context`, the stored `QueryResponse.retrieved_sections`,
+    # and the `QueryOut.legal_sections` the user actually sees are ALL the carried-forward
+    # sections, not empty ones papered over by borrowed reasoning the citations don't actually
+    # match. `sections_carried_forward` is threaded through to the response so the frontend can
+    # label it as continuing the earlier question rather than presenting it as a fresh answer.
+    sections_carried_forward = False
+    weak_evidence = is_abstention(sections)
+    if (not new_topic and weak_evidence and not civil_scope_mismatch
+            and not has_ambiguous_top_hit(sections) and not has_classifier_flag(sections)
+            and not touches_violence_or_harm(payload.query)):
+        prior_sections = await _last_retrieved_sections(db, payload.session_id, user.id if user else None)
+        # Counted, not just logged on success -- how often the trigger condition fires AT ALL
+        # (regardless of whether a prior turn had anything to carry) is what tells us if
+        # is_new_topic's bag-of-words check is too loose, per instruction: "if it fires on
+        # nearly every follow-up, the ... check is too loose and we'd want to know."
+        logger.info(
+            "followup_carry_forward_trigger", session_id=payload.session_id,
+            found_prior_sections=bool(prior_sections),
+            carried_section_count=len(prior_sections),
+        )
+        if prior_sections:
+            sections = prior_sections
+            sections_carried_forward = True
+            sims = [s["similarity"] for s in sections if s["similarity"] is not None]
+            retrieval_strength = max(sims) if sims else 0.0
+
     # FIXED 2026-09-04 (found live): a harm query came back the generic
     # abstention refusal at 23% similarity, never reaching the LLM -- which
     # meant it never reached the intent-aware discouragement-framing
@@ -540,6 +626,7 @@ async def process_query(
         structured_data=result["structured_data"], retrieved_sections=sections,
         confidence_score=result["confidence_score"], response_language=language,
         processing_time_ms=took_ms, is_followup=result["is_followup"],
+        sections_carried_forward=sections_carried_forward,
         as_of=as_of,  # K7: the date retrieval was filtered as-of, stamped on the answer
         corpus_version_id=latest_corpus_version_id,
     ))
@@ -560,6 +647,7 @@ async def process_query(
         structured_data=response_structured, confidence_score=result["confidence_score"],
         legal_sections=sections, language=language, related_questions=related,
         is_followup=result["is_followup"], processing_time_ms=took_ms, abstained=abstained,
+        sections_carried_forward=sections_carried_forward,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,
         citations_grounded=citations_grounded,
         # FIXED 2026-09-06 (checklist item 4): the abstention path used to

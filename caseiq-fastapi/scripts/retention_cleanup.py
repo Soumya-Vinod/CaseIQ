@@ -97,13 +97,22 @@ from scripts.lib.production_guard import confirm_writable_target
 # so there was no real deletion volume to calibrate against. These are
 # deliberately conservative placeholder guesses instead, sized well above
 # what this project's current traffic could plausibly produce in one day but
-# nowhere near "large enough to never fire" -- and they MUST be revisited
-# once the first real, non-zero dry-run numbers exist (soon: the oldest
-# audit_logs row is already ~39 days old as of this writing, under the
-# 90-day cutoff but not by much), not left as this initial guess
-# indefinitely. Revisit by hand roughly yearly after that, or sooner if
-# traffic genuinely grows past these -- a constant that occasionally blocks
-# a legitimate large batch fails in the safe direction; that's the point.
+# nowhere near "large enough to never fire."
+#
+# REVISIT TRIGGER (concrete, not "soon" or "provisional" -- an event, not a
+# feeling): the first time ANY table's real deleted count is > 0, look at
+# that actual number and reset these three constants relative to it (e.g.
+# ~5-10x a typical day's real count, not this initial guess). `execute_
+# deletes()` below logs a `retention_cleanup_nonzero_deletion` line (and
+# prints a matching note) on EVERY run with a non-zero count, not just
+# tracked-as-"the first" -- this script keeps no persisted state across
+# runs to know which one truly is first, but a human watching logs/output
+# will see the same thing either way: quiet zero-runs, then its first real
+# appearance is the moment that prompts revisiting these numbers. After that
+# first real recalibration, revisit by hand roughly yearly, or sooner if
+# traffic genuinely grows past the reset numbers -- a constant that
+# occasionally blocks a legitimate large batch fails in the safe direction;
+# that's the point.
 _CEILINGS = {
     "audit_logs": 500,
     "legal_queries": 200,
@@ -240,6 +249,17 @@ async def execute_deletes(db: AsyncSession, results: list[CleanupResult]) -> lis
         out.append(CleanupResult(r.table, r.would_delete, r.ceiling, deleted=deleted))
         logger.info("retention_cleanup_deleted", table=r.table, deleted=deleted,
                     ceiling=r.ceiling, expected=r.would_delete)
+        if deleted > 0:
+            # The concrete revisit-the-ceiling trigger this module's _CEILINGS
+            # comment points at -- see that comment for why this fires on
+            # every non-zero run rather than trying to track "the first" one.
+            note = (f"retention_cleanup: {r.table} deleted {deleted} row(s) this run -- "
+                    f"_CEILINGS['{r.table}'] ({r.ceiling}) was a placeholder guess (docs/"
+                    f"evaluation.md), never calibrated against a real non-zero count until now. "
+                    f"Revisit it.")
+            print(note)
+            logger.info("retention_cleanup_nonzero_deletion", table=r.table, deleted=deleted,
+                        current_ceiling=r.ceiling)
     await db.commit()
     return out
 

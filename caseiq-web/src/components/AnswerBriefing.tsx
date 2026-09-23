@@ -66,6 +66,23 @@ export function AnswerBriefing({ result }: { result: QueryOut }) {
     <section className={styles.briefing}>
       {asOfLabel && <p className={styles.asOf}>Law as it stood on {asOfLabel}</p>}
 
+      {/* sections_carried_forward (docs/evaluation.md, follow-up-continuity entry): this
+          turn's own retrieval found nothing -- the sections shown (and cited below) are
+          carried forward from the most recent turn in this session that DID retrieve
+          something. Deliberately visible, not silent -- per instruction, an answer that
+          looks freshly retrieved but isn't is exactly the failure shape this project keeps
+          finding. Placed before the summary so it frames the whole answer, not just the
+          sources list. */}
+      {result.sections_carried_forward && (
+        <div className={styles.carriedForwardNotice} role="note">
+          <span className={styles.carriedForwardIcon} aria-hidden="true">↩</span>
+          <span>
+            Continuing from your previous question — the sources below are from that answer,
+            not a fresh search for this one.
+          </span>
+        </div>
+      )}
+
       <div className={styles.topRow}>
         <p className={styles.confidence} title="Raw retrieval similarity, not a probability of correctness -- checked against the 44-pair golden set and found too small and too noisy to calibrate into one (see docs/evaluation.md).">
           Match strength{" "}

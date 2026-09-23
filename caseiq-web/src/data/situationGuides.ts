@@ -50,12 +50,14 @@
  * bailable against the source law for 373 of 395 sections (94%, not 56%);
  * several confirmed instances of the silent-wrong-value failure mode were
  * found and fixed along the way (not just the one this entry originally
- * logged); and the remaining 22 unverified sections are now a KNOWN,
- * bounded, tracked set (scripts._crpc_cognizable_bailable_verification's
- * own row-count-mismatch list) rather than an unsized unknown fraction of
- * a much larger gap. The caveat still stands -- 22 real gaps remain, and
- * the underlying row-boundary defect class isn't eliminated, only bounded
- * -- but it's no longer protecting against a diffuse, unmeasured risk.
+ * logged). UPDATED 2026-09-23 (docs/evaluation.md, row-mismatch-
+ * transcription entry): a follow-up pass hand-fixed the remaining 22 (in
+ * fact 25 -- see that entry for the correction) row-count-mismatch
+ * sections the same way, bringing coverage to 398 of 398 sections the
+ * First Schedule covers (100%). The caveat still stands, narrower than
+ * before -- s.501/s.502 (a real printed entry, not yet addressable under
+ * its own section number -- a different, older defect class) is the one
+ * remaining known gap, not an unsized fraction of a much larger one.
  * app/services/cognizability.py's `coverage_note_for()` reflects this
  * directly: the equivalent caveat on the Cognizability Lookup page is now
  * computed PER RESPONSE (silent when what's shown is verified, explicit

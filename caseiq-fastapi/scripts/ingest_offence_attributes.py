@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from parse_crpc_schedule import (
     PARSER_VERSION, PDF_PATH, apply_cognizable_bailable_verification,
     apply_first_schedule_transcription, apply_known_corrections, apply_known_row_replacements,
-    complete_rows, extract_lines, reconstruct_rows,
+    apply_row_mismatch_transcription, complete_rows, extract_lines, reconstruct_rows,
 )
 from sqlalchemy import delete
 
@@ -41,6 +41,7 @@ async def main(skip_prompt: bool = False) -> None:
     rows = reconstruct_rows(raw_lines, diags)
     rows = apply_known_corrections(rows)
     rows = apply_known_row_replacements(rows)
+    rows = apply_row_mismatch_transcription(rows)
     rows = apply_first_schedule_transcription(rows)
     rows = apply_cognizable_bailable_verification(rows)
     rows = complete_rows(rows)

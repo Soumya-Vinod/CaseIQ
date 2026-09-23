@@ -244,7 +244,10 @@ export function QueryPage() {
 
               <div className={styles.resultsRight}>
                 <section className={styles.sourcesSection}>
-                  <SourcesPanel sections={result.legal_sections} />
+                  <SourcesPanel
+                    sections={result.legal_sections}
+                    carriedForward={result.sections_carried_forward}
+                  />
                 </section>
               </div>
             </div>

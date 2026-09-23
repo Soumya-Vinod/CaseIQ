@@ -90,6 +90,15 @@ class QueryResponse(UUIDPk, Timestamped, Base):
     response_language: Mapped[str] = mapped_column(String(10), default="en")
     processing_time_ms: Mapped[int] = mapped_column(Integer, default=0)
     is_followup: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ADDED (docs/evaluation.md, follow-up-continuity entry): True when THIS turn's own
+    # retrieval found nothing (a follow-up with no legal vocabulary of its own, e.g. "what
+    # happens if I am the one doing it") and `retrieved_sections` above was instead carried
+    # forward from the most recent prior turn in this session that had real sections --
+    # deliberately visible, not silent: an answer that looks freshly retrieved but isn't is
+    # exactly the failure shape this project keeps finding (see app.api.v1.legal's own
+    # carry-forward logic for the trigger condition and app.services.llm.is_new_topic's own
+    # comment for the bug this depends on being fixed first).
+    sections_carried_forward: Mapped[bool] = mapped_column(Boolean, default=False)
     # Part K / K4: which corpus snapshot was live when this answer was generated,
     # so any past answer can be reproduced/audited. Nullable -- responses
     # generated before Part K landed have no snapshot to point at.

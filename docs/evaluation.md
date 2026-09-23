@@ -6155,16 +6155,20 @@ insisted on rather than rounded to the number that was hoped for going in:
 | Sections structurally present (real `triable_by`) | 395 |
 | **Sections with cognizable AND bailable individually verified against the source** | **373 (94%)** |
 | Sections with a genuine row-count mismatch (parser's stored rows don't match what's printed) | 40 (6 over-split, 34 under-split) |
-| Of those 40, sections with ZERO surviving row (drop out of "complete" entirely) | 22 |
-| Of those 40, sections with at least one clean row (partially resolve, e.g. an over-split section's real first row) | 18 |
+| Of those 40, sections with ZERO surviving row (drop out of "complete" entirely) | 25 (corrected 2026-09-23 -- see the row-mismatch-transcription entry below) |
+| Of those 40, sections with at least one clean row (partially resolve, e.g. an over-split section's real first row) | 15 (corrected 2026-09-23) |
 
 **373, not 395 — the number that matters is the one the scoping entry warned against losing.** The
-22 fully-dropped sections are real, specific, and listed (not estimated): 119, 120, 134, 153, 153A,
-153B, 171F, 177, 187, 188, 195A, 211, 212, 213, 214, 221, 222, 235, 294A, 307, 451, 454. Each is a
-genuine row-boundary defect -- a printed row the parser merged with another or fragmented -- not a
-blank cell nobody looked at. Fixing them means the same row-boundary/close-heuristic redesign this
-project has repeatedly sized and repeatedly declined as too broad a change for the rows it would fix
-(see the sub-clause-merge entries, 2026-09-18/19), not a hand-verification task.
+fully-dropped sections are real, specific, and listed (not estimated): 119, 120, 134, 153, 153A,
+153AA, 153B, 171F, 177, 187, 188, 195A, 211, 212, 213, 214, 221, 222, 235, 294A, 307, 353, 363, 451,
+454 -- 25, not the 22 this entry originally reported (missing 153AA, 353, 363: see the row-mismatch-
+transcription entry below for how that was found and why it happened). Each is a genuine
+row-boundary defect -- a printed row the parser merged with another or fragmented -- not a blank cell
+nobody looked at. Fixing them means the same row-boundary/close-heuristic redesign this project has
+repeatedly sized and repeatedly declined as too broad a change for the rows it would fix (see the
+sub-clause-merge entries, 2026-09-18/19), not a hand-verification task -- true when this entry was
+written, and no longer true as of the row-mismatch-transcription entry below, which did exactly that
+via hand transcription rather than a heuristic redesign.
 
 **Two real defects found during the pass, both with live-production consequences, both fixed:**
 
@@ -6378,3 +6382,382 @@ seeded ceiling constants, are the next entry. User-facing wording (`AccountPage.
 "documented policy, not automated" lines, `dpdp-compliance.md` §6) is drafted but deliberately not
 applied yet either -- same gating principle as the cognizability coverage-note entry above: it
 changes only after this is verified running, not when the code lands.
+
+## Retention automation: the promised dry-run report against production (2026-09-21)
+
+`python -m scripts.retention_cleanup` (no `--delete`) against production, read-only:
+
+```
+Retention cleanup -- counts as of this run:
+  audit_logs: would delete 0 row(s) (ceiling 500)
+  legal_queries: would delete 0 row(s) (ceiling 200)
+  complaints: would delete 0 row(s) (ceiling 50)
+
+Dry run -- no changes written.
+```
+
+Nothing eligible anywhere. Not a bug or an empty query -- the project is genuinely too young: the
+oldest `audit_logs` row was ~39 days old against a 90-day cutoff, and nothing else was close. There
+was no real production run to review in the sense of "did it delete the right rows" -- there was
+nothing to delete. What was verifiable at this point was the logic (`tests/integration/test_
+retention_cleanup.py`, 13/13 passing) and the full backend suite (235 unit + 93 integration, all
+passing) -- reported in full alongside this dry-run output before asking whether to proceed.
+
+## Retention automation: schedule promoted to real deletion (2026-09-23)
+
+**Reasoning, the user's own, recorded because it's the actual argument for why this was safe to do
+before any row was ever eligible**: leaving the schedule as permanently dry-run-only means the first
+real deletion happens whenever someone remembers to flip it by hand -- which is exactly how `cleanup_
+audit_logs` ended up documented, wired, and never executed (two entries above). A scheduled job that
+only ever dry-runs is the same shape as a cleanup that was written and never actually ran; the
+schedule's OWN existence was starting to look like coverage it wasn't providing. Promoting it before
+production has anything eligible is safe specifically because the ceiling check and the session-
+ownership predicate are unconditional -- they gate a schedule-triggered real run exactly the same way
+they'd gate a manual one; promotion removes the "wait for a human to flip a flag" step, not any
+safety check under it. `.github/workflows/retention-cleanup.yml`'s schedule step now runs `python -m
+scripts.retention_cleanup --delete --yes` directly.
+
+**Two refinements made alongside the promotion, both closing a real gap the promotion itself
+exposed**:
+
+1. **The canary was, from this point on, the ONLY thing actually proving the session-ownership
+   predicate works** -- production has had nothing eligible to exercise it with, so every scheduled
+   run so far is a genuine no-op, not a run that happened to find nothing. A canary that can silently
+   not-run and still report success is worse than none: `pytest` exits 0 if every test in a file is
+   SKIPPED (confirmed directly -- module-level collection skip via `tests/integration/conftest.py`'s
+   `_skip_if_unreachable`, simulated by pointing `TEST_DATABASE_URL` at an unreachable host, produces
+   no "N passed" summary line at all and no non-zero exit from pytest's own default behaviour in that
+   exact shape). `nightly-eval.yml`'s retention pre-flight step now pipes pytest's own output through
+   a parser that fails the step explicitly (loud, not a silent green check) if anything was skipped or
+   fewer than the known 13 tests passed -- verified against both the real-pass case (13 passed, 0
+   skipped, check passes) and a simulated unreachable-DB case (0 passed matched, check correctly
+   fails) before trusting it, not assumed correct from reading the regex.
+
+2. **The `_CEILINGS` placeholder comment was rewritten with a concrete trigger, not a word.** "Revisit
+   once real numbers exist" or "provisional" are exactly the kind of language that never actually
+   prompts anyone to act, per instruction. The comment now names the trigger as an event (the first
+   real run with a non-zero deleted count for any table) rather than a feeling, and `execute_deletes()`
+   backs it with a runtime `print()` + `logger.info("retention_cleanup_nonzero_deletion", ...)` line on
+   every run where any table's deleted count is > 0 -- not specifically tracked as "the first," since
+   this script keeps no persisted state across runs to know that with certainty, but a human watching
+   logs sees the same thing either way: quiet zero-runs, then a real, visible, grep-able appearance the
+   moment there's something to recalibrate against.
+
+**Wording changes remain gated on an actual non-zero deletion, not on the schedule being promoted** --
+promotion makes a real deletion possible, it doesn't manufacture one. `AccountPage.tsx` and `docs/
+dpdp-compliance.md` §6 stay exactly as they are ("documented policy, not automated") until the first
+real, non-zero delete is observed and reported, per instruction: "first real deletion is worth seeing
+rather than assuming."
+
+## Row-mismatch transcription: the 40 sections, hand-fixed the same way as the 173 (2026-09-23)
+
+Picked up the 40 row-count-mismatch sections the cognizable/bailable pass above found but explicitly
+left unpatched (6 over-split, 34 under-split) -- unlike that pass's 192-section scope, these weren't
+just missing cognizable/bailable, every one had visibly word-scrambled `offence_description` too, so
+the fix needed all four columns re-read, same per-row cost as the original 173-section transcription.
+Scoped before transcribing, per instruction, then transcribed. Full scoping report is in this
+session's own transcript; the numbers below are what actually shipped.
+
+**Method**: 3 parallel subagents, each given a cluster of page ranges already mapped by the
+cognizable/bailable pass (196-201, 202-210, 211-213+218-223) and the section list within it, read the
+source PDF page images directly. Then a **blind 25% re-read** (10 of 40 sections, spread across all
+three clusters, chosen to include the hardest shapes -- an amendment-bracket spanning a whole row, a
+missing-section case, a page-boundary split) by fresh agents with **no exposure to the primary
+values** -- specifically because the free cross-check against `_crpc_cognizable_bailable_
+verification.py`'s own independent data (see below) structurally cannot catch a misread shared by
+both passes on the same source page. 3 of 10 disagreed with the primary read; all 3 settled by a
+direct tie-break read of the actual page image, not a coin flip: s.153A's bailable trailing period
+(blind read was right, no period), s.195A's bailable value (primary was right, "Ditto" not
+"Bailable" -- the blind reader misread an explicit value where the real cell chains), s.506's court
+value (primary was right, "Ditto." -- the blind reader's eye drifted onto s.504's court cell two rows
+above). 7 of 10 matched byte-for-byte on the first read, including the two hardest cases in the whole
+40 (s.225's 5-row split across the printed page 205/206 boundary, s.153AA's two-line-wrapped,
+whole-row-spanning amendment bracket).
+
+**Mechanism decision, made explicitly rather than assumed**: a new file
+(`scripts/_crpc_row_mismatch_transcription.py`), structurally a close copy of `_crpc_first_schedule_
+transcription.py`'s own pattern (own `_ALL_RAW`, own Ditto-chain walk reusing `_resolve_col`) --
+copied, not shared via an extracted helper. A DRY refactor touching the already-shipped, already-
+tested 173-section resolution path was judged the wrong risk for ~60 duplicated lines, on a project
+that has already had one fix silently cancel another once. Wired in as a new `apply_row_mismatch_
+transcription()`, called in `parse_crpc_schedule.py` **before** `apply_cognizable_bailable_
+verification()` (so that function's own mismatch-exclusion naturally clears once these 40 are fixed,
+letting it independently re-verify their cognizable/bailable -- the same thing it already does,
+unremarked, for the 173). `_structurally_complete_rows()`'s length-check exemption extended to this
+module's own section set, the same protection `_FIRST_SCHEDULE_TRANSCRIBED` already has, added
+deliberately rather than rediscovered after coverage silently dropped.
+
+**Ordering relative to `apply_first_schedule_transcription()` was wrong on the first attempt --
+caught spot-checking production, not by review.** Originally called AFTER that function (reasoning:
+don't disturb its own already-tested antecedent-building logic). Re-ingested, then spot-checked a
+sample of the newly-fixed 40 directly against the live database -- s.353 showed a literal, garbled
+`"Ditto. Ditto."` as its court value instead of a real court name. Traced, not guessed: s.353's own
+antecedent, s.352, was fine; the actual break was s.451 (one of these 40) still being in its
+pre-fix, merged, single-row state when `apply_first_schedule_transcription()` built ITS OWN
+antecedent baseline for s.452 (a 173-module target chaining from s.451) -- producing corrupted text
+that then propagated forward into s.453 and s.454. Checked for scale before fixing narrowly: a
+systematic scan (immediate-predecessor lookup, not sampling) found **13 of the 173-module's own 161
+target sections chain from one of these 40 as their immediate antecedent** -- s.111/110, s.120B/120,
+s.160/158, s.171G/171F, s.180/179, s.189/188, s.215/214, s.225A/225, s.308/307, s.452/451,
+s.472/471, s.475/474, s.507/506. A REVERSE check (does any of these 40 depend on a 173-module
+antecedent) found the same count, 13, the other direction -- the two section sets are interleaved
+throughout the document, not cleanly separable by page range. **Fix: swapped the call order** --
+`apply_row_mismatch_transcription()` now runs first. Verified, not assumed, that this doesn't just
+move the bug: a corpus-wide scan for a literal `"ditto"` surviving in any FINAL `triable_by` after
+the complete pipeline found 7 broken rows under the original order (s.215, 308 x2, 452, 453, 454,
+507), 0 under the reversed one, with an identical scan for `cognizable_raw`/`bailable_raw` also
+clean. The reverse-direction 13 were checked empirically too, not assumed safe by symmetry --
+`apply_first_schedule_transcription()` doesn't exclude sections outside its own `_ALL_RAW` from
+being used as an antecedent, so once this pass has already run, its fresh output is simply available
+to be read like any other already-complete section; no corpus-wide artifact from that direction
+either.
+
+**One more defect found in the same sweep, needing a third mechanism, not the reorder and not
+`_KNOWN_COURT_CORRECTIONS`.** s.352 -- genuinely out of scope, not a member of either module's
+section set -- has its own STORED `triable_by` corrupted the same way, independently of anything
+chained through it (`"Ditto. Ditto."`, a column-bleed duplicate-word artifact; the real printed
+value is a single `"Ditto."`, chaining s.347's real `"Any Magistrate."` through s.348). A first fix
+attempt added `"352"` to `_KNOWN_COURT_CORRECTIONS` -- caught before shipping: that dict applies to
+EVERY row for a section, including s.352's own over-split PHANTOM fragment row (previously excluded
+from `_structurally_complete_rows` by its own empty `triable_by`); giving that phantom row a
+non-empty `triable_by` made it look like a second real row, flipping `compute_row_count_mismatches()`'s
+verdict on s.352 from clean to over-split and silently excluding it from `apply_cognizable_bailable_
+verification()`'s own patch, which had been correctly resolving its cognizable/bailable all along --
+fixing 353's antecedent that way would have broken 352's own already-working resolution, the exact
+"one fix cancelling another" shape this whole pass was asked to design around. Fixed instead via
+`_CHAIN_REPAIR_ANTECEDENTS` in the new module -- the same mechanism already proven for s.202/s.203,
+which substitutes only what a downstream WALK sees for a section, never what's stored on its own
+row(s). s.352's own row is left exactly as wrong as it started, flagged here, not silently patched
+over -- same discipline as s.202.
+
+**The precedence test almost asserted the wrong thing.** Built `TestOrderDependenceSafe` to check
+that `apply_cognizable_bailable_verification()` never silently overwrites a value this pass already
+resolved with a different one -- the exact assertion asked for, aimed at the exact bug class this
+project keeps re-finding. First version failed on ~40 rows, all shaped like `(None, None) vs (True,
+False)`. Investigated rather than loosened blindly: this pass's own internal antecedent baseline is
+built from rows at a pipeline stage **before** `apply_cognizable_bailable_verification()` has run --
+plenty of legitimate antecedent sections still have empty `cognizable_raw`/`bailable_raw` at that
+point, so a "Ditto"-chained row here frequently resolves to a correct-but-uninformative `None`, not a
+wrong answer. That's not a bug, it's *why* the downstream pass exists -- asserting "must never change"
+would have permanently pinned these 40 sections' cognizable/bailable to `None` instead of letting the
+real downstream verification pass finish the job. Rewritten to assert what actually matters: fields
+only this pass owns (`offence_description`, `triable_by`, row count) stay byte-identical across the
+downstream pass, and cognizable/bailable end up either resolved or genuinely conditional (the same
+`"according as"/"if"` test `_resolve_col` itself uses -- s.110/118/119/120/221's own real conditional
+values, chained from equally-conditional base clauses like s.109's, correctly stay `None`) -- never
+silently left wrong. A second layer, `TestCrossCheckAgainstIndependentCognizableBailableRead`,
+compares the FINAL pipeline output against `_crpc_cognizable_bailable_verification.py`'s own
+independent resolution for all 40 sections -- the free spot-check layer promised in scoping, now a
+real assertion, not a hope.
+
+**A bigger finding than expected while compiling the data, not while testing it**: cross-referencing
+this pass's own printed-row counts against `_crpc_first_schedule_transcription.py`'s existing
+entries found that module's hand-transcription for s.175 stored only 1 row where the real table
+prints 2 -- its own comment had even said "second sub-row not separately modeled," a deliberate
+simplification that turned out to violate this codebase's own one-row-per-real-condition contract.
+Checking whether this was a one-off or systemic (rather than assuming a single miss and moving on)
+found **11 more sections with the identical defect**: 158, 173, 174, 177, 187, 188, 213, 214, 467,
+471, 474 -- all stored 1 row in the 173-module where the true printed count (confirmed against the
+cognizable/bailable pass's own independent read) is 2 or 3. **12 of the original 173 sections, ~7% of
+that pass's own scope, were themselves under-transcribed** -- never caught until this session cross-
+referenced row counts between two modules nobody had compared before. All 12 moved out of
+`_crpc_first_schedule_transcription.py`'s `_ALL_RAW` into this pass's own (173 -> 161 in that module);
+none silently duplicated across both. `TestS175MovedCorrectly` and the disjointness assertion in
+`TestTranscriptionSourceShape` are the direct regression coverage.
+
+**Three of the 34 "under-split" sections were a more severe sub-case**: 153AA, 353, 363 had literally
+ZERO stored rows -- their content was fully swallowed into a neighbouring section's buffer (153A/154;
+352/354; 358/364), the same missing-section defect class already documented for s.501(a)/(b)/502(a)/
+(b), just milder. Confirmed as genuine standalone printed rows (not misattributed neighbour content)
+by two independent reads each. **This is also why the "cognizable/bailable hand-verification:
+completed" entry's own "22 fully-dropped sections" list was wrong** -- corrected above to 25/15. Those
+three sections' zero row count meant they were never counted as either "dropped" or "partial" when
+that entry's list was hand-assembled; the underlying 40-section total was always right (computed from
+data, not hand-counted), only the breakdown list omitted them. Found by re-deriving the split from
+`compute_row_count_mismatches()` directly rather than trusting the prior entry's own enumeration.
+**This is the second time in this file a documented coverage figure turned out wrong only once
+someone re-derived it independently** -- the first being "395/395 measured the wrong field" earlier in
+this document. Neither was caught by review of the number itself; both were caught by a later pass
+that happened to recompute the same thing a different way. Worth naming as a pattern, not just fixing
+twice: a number's presence in this file, even stated confidently with a citation, is not evidence it
+was ever cross-checked against a second independent computation -- only that nobody had reason to
+doubt it yet.
+
+**Verification, in full**: full pipeline run confirms **398/398 distinct sections, 100% complete**
+(up from 373/395 -- the +3 beyond 395 are 153AA/353/363 becoming addressable for the first time).
+`tests/test_crpc_row_mismatch_transcription.py` (14 tests: source shape including the 6/34 split and
+the zero-`__UNVERIFIABLE__` guarantee, full coverage including the 3 previously-missing sections, the
+s.175 move, order-dependence, the independent cross-check, no regression on untouched sections) plus
+updates to `test_crpc_first_schedule_transcription.py` (173->161 sections, 395->384 structural
+coverage at that pipeline stage, the 222->223 antecedent-baseline shift from s.175 leaving that
+module) and `test_crpc_cognizable_bailable_verification.py` (373->367, 211->213->208 across both
+mid-session changes) all pass, each numeric change traced and explained in place, not just updated to
+whatever the new run produced. Full non-integration backend suite passes with no unrelated breakage.
+
+Not yet re-ingested into production -- pending the user's own review, same "backup first, verify live"
+discipline as every prior write to this schedule this session and last.
+
+## Row-mismatch transcription: re-ingested, then the ordering it was built on turned out wrong (2026-09-23)
+
+Re-ingested per the user's go-ahead, same discipline as every prior write to this schedule: targeted
+backup of the live 412-row/373-section state first, `ingest_offence_attributes.py --yes` run
+(`parser_version=crpc-schedule-v8`), verified directly against the live database, not the parser's own
+printout -- 479 rows, 398 distinct sections, all 25 previously-dropped sections present with non-empty
+cognizable/bailable.
+
+**Spot-checking that same live data is what caught the ordering bug** -- not a regression test, not a
+corpus-wide scan run proactively, a direct query against a handful of the 40 newly-fixed sections after
+the write. s.353's `triable_by` came back `"Any Magistrate. Ditto."` -- two court values concatenated,
+not a real printed value. Traced to `apply_row_mismatch_transcription()` running AFTER `apply_first_
+schedule_transcription()`: 13 of the 173-module's own 161 target sections chain from one of these 40 as
+their immediate Ditto-antecedent, and running this pass second meant those 13 built their own
+antecedents from these 40 sections' STILL-BROKEN pre-fix rows. A systematic check (not sampling) found
+13 more in the reverse direction, confirming the two section sets are interleaved throughout the
+document, not cleanly separable. Fixed by swapping the call order, verified corpus-wide (0 literal-
+`"ditto"` artifacts left in any `triable_by`, down from 7), plus one more defect found in the same
+sweep needing a third mechanism (`_CHAIN_REPAIR_ANTECEDENTS`, s.352) -- full detail in the entry above,
+edited in place once the real ordering was known, not left describing the wrong one.
+`parser_version=crpc-schedule-v9` re-ingested, re-verified live: same 479 rows/398 sections, all the
+previously-corrupted values now resolve to real court names, s.352's own row honestly still wrong
+(flagged, not silently patched, matching the s.202 precedent).
+
+**Worth recording as more than a fixed bug.** The scoping report for this whole pass named this exact
+failure mode by name before a line of it was written: "how precedence is enforced and tested -- I don't
+want a fix silently cancelling a fix again." A precedence decision was made deliberately (`apply_row_
+mismatch_transcription()` after the 173-pass, reasoned through in the scoping report, not assumed), a
+regression test was built specifically to guard the ordering (`TestOrderDependenceSafe`), and the
+ordering was STILL wrong -- not because the guard didn't exist, but because the guard tested the wrong
+half of the relationship (whether the DOWNSTREAM cog/bail pass could silently overwrite this pass's
+values) and never modelled whether the 173-pass's OWN antecedent computation depended on sections this
+pass hadn't fixed yet at the point it ran. Naming the risk in scoping was real and did real work -- it's
+why `TestOrderDependenceSafe` exists at all -- but naming a risk category is not the same as having
+enumerated every instance of it, and nothing short of checking the actual dependency graph (which
+section chains from which, in both directions) would have caught this specific one. **The thing that
+actually caught it wasn't the scoped-for guard -- it was verifying against the live database after
+ingestion, the same standing discipline this project already runs for every write, doing its job on a
+defect class a purpose-built test had already been written for and still missed.** Two mitigations, not
+one, is the standing lesson this leaves behind: a test targeting a named risk is necessary but not
+sufficient once the risk turns out to have more shape than the name suggested, and live verification
+after every write is what closes that gap, not a substitute for writing the test.
+
+## Coverage note and gap logic brought current with 398/398, one real bug found along the way (2026-09-23)
+
+Requested follow-up to the re-ingestion above: confirm `coverage_note_for()` and the per-response gap
+logic actually reflect 398/398, not stale 373/395 numbers. They didn't, in four places --
+`_BLANKET_COVERAGE_NOTE`/`coverage_note_for()`'s own docstring (`app/services/cognizability.py`),
+`CognizabilitySearchOut`'s schema comment (`app/schemas/cognizability.py`), `CognizabilityPage.tsx`'s
+pre-search fallback, and `situationGuides.ts`'s own caveat comment -- all updated. The real remaining
+gap, computed directly rather than assumed zero, is s.501/s.502 (the still-open "missing section"
+defect, unrelated to this pass) -- not "the other 22" any more.
+
+**A real, separate bug found spot-checking the gap logic, not the coverage numbers**:
+`lookup_by_section()` used `scalar_one_or_none()`, which raises `MultipleResultsFound` -- a 500, not an
+answer -- the instant a section has more than one `offence_attributes` row. Confirmed pre-existing
+(s.376, three rows since the s.373/374/376 fix months ago, crashed the same way before today), but this
+session's own row-mismatch-transcription pass made it far more common: most of the 40 newly-fixed
+sections are themselves multi-row. Fixed by fetching all matching rows per act and returning each as
+its own card -- the same one-card-per-real-row shape `search_by_name()` and the frontend's own
+`results.map(...)` already assumed. `tests/integration/test_cognizability_lookup.py` (4 tests) added --
+no prior test coverage existed for this function at all.
+
+## Follow-up continuity: retrieval never saw the conversation, only generation did (2026-09-23)
+
+Reported live: "what is the punishment for defamation", answered correctly, then "what happens if I am
+the one doing it" -- abstained, "not confident enough to answer." Diagnosed before building, per
+instruction.
+
+**Traced the query string precisely** (`app/api/v1/legal.py`'s `process_query` route handler):
+`history` is fetched early (`_history()`, line ~307) but `semantic_search(db, payload.query, ...)`
+(line ~337) uses `payload.query` ALONE -- `history` isn't passed in or consulted. The abstention gate
+(`is_abstention(sections)` et al.) runs immediately after, still with no `history` involvement. `history`
+is used for the first time only at the `llm_service.process_query(..., history=history, ...)` call --
+which the abstention short-circuit skips entirely when it fires. In the reported case, retrieval found
+nothing for the vocabulary-free follow-up, abstention fired, and **the LLM was never called at all** --
+the conversation history it would have received never got a chance to help, because the code path that
+had it never ran.
+
+**`is_followup`/`is_new_topic` -- the wired-but-inert shape this project keeps finding, confirmed, not
+assumed**: `LLMService.is_new_topic()` (bag-of-words crime-term intersection against the last 3 user
+turns) is computed inside `LLMService.process_query()` -- i.e. only reached AFTER retrieval and the
+abstention gate have already run. Its only two consumers, both downstream of retrieval: which system
+prompt to send Groq, and a stored/returned `is_followup` flag for persistence and display. Nothing reads
+it to change retrieval behaviour.
+
+**Checked before building on it, per instruction, not assumed safe**: does `is_new_topic` even return
+the right answer for the reported query? No. `"what happens if I am the one doing it"` has zero words in
+`_CRIME_TERMS` -- `cur` is empty. The old logic's early-return only special-cased `not cur and not prev`
+(BOTH empty); when `cur` is empty but `prev` isn't, `cur & prev` is empty regardless of what `prev`
+contains, so `not (cur & prev)` was unconditionally `True`. Confirmed directly: `is_new_topic("what
+happens if I am the one doing it", [defamation turn])` returned `True` (new topic) under the old logic.
+Hoisting this signal to gate retrieval would have done nothing for the exact case that motivated the
+investigation -- fixed first (`not cur: return False`, covering both the old both-empty case and this
+one), verified against the 3 existing tests (unaffected) plus 2 new ones for the fixed case and its
+`len(history) < 2` boundary, before any retrieval-side logic was built on top of it.
+
+**Worth naming on its own, not just as a step in this fix**: an unconditional `True` for any
+vocabulary-free query is not a loud failure -- it's a signal that looks correct on every case anyone
+happened to try it against (all three existing tests, all built around queries WITH crime vocabulary on
+both sides) and is silently wrong on the one shape nobody tested: the current turn saying nothing on its
+own. Hoisting it as-is would have shipped, passed every existing test, and done nothing for the exact
+case it was built to fix -- a green suite is not evidence a signal means what its name says, only that
+nobody has yet fed it the input class its own logic mishandles. The check that caught it wasn't a test
+run against the fixed code; it was running the signal against the real reported query BEFORE building
+anything on top of it, per instruction, specifically because gating retrieval on a signal is exactly the
+kind of use that turns a quiet inaccuracy into a wrong answer shipped to a user.
+
+**Built: carry-forward, not a query-rewrite Groq call.** Costed both before building: an LLM rewrite
+adds one full sequential Groq round-trip per follow-up turn (retrieval depends on the rewrite,
+generation depends on retrieval) -- real, ongoing spend on a budget this project has already had to
+actively manage (the 8->40/hour ceiling raise was itself flagged provisional against Groq's TPM/TPD
+limits). Carry-forward costs one DB read: `QueryResponse.retrieved_sections` (JSONB) is already
+populated on every successful turn and was simply never exposed by `_history()`'s own return shape.
+New `_last_retrieved_sections()` helper (same session-ownership contract as `_history()`, reused not
+reimplemented) walks back to the most recent PROCESSED turn in the session with a non-empty
+`retrieved_sections` -- works transitively for a chain of follow-ups for free, since a turn that itself
+carried sections forward stores them in its own `retrieved_sections` exactly like a real retrieval would.
+
+Trigger, hoisted to before retrieval: `is_new_topic() == False` AND this turn's own retrieval would
+abstain specifically on weak evidence (`is_abstention(sections)`) -- deliberately NOT triggered by a
+civil-scope mismatch, an ambiguous top hit, or a classifier flag, none of which a borrowed section set
+from an unrelated prior turn should be allowed to override.
+
+**Made visible, not silent, per instruction** -- "an answer that looks freshly retrieved but isn't is
+the shape this project keeps finding": when carry-forward fires, `sections` itself becomes the
+carried-forward set, so `rag_context`, the stored `QueryResponse.retrieved_sections`, and the
+`QueryOut.legal_sections` the user actually sees are ALL the carried-forward sections, not empty ones
+papered over by reasoning the citations don't match. A new `sections_carried_forward` flag (`query_
+responses` migration `0016`, threaded through `QueryOut`) drives two frontend indicators --
+`AnswerBriefing.tsx` shows a muted (deliberately not the amber `citations_grounded` caution colour --
+this isn't a data-quality warning, it's a neutral fact) "Continuing from your previous question" notice
+framing the whole answer, and `SourcesPanel.tsx`'s own "Sources N" heading gets a small "from your
+previous question" label right where the carried cards are.
+
+**Counted, not just logged on success, per instruction**: `followup_carry_forward_trigger` logs every
+time the trigger condition fires, with `found_prior_sections`/`carried_section_count` -- whether or not
+a prior turn had anything to carry. The rate this fires at is the thing that tells us if `is_new_topic`'s
+bag-of-words check is too loose ("if it fires on nearly every follow-up... we'd want to know") --
+visible from here, not just from carry-forward's own success rate.
+
+**Tested end to end, the real reported sequence, not just the unit-level pieces in isolation**: real IPC
+499/500 text (verbatim from the tracked `documents/IPC_1860.pdf`, not a paraphrase) seeded with a real
+embedding, driven through the real `/legal/query` endpoint twice in the same session -- "what is the
+punishment for defamation" (retrieves IPC 499 normally, `sections_carried_forward=False`), then "what
+happens if I am the one doing it" (own retrieval finds nothing usable, `sections_carried_forward=True`,
+`legal_sections` exactly the carried-forward IPC 499, `abstained=False`). Found and fixed one harness
+bug building this: the borrowed `test_demo_trim_mode.py` DB-override pattern never commits (it never
+previously needed a write to survive past its own response) -- silently meant turn 1's `LegalQuery` row
+never persisted, so turn 2 saw empty history and read as a genuinely new topic. Fixed to match
+`app.db.base.get_db()`'s own real commit-on-yield-return behaviour.
+
+**Migration applied, schema regenerated, both real infrastructure steps, not paperwork**: `alembic
+upgrade head` run directly (additive-only, one nullable-with-default boolean column, low risk) --
+without it the app fails to boot at all (`assert_alembic_head_matches_db`'s own drift guard, doing
+exactly the job it exists for). `caseiq-web/src/api/schema.d.ts` regenerated from the live running app's
+real OpenAPI export, not hand-edited -- swept up unrelated, already-real drift in the same diff (a
+`/legal/timeline` endpoint and the `coverage_note` redesign, both shipped in earlier sessions, neither
+ever reflected in this file since) -- confirming this frontend type file had been stale for longer than
+just this change.
+
+`tests/test_llm_logic.py` (2 new tests), `tests/integration/test_followup_carry_forward.py` (1 test,
+the full real sequence) added; full non-integration and integration backend suites both pass, no
+unrelated breakage.

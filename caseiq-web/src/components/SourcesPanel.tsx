@@ -12,7 +12,17 @@ import styles from "./SourcesPanel.module.css";
  * text is presented the way a legal document is: sectioned, with the act
  * and section number leading every card, not buried in a snippet.
  */
-export function SourcesPanel({ sections }: { sections: RetrievedSection[] }) {
+export function SourcesPanel({
+  sections,
+  carriedForward = false,
+}: {
+  sections: RetrievedSection[];
+  /** sections_carried_forward (docs/evaluation.md, follow-up-continuity entry) -- these
+   * sections came from the prior turn this session, not a fresh search for this one. The
+   * main notice lives in AnswerBriefing (it frames the whole answer); this is the smaller,
+   * where-did-THESE-specific-cards-come-from label right where the cards are. */
+  carriedForward?: boolean;
+}) {
   const [detail, setDetail] = useState<{ act: string; section: string } | null>(null);
   const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null);
 
@@ -32,6 +42,9 @@ export function SourcesPanel({ sections }: { sections: RetrievedSection[] }) {
     <section className={styles.panel} aria-label="Cited sections">
       <h2 className={styles.heading}>
         Sources <span className={styles.count}>{sections.length}</span>
+        {carriedForward && (
+          <span className={styles.carriedForwardLabel}>from your previous question</span>
+        )}
       </h2>
       <ol className={styles.list}>
         {sections.map((s, i) => (

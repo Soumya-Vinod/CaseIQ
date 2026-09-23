@@ -128,15 +128,30 @@ class TestRowCountMismatchesReportedNotGuessed:
 
 
 class TestCleanSectionsPatchedCorrectly:
-    def test_strict_coverage_is_373_not_395(self, post_verification_rows):
+    def test_strict_coverage_is_367_not_395(self, post_verification_rows):
         # complete_rows() now requires all three fields (2026-09-20 tightening) -- 395 was
         # the triable_by-only number; 22 sections whose only row(s) are row-count mismatches
         # (real content, not guessed at, just not attachable to a correct stored row) drop
         # out entirely. This is the deliberately-NOT-395 number docs/evaluation.md's
         # "395/395 measured the wrong field" entry is about -- asserting it explicitly here
         # so a future change that silently pads this back to 395 fails loudly.
+        #
+        # Was 373. Now 367: this fixture doesn't run apply_row_mismatch_transcription() (docs/
+        # evaluation.md, row-mismatch-transcription entry), so the 12 sections moved out of
+        # _crpc_first_schedule_transcription.py's _ALL_RAW (see tests/
+        # test_crpc_first_schedule_transcription.py's own test_exactly_161_sections) are no
+        # longer resolved at this checkpoint either. Of those 12: 6 (158, 173, 174, 467, 471, 474)
+        # were counted here before this session's work via that module's own now-superseded
+        # single-row entries -- these are exactly the 6 the count drops by. The other 6 split as
+        # 5 (177, 187, 188, 213, 214) already excluded before this session even started (already
+        # among the pre-existing 22), unaffected either way, and 175, which stays counted
+        # regardless -- its stale pre-fix row still structurally qualifies (just with wrong,
+        # garbled values). Confirmed directly by diffing the exact section set, not inferred from
+        # the arithmetic alone. The real, correct number lives in tests/
+        # test_crpc_row_mismatch_transcription.py, against the fixture that actually runs the
+        # pass that now owns these 12.
         complete = complete_rows(post_verification_rows)
-        assert len(set(r.section_number for r in complete)) == 373
+        assert len(set(r.section_number for r in complete)) == 367
 
     def test_previously_empty_rows_mostly_filled(self, pre_verification_rows, post_verification_rows):
         # _structurally_complete_rows, not complete_rows() -- complete_rows() now filters
@@ -147,7 +162,22 @@ class TestCleanSectionsPatchedCorrectly:
         after = _structurally_complete_rows(post_verification_rows)
         before_empty = sum(1 for r in before if not r.cognizable_raw.strip() or not r.bailable_raw.strip())
         after_empty = sum(1 for r in after if not r.cognizable_raw.strip() or not r.bailable_raw.strip())
-        assert before_empty == 211
+        # Was 211, then 213 (mid-session), now 208. 211->213: adding apply_row_mismatch_
+        # transcription()'s own section set to _structurally_complete_rows()'s length-check
+        # exemption is a shared change (it has to apply everywhere that function is called, not
+        # just after the new pass has run) -- it let through 2 rows here whose garbled pre-fix
+        # offence_description exceeds 250 chars (s.119's first row, s.222's second row), both
+        # previously excluded entirely, both with genuinely empty cognizable_raw. 213->208: moving
+        # 12 sections' entries out of _crpc_first_schedule_transcription.py (see tests/
+        # test_crpc_first_schedule_transcription.py's own test_exactly_161_sections) removed 5 of
+        # them (177, 187, 188, 213, 214) from the exemption they'd been getting via THAT module's
+        # membership -- without any exemption at this checkpoint (this fixture doesn't run the new
+        # pass that now owns them), their long/malformed pre-fix rows are excluded entirely by the
+        # length check rather than counted here as "empty", so they simply disappear from this
+        # list rather than reappearing in it. Confirmed directly by diffing this exact fixture's
+        # output against each prior baseline: exactly the rows named above account for each step,
+        # nothing else changes.
+        assert before_empty == 208
         assert after_empty < before_empty
         # every row still empty after the fix must belong to a reported mismatch
         mismatches = compute_row_count_mismatches(pre_verification_rows)

@@ -164,20 +164,29 @@ async def search_by_name(db: AsyncSession, q: str, limit: int = 20) -> list[dict
 
 
 async def lookup_by_section(db: AsyncSession, section_number: str) -> list[dict]:
-    """Each of the two classified acts gets exactly one of three outcomes
-    for this number -- a real row, a real section with no row (the fourth
-    state), or nothing (that act never had this section, so it's omitted,
-    not fabricated as a third kind of empty card)."""
+    """Each of the two classified acts gets one of three outcomes for this number -- one or more
+    real rows, a real section with no row (the fourth state), or nothing (that act never had this
+    section, so it's omitted, not fabricated as a third kind of empty card).
+
+    FIXED (docs/evaluation.md, row-mismatch-transcription entry): "one real row" was `scalar_one_
+    or_none()` -- a genuinely conditional section with more than one printed sub-clause (e.g. s.376's
+    three graded conditions, s.109's own base/exception pair) has always stored MULTIPLE rows under
+    the same section_number, the same contract every hand-transcription pass in this schedule uses.
+    `scalar_one_or_none()` raises `MultipleResultsFound` the instant a section has 2+ rows -- a 500,
+    not a wrong answer, for any such lookup. Confirmed pre-existing, not introduced by this session's
+    own row-mismatch-transcription work (s.376 crashed this same way before today) -- but that work
+    just made it far more common: many of the 40 newly-fixed sections are themselves multi-row.
+    Fixed by fetching all matching rows and returning each as its own card, the same one-card-per-
+    real-row shape `search_by_name()` and the frontend's own `results.map(...)` already assume."""
     results: list[dict] = []
     for act in _CLASSIFIED_ACTS:
-        oa_row = (await db.execute(
+        oa_rows = (await db.execute(
             select(OffenceAttributes).where(
                 OffenceAttributes.act == act, OffenceAttributes.section_number == section_number,
             )
-        )).scalar_one_or_none()
-        if oa_row is not None:
-            (attached,) = await _attach_titles(db, [oa_row])
-            results.append(attached)
+        )).scalars().all()
+        if oa_rows:
+            results.extend(await _attach_titles(db, oa_rows))
             continue
 
         sv_row = (await db.execute(
@@ -201,8 +210,9 @@ async def lookup_by_section(db: AsyncSession, section_number: str) -> list[dict]
 
 _BLANKET_COVERAGE_NOTE = (
     "Coverage: BNS is near-complete (398 of 434 sections). IPC/CrPC cognizable/bailable "
-    "classification is individually verified against the source law for 373 of 395 "
-    "sections -- the other 22 are a known, specific gap (not a general shortfall), so this "
+    "classification is individually verified against the source law for 398 of 398 "
+    "sections the First Schedule covers (100%) -- the remaining known gap is s.501/s.502 "
+    "(a real printed table entry not yet addressable under its own section number), so this "
     "search finding nothing may be one of those rather than proof the offence doesn't exist."
 )
 
@@ -220,9 +230,9 @@ def coverage_note_for(mode: str, results: list[dict]) -> str:
     reason to doubt what's on screen:
 
       - section_number mode: any result with has_data=False means this specific section
-        has no verified row (it may be one of the 22 known cognizable/bailable gaps, or a
-        section the First Schedule never covered at all -- either way, nothing to show for
-        it). Note attaches to that response; a response where every result has_data=True
+        has no verified row (it may be s.501/s.502, the last known cognizable/bailable gap,
+        or a section the First Schedule never covered at all -- either way, nothing to show
+        for it). Note attaches to that response; a response where every result has_data=True
         needs no caveat at all.
       - name mode: search_by_name() can only ever match a row that EXISTS in
         offence_attributes, so any non-empty result set is inherently already-verified data

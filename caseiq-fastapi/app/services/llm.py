@@ -467,7 +467,17 @@ class LLMService:
         prev: set[str] = set()
         for m in [h for h in history if h["role"] == "user"][-3:]:
             prev |= LLMService._crime_words(m["content"])
-        if not cur and not prev:
+        # FOUND (docs/evaluation.md, follow-up-continuity entry), not assumed safe: a query
+        # carrying NO legal vocabulary at all can't be signalling a genuinely new legal topic --
+        # it's far more likely a referential follow-up ("what happens if I am the one doing it",
+        # "what about them"). The old logic only special-cased `not cur and not prev` (both
+        # empty); when `cur` was empty but `prev` wasn't, `cur & prev` is empty regardless of
+        # what `prev` contains, so `not (cur & prev)` was unconditionally True -- every
+        # vocabulary-free follow-up read as a brand new topic. Confirmed live: "what happens if
+        # I am the one doing it" immediately after a defamation question returned True (new
+        # topic) under the old logic. `not cur` alone (dropping the `and not prev` half) covers
+        # both the old both-empty case and this one, with no separate branch needed.
+        if not cur:
             return False
         return not (cur & prev)
 

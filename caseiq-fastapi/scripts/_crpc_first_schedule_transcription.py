@@ -95,8 +95,12 @@ _RAW_111_190: dict[str, list[tuple[str, str, str, str]]] = {
              "means to prevent it. Ditto", "Ditto", "Ditto", "Ditto")],
     "157": [("Harbouring persons hired for an unlawful assembly. Imprisonment for 6 months, or "
              "fine, or both.", "Cognizable", "Ditto", "Ditto")],
-    "158": [("Being hired to take part in an unlawful assembly or riot. Ditto Or to go armed. "
-             "Imprisonment for 2 years, or fine, or both.", "Ditto", "Ditto", "Ditto")],
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py, same reason and same discovery method
+    # as "175" below (docs/evaluation.md, row-mismatch transcription entry): this entry stored only
+    # 1 row; the real table prints 2 ("Being hired..." base clause + "Or to go armed" sub-clause as
+    # its own row), confirmed against _crpc_cognizable_bailable_verification.py's own independent
+    # 2-row read for this section, which nobody had cross-referenced against this module's entry
+    # until the row-mismatch pass did.
     "160": [("Committing affray. Imprisonment for one month, or fine of 100 rupees or both.",
               "Ditto", "Ditto", "Ditto.")],
     "163": [("Taking a gratification for the exercise of personal influence with a public servant. "
@@ -121,29 +125,31 @@ _RAW_111_190: dict[str, list[tuple[str, str, str, str]]] = {
     "171G": [("False statement in connection with an election. Fine", "Non-cognizable", "Ditto", "Ditto.")],
     "171H": [("Illegal payments in connection with elections. Fine of 500 rupees.",
               "Ditto.", "Ditto.", "Ditto.")],
-    "173": [("Preventing the service or the affixing of any summons of notice, or the removal of it "
-             "when it has been affixed, or preventing a proclamation. Simple imprisonment for 1 "
-             "month, or fine of 500 rupees, or both. If summons, etc., require attendance in "
-             "person, etc., in a Court of Justice. Simple imprisonment for 6 months, or fine of "
-             "1,000 rupees, or both.", "Ditto", "Ditto", "Ditto.")],
-    "174": [("Not obeying a legal order to attend at a certain place in person or by agent, or "
-             "departing there from without authority. Simple imprisonment for 1 month, or fine of "
-             "500 rupees, or both. If the order requires personal attendance, etc., in a Court of "
-             "Justice. Simple imprisonment for 6 months, or fine of 1,000 rupees, or both.",
-             "Ditto", "Ditto", "Ditto.")],
-    "175": [("Intentionally omitting to produce a document to a public servant by a person legally "
-             "bound to produce or deliver such document. Simple imprisonment for 1 month, or fine "
-             "of 500 rupees, or both.",
-             # FOUND by the transcriber: cols 4/5 were legislatively amended (Act 25 of 2005, s.42,
-             # w.e.f. 23-6-2006) FROM "Ditto" TO these explicit values -- current, correct, not a
-             # misread. Second sub-row not separately modeled: its own cols read "Ditto" against
-             # THESE now-explicit values, so it carries the same resolved classification.
-             "Non-cognizable", "Bailable",
-             "The Court in which the offence is committed, subject to the provisions of Chapter "
-             "XXVI; or, if not committed in a court, any Magistrate.")],
-    "177": [("Knowingly furnishing false information to a public servant. Ditto If the information "
-             "required respects the commission of an offence, etc. Imprisonment for 2 years, or "
-             "fine, or both.", "Ditto", "Ditto", "Ditto")],
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py, same reason as "175" below: "173" and
+    # "174" each stored only 1 row (base clause + "in a Court of Justice" sub-clause folded
+    # together as one run-on sentence); the real table prints each sub-clause as its own row (2
+    # each), confirmed against the independent cog/bail read the same way as every other section
+    # noted in this file as moved.
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py (docs/evaluation.md, row-mismatch
+    # transcription entry): this entry's own comment already said "second sub-row not separately
+    # modeled" -- a deliberate simplification, not an oversight, on the theory that the real second
+    # row's classification columns just Ditto-chain to the same resolved values as the first. That
+    # part was right, but the one-row-per-real-condition contract this module's own docstring states
+    # (same contract _KNOWN_ROW_REPLACEMENTS uses for s.376) wasn't followed -- the second row's own
+    # distinct offence_description ("If the document is required to be produced in or delivered to a
+    # Court of Justice...") was never stored anywhere, under any section, at all. Caught by the
+    # row-mismatch pass cross-referencing this module's own single-row entry against
+    # _crpc_cognizable_bailable_verification.py's independent 2-row read for the same section --
+    # nobody had compared the two until then. "175", "173", "174", "177" (below), "158" (above),
+    # "187", "188", "213", "214", "467", "471", "474" (all further down) are ALL now defined ONLY in
+    # _crpc_row_mismatch_transcription.py -- 12 sections total, not just 175 -- each the SAME defect
+    # (this module's own entry stored 1 row where the real table prints 2-3), each confirmed the
+    # same way. test_exactly_161_sections in tests/test_crpc_first_schedule_transcription.py is 161,
+    # not 173 (173 minus these 12).
+    #
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py, same defect/discovery as above: this
+    # entry stored 1 row; the real table prints 2 (base "Knowingly furnishing..." clause + "If the
+    # information required respects..." sub-clause as its own row).
     "180": [("Refusing to sign a statement made to a public servant when legally required to do so. "
              "Simple imprisonment for 3 months, or fine of 500 rupees, or both.",
              "Ditto", "Ditto", "Ditto.")],
@@ -155,16 +161,9 @@ _RAW_111_190: dict[str, list[tuple[str, str, str, str]]] = {
              "Ditto", "Ditto", "Ditto.")],
     "186": [("Obstructing public servant in discharge of his public functions. Imprisonment for 3 "
              "months, or fine of 500 rupees, or both.", "Ditto", "Ditto", "Ditto.")],
-    "187": [("Omission to assist public servant when bound by law to give such assistance. Simple "
-             "imprisonment for 1 month, or fine of 200 rupees, or both. Wilfully neglecting to aid "
-             "a public servant who demands aid in the execution of process, the prevention of "
-             "offences, etc. Simple imprisonment for 6 months, or fine of 500 rupees, or both.",
-             "Ditto", "Ditto", "Ditto.")],
-    "188": [("Disobedience to an order lawfully promulgated by a public servant, if such "
-             "disobedience causes obstruction, annoyance or injury to persons lawfully employed. "
-             "Simple imprisonment for 1 month, or fine of 200 rupees, or both. If such disobedience "
-             "causes danger to human life, health or safety, etc. Imprisonment for 6 months, or "
-             "fine of 1,000 rupees, or both.", "Cognizable", "Ditto", "Ditto.")],
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py: "187" and "188" each stored 1 row where
+    # the real table prints 2 (each section's own run-on sentence is actually a base clause plus a
+    # distinct conditional sub-clause).
     "189": [("Threatening a public servant with injury to him or one in whom he is interested, to "
              "induce him to do or forbear to do any official act. Imprisonment for 2 years, or "
              "fine, or both.", "Non-cognizable", "Ditto", "Ditto.")],
@@ -217,17 +216,12 @@ _RAW_207_294: dict[str, list[tuple[str, str, str, str]]] = {
     "210": [("Fraudulently obtaining a decree for a sum not due, or causing a decree to be executed "
              "after it has been satisfied. Imprisonment for 2 years, or fine, or both.",
              "Ditto", "Ditto", "Ditto.")],
-    "213": [("Taking gift, etc., to screen an offender from punishment if the offence be capital. "
-             "Imprisonment for 7 years and fine. If punishable with imprisonment for life or with "
-             "imprisonment for 10 years. Imprisonment for 3 years and fine. If punishable with "
-             "imprisonment for less than 10 years. Imprisonment for a quarter of the longest term "
-             "provided for the offence, or fine, or both.", "Ditto", "Ditto", "Ditto.")],
-    "214": [("Offering gift or restoration of property in consideration of screening offender if "
-             "the offence be capital. Imprisonment for 7 years and fine. If punishable with "
-             "imprisonment for life or with imprisonment for 10 years. Imprisonment for 3 years and "
-             "fine. If punishable with imprisonment for less than 10 years. Imprisonment for a "
-             "quarter of the longest term, provided for the offence, or fine, or both.",
-             "Non-cognizable", "Ditto", "Ditto.")],
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py: "213" and "214" each stored 1 row
+    # combining all three graded conditions (capital / life-or-10-years / less-than-10-years) into
+    # one run-on sentence, where the real table prints each condition as its own row (3 each) --
+    # the same one-row-per-real-condition contract this module's own docstring states (and which
+    # this SAME module's s.115/116/213-adjacent entries elsewhere DO follow correctly) wasn't
+    # applied to these two specifically.
     "215": [("Taking gift to help to recover movable property of which a person has been deprived "
              "by an offence without causing apprehension of offender. Imprisonment for 2 years, or "
              "fine, or both.", "Cognizable", "Ditto", "Ditto.")],
@@ -488,11 +482,9 @@ _RAW_404_511: dict[str, list[tuple[str, str, str, str]]] = {
     "462": [("Being entrusted with any closed receptacle containing or supposed to contain any "
              "property, and fraudulently opening the same. Imprisonment for 3 years or fine, or "
              "both.", "Ditto", "Bailable", "Ditto")],
-    "467": [("Forgery of a valuable security, will, or authority to make or transfer any valuable "
-             "security, or to receive any money, etc. Imprisonment for life, or imprisonment for "
-             "10 years and fine.", "Ditto", "Ditto", "Ditto.")],
-    "471": [("Using as genuine a forged document which is known to be forged. Punishment for "
-             "forgery of such document.", "Ditto", "Ditto", "Ditto.")],
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py: "467" and "471" each stored 1 row; the
+    # real table prints 2 each (a base clause plus a "when the [security/document] is a promissory
+    # note of the Central Government" sub-clause the original transcription didn't separately model).
     "472": [("Making or counterfeiting a seal, plate, etc., with intent to commit a forgery "
              "punishable under section 467 of the Indian Penal Code, or possessing with like "
              "intent any such seal, plate, etc., knowing the same to be counterfeit. Imprisonment "
@@ -501,9 +493,10 @@ _RAW_404_511: dict[str, list[tuple[str, str, str, str]]] = {
              "punishable otherwise than under section 467 of the Indian Penal Code, or possessing "
              "with like intent any such seal, plate, etc., knowing the same to be counterfeit. "
              "Imprisonment for 7 years and fine.", "Ditto", "Ditto", "Ditto.")],
-    "474": [("Having possession of a document, knowing it to be forged, with intent to use it as "
-             "genuine; if the document is one of the description mentioned in section 466 of the "
-             "Indian Penal Code. Ditto.", "Ditto.", "Ditto.", "Ditto.")],
+    # MOVED to scripts/_crpc_row_mismatch_transcription.py: "474" stored 1 row; the real table
+    # prints 2 (the "section 466" base clause plus a distinct "section 467" sub-clause with its own,
+    # different classification -- the original single row's "if" text made it look like a single
+    # conditional clause rather than two separate printed rows).
     "475": [("Counterfeiting a device or mark used for authenticating documents described in "
              "section 467 of the Indian Penal Code, or possessing counterfeit marked material. "
              "Ditto.", "Ditto.", "Ditto.", "Ditto.")],

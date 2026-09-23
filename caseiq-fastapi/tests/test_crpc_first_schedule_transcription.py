@@ -96,8 +96,17 @@ def post_transcription_rows(pre_transcription_rows):
 class TestTranscriptionSourceShape:
     """Invariants about _ALL_RAW itself, independent of the parser pipeline."""
 
-    def test_exactly_173_sections(self):
-        assert len(_ALL_RAW) == 173
+    def test_exactly_161_sections(self):
+        # Was 173. 12 sections moved out to scripts/_crpc_row_mismatch_transcription.py -- not just
+        # s.175: this module's own entries for 158, 173, 174, 175, 177, 187, 188, 213, 214, 467,
+        # 471, and 474 ALL stored only 1 row where the real printed table has 2 or 3, confirmed
+        # against _crpc_cognizable_bailable_verification.py's independent row-count read for each
+        # (see this module's own comments at each point of removal, and docs/evaluation.md's
+        # row-mismatch-transcription entry). Not a coverage loss: all 12 are still transcribed,
+        # correctly, just from a different module -- but it IS a real finding that ~7% of this
+        # module's own original 173 sections were themselves under-transcribed, undetected until
+        # this cross-check.
+        assert len(_ALL_RAW) == 161
 
     def test_disjoint_from_known_row_replacements(self):
         assert set(_ALL_RAW).isdisjoint(_KNOWN_ROW_REPLACEMENTS)
@@ -110,20 +119,34 @@ class TestTranscriptionSourceShape:
 
 
 class TestFullCoverageAfterTranscription:
-    def test_395_of_395_sections_complete(self, post_transcription_rows):
+    def test_384_of_395_sections_complete(self, post_transcription_rows):
         # _structurally_complete_rows, not the public complete_rows() -- this fixture
         # doesn't run apply_cognizable_bailable_verification(), so most rows' cognizable_raw/
         # bailable_raw are still empty at this pipeline stage; complete_rows() now also
         # requires those (2026-09-20 tightening) and would undercount here for a reason
         # unrelated to what THIS test checks (triable_by/offence coverage from the
         # transcription itself). See docs/evaluation.md and tests/
-        # test_crpc_cognizable_bailable_verification.py for the post-cog/bail-fix number
-        # (373/395), which is the right place to assert the public complete_rows() count.
+        # test_crpc_cognizable_bailable_verification.py for the post-cog/bail-fix number,
+        # which is the right place to assert the public complete_rows() count.
+        #
+        # Was "395 distinct, all 395 complete". Now still 395 distinct (the 12 moved sections'
+        # OLD garbled rows are still PRESENT in post_transcription_rows -- nothing deletes them,
+        # they're just no longer fixed by this specific function) but only 384 of those 395 are
+        # complete: the 12 sections moved out of THIS module's own _ALL_RAW (see
+        # TestTranscriptionSourceShape.test_exactly_161_sections above) aren't resolved by
+        # apply_first_schedule_transcription() alone any more -- they need scripts/
+        # _crpc_row_mismatch_transcription.py's own apply_row_mismatch_transcription(), which
+        # this fixture doesn't run. 11 of the 12 drop out entirely (395-11=384); 175 stays
+        # "complete" per this loose check regardless, since its stale pre-fix row still has a
+        # non-empty triable_by, just a wrong one. Not a real coverage loss -- see tests/
+        # test_crpc_row_mismatch_transcription.py for that pass's own full-coverage assertion,
+        # which is the right place to see all 12 (and the 3 newly-created sections) resolve
+        # correctly -- just this fixture no longer being the right place to see it.
         complete = _structurally_complete_rows(post_transcription_rows)
         distinct_sections = {r.section_number for r in post_transcription_rows}
         complete_sections = {r.section_number for r in complete}
         assert len(distinct_sections) == 395
-        assert complete_sections == distinct_sections
+        assert len(complete_sections) == 384
 
     def test_every_transcribed_section_present_with_real_text(self, post_transcription_rows):
         by_section: dict[str, list] = {}
@@ -147,9 +170,19 @@ class TestNoSectionSilentlyMaskedByExemption:
     stale data (finding #2 in the module docstring). Confirmed by direct
     inspection of pre_transcription_rows that these 9, and only these 9,
     have this property -- not an arbitrary sample.
+
+    "175" is historically the 9th member of this set but is no longer
+    verified HERE -- it moved to scripts/_crpc_row_mismatch_transcription.py
+    (see that module's own comment, and _crpc_first_schedule_transcription.py's
+    comment at the point of removal), so it no longer resolves via
+    apply_first_schedule_transcription() at all; this fixture only runs that
+    one function. Its own masking-bug-shaped regression coverage (does it
+    resolve to the NEW transcribed text and not stale pre-fix text) lives in
+    tests/test_crpc_row_mismatch_transcription.py instead, against the
+    fixture that actually includes the pass that now owns it.
     """
 
-    _AFFECTED = ["116", "120B", "175", "201", "225A", "358", "404", "498A", "511"]
+    _AFFECTED = ["116", "120B", "201", "225A", "358", "404", "498A", "511"]
 
     def test_affected_sections_have_nonempty_pretranscription_triable_by(
         self, pre_transcription_rows
@@ -233,8 +266,18 @@ class TestNoRegressionOnPreviouslyCompleteSections:
         for r in _structurally_complete_rows(post_transcription_rows):
             after_by_section.setdefault(r.section_number, []).append(r)
 
-        assert len(before_by_section) == 222, (
-            "expected exactly 222 previously-complete, non-transcribed sections "
+        # Was 222. Now 223: s.175 left THIS module's _ALL_RAW (see this file's own header comment
+        # on that), so the `not in _ALL_RAW` filter above no longer excludes it here -- but its
+        # stale pre-fix row is STILL structurally complete (still exempted from the length check,
+        # now via membership in scripts._crpc_row_mismatch_transcription's own _ALL_RAW instead,
+        # since that's where 175 lives now). Net effect: 175 simply moves from "excluded here
+        # because it's one of THIS module's own targets" to "counted here as an ordinary
+        # previously-complete section, coincidentally untouched by apply_first_schedule_
+        # transcription()" -- a bookkeeping shift, not new or lost data. Confirmed directly (not
+        # assumed from the arithmetic alone): 175 is present in before_by_section post-change and
+        # was excluded pre-change, nothing else differs.
+        assert len(before_by_section) == 223, (
+            "expected exactly 223 previously-complete, non-transcribed sections "
             f"as the regression baseline, got {len(before_by_section)}"
         )
 

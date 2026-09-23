@@ -63,22 +63,26 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Scheduled run -- dry run only (INTERIM, see below)
-        # DELIBERATE INTERIM STATE, not the finished design: the schedule
-        # trigger only ever dry-runs right now, regardless of this script's
-        # own --delete flag, because production has not yet had its first
-        # real run reviewed by a human (docs/evaluation.md -- "Report before
-        # the first production run" was the explicit instruction this
-        # workflow was built under). The finished, actually-automated state
-        # is this step running `python -m scripts.retention_cleanup --delete
-        # --yes` on schedule, unattended, same as db-backup.yml and
-        # nightly-eval.yml already do. Promote it by changing ONLY this
-        # step's run line to add `--delete --yes` -- do that once a manual
-        # workflow_dispatch (delete=true) run has been reviewed and the
-        # first real deletion's counts look right, not before, and not
-        # automatically on some later date.
+      - name: Scheduled run -- real deletion
+        # PROMOTED 2026-09-23 (docs/evaluation.md, "Retention automation:
+        # schedule promoted to real deletion" entry) -- the schedule trigger
+        # now deletes, unattended, same as db-backup.yml and nightly-eval.yml
+        # already do. Deliberately NOT left dry-run-only waiting for a human
+        # to notice and flip it: that is the exact shape of the
+        # cleanup_audit_logs failure this workflow replaces (docs/
+        # evaluation.md, "audit_logs never self-pruning") -- written, wired,
+        # documented, never actually executed, because nothing ever forced
+        # the moment to flip it. Safe to promote before production has any
+        # eligible rows: the first runs are no-ops by construction (nothing
+        # is old enough yet), and the ceiling check (scripts/
+        # retention_cleanup.py's own _CEILINGS) still gates every run
+        # regardless of schedule vs. manual trigger -- promotion removes the
+        # "wait for a human" step, not the safety checks under it. The
+        # nightly-eval.yml canary (see that workflow) is what actually
+        # proves the session-ownership predicate still works on a night
+        # production has nothing real to exercise it with.
         if: github.event_name == 'schedule'
-        run: python -m scripts.retention_cleanup
+        run: python -m scripts.retention_cleanup --delete --yes
 
       - name: Manual dispatch -- dry run
         if: github.event_name == 'workflow_dispatch' && inputs.delete != true

@@ -125,6 +125,12 @@ class QueryOut(BaseModel):
     language: str
     related_questions: list[str]
     is_followup: bool
+    # True when this turn's OWN retrieval found nothing and `legal_sections` was instead
+    # carried forward from the most recent prior turn in this session -- see
+    # app.api.v1.legal's own carry-forward logic. Deliberately surfaced, not silent: the
+    # frontend uses this to show the sections as continuing the earlier question rather than
+    # presenting them as freshly retrieved for this exact query.
+    sections_carried_forward: bool = False
     processing_time_ms: int
     # True when app.services.retrieval.is_abstention short-circuited this query
     # before the LLM was ever called -- confidence_score and legal_sections are
