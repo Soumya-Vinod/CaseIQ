@@ -26,6 +26,18 @@ database still needs a human to say "yes, I mean to write here" before a
 script proceeds -- the validator stops an accident from being silently
 possible; this stops an intentional, correctly-configured write from
 running unattended.
+
+Composes with, does not replace, app.db.write_guard's own engine-level
+guard either (added after a THIRD incident -- docs/evaluation.md,
+follow-up-continuity entry -- an ad-hoc script that never called this
+function at all): that one is the backstop enforced at every SessionLocal()
+regardless of whether a script remembers this function exists; this one is
+where the friendly interactive prompt lives, since a per-statement DB hook
+has no reasonable place to pause for input(). A confirmed "yes" here (any
+of the three ways below) sets CONFIRM_PRODUCTION_WRITE=1 for the rest of
+this process -- the same env var the engine-level guard checks -- so a
+script that calls this function first never hits that guard's own
+exception; it's confirmation once, not twice.
 """
 from __future__ import annotations
 
@@ -62,6 +74,7 @@ def confirm_writable_target(label: str, *, skip_prompt: bool = False) -> None:
 
     if skip_prompt:
         print("Confirmed via --yes.")
+        os.environ["CONFIRM_PRODUCTION_WRITE"] = "1"
         return
     if os.environ.get("CONFIRM_PRODUCTION_WRITE") == "1":
         print("Confirmed via CONFIRM_PRODUCTION_WRITE=1.")
@@ -71,3 +84,4 @@ def confirm_writable_target(label: str, *, skip_prompt: bool = False) -> None:
     if answer != "yes":
         print("Aborted -- nothing written.", file=sys.stderr)
         sys.exit(1)
+    os.environ["CONFIRM_PRODUCTION_WRITE"] = "1"

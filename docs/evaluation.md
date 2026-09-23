@@ -6102,6 +6102,26 @@ before that process next restarts, which on Render's free tier could be minutes 
 next deploy). Worth naming as a real gap rather than assuming this project's own tooling already
 covers it just because a related-looking guard exists nearby.
 
+**RECURRED, 2026-09-23, the identical shape, three days later (row-mismatch-transcription entry):**
+`alembic upgrade head` run directly against production for migration `0016` (an intentional,
+authorized action, backup discipline followed correctly) before the code that migration belongs to
+had been pushed — the exact sequencing gap this entry's own "standing rule" names, written down after
+0015 specifically so it wouldn't happen again. It happened again anyway, the same way: `/health`
+confirmed the live app was still running the OLD commit, `code_heads()` for that deployed process
+still resolving to `0015`, `db_head` now `0016` — `assert_alembic_head_matches_db`'s own strict
+two-way check meant the live app was one restart away from refusing to boot, for the entire window
+between the migration and the push. Caught by directly checking `/health`'s `git_commit` against the
+migration file's own revision before declaring the work done, not by the written rule — the rule was
+read, understood, and didn't change what happened, because "never run a migration ahead of the
+deploy" was advice a person or a future session has to remember to apply, not a check anything
+enforces. **A written rule that doesn't change behaviour isn't a fix, it's a hope.** Still no
+structural guard for this specific direction as of this entry — the write-guard built in response to
+this same session's OTHER production incident (the "coverage note and gap logic" entry's own
+addendum, and see the "closing the SessionLocal() gap" entry below) closes a different gap (ad-hoc
+scripts writing DATA); it does nothing for a deliberately-authorized `alembic upgrade head` run in the
+wrong order relative to a deploy. That remains open, named honestly rather than assumed covered by
+proximity to a guard that solves a different problem.
+
 ## The Unicode hyphen bug: the verifier misread the model, not the other way round (2026-09-20)
 
 **First real call to `POST /legal/timeline` against production** (a genuine arrest/custody query,
@@ -6761,3 +6781,90 @@ just this change.
 `tests/test_llm_logic.py` (2 new tests), `tests/integration/test_followup_carry_forward.py` (1 test,
 the full real sequence) added; full non-integration and integration backend suites both pass, no
 unrelated breakage.
+
+## Closing the SessionLocal() gap: a write guard at the connection, not the script (2026-09-23)
+
+The accidental production write flagged in the entry above was the THIRD real incident of this exact
+shape -- `scripts.lib.production_guard.confirm_writable_target()` already existed specifically because
+of the first two (its own docstring), and still didn't help, because this one was an ad-hoc diagnostic
+that never lived under `scripts/` and never called it. Scoped before building (per instruction): compared
+against the test that actually matters -- "is a scratch script written in five minutes next week safe by
+default" -- not "does a safer option exist if someone remembers to reach for it."
+
+**Two options, one clearly wrong for this problem.** A separate read-only session (`ReadOnlySessionLocal`
+alongside a renamed, deliberately-reached-for `WritableSessionLocal`) is only safe-by-default if it also
+renames the FAMILIAR name -- otherwise a scratch script reaches for `SessionLocal` out of habit and gets
+full write access exactly as before, no safer than today. Making it actually safe means auditing and
+updating every legitimate write site in the real app (`get_db()`, every route handler, every script) to
+fix a problem entirely caused by scripts that never go near those call sites -- the wrong blast radius for
+what's actually broken, and it needs a real Postgres read-only role provisioned against Neon besides.
+
+**Built instead: a guard at the connection.** `app/db/base.py` binds exactly one `engine`/`SessionLocal` --
+every current and future caller, the real app included, passes through it. `app/db/write_guard.py`
+registers a SQLAlchemy `before_cursor_execute` listener (the one hook that fires for every statement,
+ORM-generated or raw `text()` alike, right before it reaches the DBAPI driver -- raising here means the
+statement never partially executes) on the engine's sync side at creation time. Read/transaction-control
+statements are allow-listed by leading keyword (`SELECT`/`WITH`/`SHOW`/`EXPLAIN`/`BEGIN`/`COMMIT`/etc.);
+everything else is blocked by default against a non-local host unless `CONFIRM_PRODUCTION_WRITE=1` -- the
+SAME env var `confirm_writable_target()` already defined, not a new concept. That function now sets it in
+`os.environ` itself after a real confirmation (interactive "yes" or `--yes`), so every existing
+`scripts/*.py` file keeps working with zero changes -- confirm once, not twice.
+
+**Error message matched to the standard asked for -- `backup_dump.sh`'s own pg_dump-version assertion, not
+a generic exception.** Names what was blocked (the statement, template only -- bound parameters are never
+included, since those can carry real user data the statement template itself never does), which host, and
+the exact remediation (`confirm_writable_target()` for a `scripts/*.py` file, or set
+`CONFIRM_PRODUCTION_WRITE=1` directly) -- someone hitting this at 2am reads the exception, not the
+listener's source.
+
+**Tested the blocking path for real, per instruction, not just the passing one.** Pointing a test at an
+actual non-local host to prove this would mean risking exactly what the guard exists to prevent --
+instead, `install_write_guard()` takes an injectable `local_hosts` set (same pattern as
+`assert_alembic_head_matches_db`'s own injectable `code_heads`), so a test can point a fresh engine at the
+real, reachable, throwaway integration-test Postgres and have the guard treat IT as "non-local" for the
+purpose of the test alone. `tests/integration/test_write_guard.py`: a real INSERT through this setup
+raises `ProductionWriteBlocked`, and a SEPARATE, unguarded connection to the same real database afterward
+confirms the row genuinely isn't there -- not just that an exception fired somewhere while the write went
+through anyway. A second test confirms the identical write succeeds once the env var is set; a third
+confirms a bare SELECT is never blocked regardless. `tests/test_write_guard_classification.py` covers the
+statement-classification regex in isolation, no DB needed.
+
+**A real regression found running the FULL suite, not the new tests in isolation** -- confirming the
+instruction's own premise ("every guard in this project that turned out to be inert looked correct until
+someone made it fire") extends to the guard's OWN test suite, not just the code: `confirm_writable_target()`
+mutating the REAL `os.environ` directly (correct for its actual use -- a script confirms once, then makes
+many real DB calls in the same process, all needing to see the var set) isn't reverted by `monkeypatch`'s
+own teardown the way `monkeypatch.setenv` would be. The existing `tests/test_production_guard.py`'s
+`skip_prompt`/interactive-"yes" tests now permanently set the var for the rest of the pytest process; run
+after them, `test_non_local_host_interactive_no_aborts` and `test_non_local_host_garbage_answer_aborts`
+silently saw the leaked "confirmed" state and returned instead of ever reaching their own mocked `input()`
+or raising `SystemExit` -- passed in isolation, failed in the full run, the exact shape that's easy to ship
+unnoticed if only the new file's own tests are run before declaring done. Fixed with an autouse
+`monkeypatch.delenv` fixture on that test class, guaranteeing a clean slate at the start of every test
+regardless of what an earlier one left behind, rather than requiring each test to know to clean up after
+itself.
+
+**A second isolation bug, same discipline, different mechanism**: `tests/integration/test_write_guard.py`
+alongside `tests/integration/test_followup_carry_forward.py` (this session's earlier entry) and
+`tests/integration/test_cognizability_lookup.py` (the "coverage note and gap logic" entry) all passed
+individually and in the full alphabetical suite run -- but ran together in a different explicit order,
+`test_followup_carry_forward.py`'s own seeded real `"IPC"` act (left behind: that test manages its own
+engine to override `get_db` for a real HTTP call, so `conftest.py`'s own auto-truncating `db` fixture never
+touches it) collided with `test_cognizability_lookup.py`'s own `"IPC"` seed with a unique-constraint
+violation. Order-dependent bugs are the same failure shape as the `os.environ` leak just above, one layer
+up -- caught the same way, by deliberately running new test files together and out of their default
+order, not trusting that "the full suite passed once" ruled it out. Fixed by giving that test its own
+explicit truncate in a `finally` block (same query `db`'s own teardown uses, including the same
+safe-to-truncate database-name check), since it can't rely on the shared fixture it doesn't use.
+
+**Sequencing, stated explicitly rather than left to timing, per instruction**: this guard, once deployed,
+blocks the real app's own legitimate writes in production unless `CONFIRM_PRODUCTION_WRITE=1` is already
+set there -- deploying the guard BEFORE that env var exists on Render would take production down over its
+own writes. The user set the env var on the currently-deployed (guard-less) code first, confirmed no-op
+there, before this commit is pushed -- migration-ahead-of-deploy's mirror image, sequenced correctly this
+time because it was named explicitly rather than assumed safe by timing.
+
+Full non-integration and integration backend suites both pass (the one integration failure,
+`test_grounding.py`'s own order-dependent flake, confirmed pre-existing and unrelated -- passes standalone,
+fails only interleaved with unrelated tests sharing `grounding_stats` state, untouched by anything in this
+entry).

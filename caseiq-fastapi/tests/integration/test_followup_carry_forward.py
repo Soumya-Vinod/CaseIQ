@@ -28,7 +28,7 @@ from app.db.base import get_db
 from app.main import app
 from app.services.embeddings import embedder
 from app.services.llm import llm_service
-from tests.integration.conftest import TEST_DATABASE_URL
+from tests.integration.conftest import TEST_DATABASE_URL, _assert_safe_to_truncate
 from tests.integration.test_corpus import _make_act, _make_version
 
 pytestmark = pytest.mark.integration
@@ -124,6 +124,21 @@ async def test_followup_with_no_legal_vocabulary_answers_from_carried_sections(
     finally:
         app.dependency_overrides.clear()
         limiter.reset()
+        # FOUND (docs/evaluation.md, follow-up-continuity entry's own write-guard-scoping
+        # addendum): this test doesn't use conftest.py's own `db` fixture (needs its own
+        # engine to override get_db for the real HTTP app), so nothing truncates the seeded
+        # real "IPC" act afterward the way `db`'s own teardown would. Left uncleaned, it
+        # collided with tests/integration/test_cognizability_lookup.py's OWN "IPC" act seed
+        # the next time these files happened to run in this order in the same session --
+        # order-DEPENDENT, passed in the full alphabetical suite run, failed the moment these
+        # files were run in a different explicit order. Same truncate `db`'s own fixture uses
+        # (same safety check, same tables), run here explicitly since this test manages its
+        # own engine instead of borrowing that fixture's.
+        from app.db.base import Base
+        async with engine.begin() as conn:
+            await _assert_safe_to_truncate(conn)
+            table_names = ", ".join(f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables))
+            await conn.exec_driver_sql(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE")
         await engine.dispose()
 
     # The whole point: this turn's OWN retrieval (no legal vocabulary at all) would abstain on

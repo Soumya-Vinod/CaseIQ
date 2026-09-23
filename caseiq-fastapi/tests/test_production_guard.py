@@ -20,6 +20,22 @@ def _fake_settings(host: str, env: str = "production"):
 
 
 class TestConfirmWritableTarget:
+    # AUTOUSE (docs/evaluation.md, follow-up-continuity entry's own write-guard-scoping
+    # addendum): confirm_writable_target() now sets the REAL os.environ (not through
+    # monkeypatch) on a successful confirmation -- correct for its actual use case (a script
+    # confirms once, then makes many real DB calls in the same process, all of which need to
+    # see the var set), but a real os.environ mutation isn't reverted by monkeypatch's own
+    # teardown the way monkeypatch.setenv's would be. Without this, test order matters: the
+    # skip_prompt/interactive-"yes" tests below permanently set the var, and any LATER test in
+    # this file expecting an unset/aborting state would silently see the leaked "confirmed"
+    # value instead and never reach its own input()/abort path at all -- found live, not
+    # assumed, when exactly that happened in the full suite (passed in isolation, failed in
+    # the full run). delenv, not just "don't set it" -- guarantees a clean slate regardless of
+    # what any earlier test in this file did.
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch):
+        monkeypatch.delenv("CONFIRM_PRODUCTION_WRITE", raising=False)
+
     def test_localhost_returns_silently_no_prompt(self, monkeypatch, capsys):
         monkeypatch.setattr(production_guard, "settings", _fake_settings("localhost"))
         production_guard.confirm_writable_target("my-script")

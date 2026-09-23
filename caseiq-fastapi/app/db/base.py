@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
+from app.db.write_guard import install_write_guard
 
 # Two things only apply when talking to a managed Postgres (Neon, the
 # deployment spike) through its POOLED endpoint -- both explicit here, with
@@ -38,6 +39,14 @@ engine = create_async_engine(
 )
 
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+# See app.db.write_guard's own module docstring: closes the gap left by scripts.lib.
+# production_guard.confirm_writable_target() being opt-in (three real incidents this project
+# has had -- an ad-hoc script never under scripts/, never calling it, writing to production
+# anyway through this exact engine). Installed here, once, so every current and future
+# SessionLocal() caller is covered automatically -- no call site anywhere needs to know this
+# exists.
+install_write_guard(engine)
 
 
 class Base(DeclarativeBase):
