@@ -6076,7 +6076,7 @@ already existed. It stays exactly as-is (`triable_by` only) until the cognizable
 actually there, then gets extended to require all three fields, with the number expected to hold at 395
 once it is.
 
-## Standing operational gap: "what my local branch shows" vs. "what's actually deployed" (2026-09-20)
+## Standing operational gap, STILL OPEN: "what my local branch shows" vs. "what's actually deployed" (2026-09-20, recurred 2026-09-23)
 
 Migration `0015` was run against production (backup confirmed green first) while the code that
 migration belongs to had already been pushed and deployed — but the sequencing wasn't checked before
@@ -6121,6 +6121,16 @@ addendum, and see the "closing the SessionLocal() gap" entry below) closes a dif
 scripts writing DATA); it does nothing for a deliberately-authorized `alembic upgrade head` run in the
 wrong order relative to a deploy. That remains open, named honestly rather than assumed covered by
 proximity to a guard that solves a different problem.
+
+**Stated plainly, so this reads as an open problem and not a resolved one**: this gap has now produced
+two live instances in a single week (0015, then 0016), the second one AFTER the first was written up
+in this exact entry with a named standing rule. Writing the rule down once did not prevent the second
+instance; writing it down a second time (this paragraph) should not be mistaken for having fixed
+anything either. As of this entry, the only thing standing between "migration run against production"
+and "deployed app crash-loops on its next restart" is a person remembering to check `/health` before
+calling the work done, the same non-structural safeguard that failed to prevent 0016. No engine-level,
+CI-level, or script-level guard exists for this direction. It is not scheduled, scoped, or designed --
+it is an open problem, named here a second time specifically so it cannot quietly be read as closed.
 
 ## The Unicode hyphen bug: the verifier misread the model, not the other way round (2026-09-20)
 
