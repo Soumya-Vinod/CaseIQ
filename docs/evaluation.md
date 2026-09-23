@@ -6878,3 +6878,103 @@ Full non-integration and integration backend suites both pass (the one integrati
 `test_grounding.py`'s own order-dependent flake, confirmed pre-existing and unrelated -- passes standalone,
 fails only interleaved with unrelated tests sharing `grounding_stats` state, untouched by anything in this
 entry).
+
+## Follow-up continuity, carry-forward trigger scope: the browser test still abstained (2026-09-23)
+
+Shipped, deployed, then tested live in the browser (the real reported sequence) -- still abstained.
+Diagnosed before touching anything, per instruction: reran the real query against real production
+retrieval directly. `retrieval_strength` was 0.3836, above the 0.35 `ABSTENTION_SIMILARITY_THRESHOLD` --
+`is_abstention` correctly did NOT fire. `has_ambiguous_top_hit` did: top candidates (IPC 416, CrPC 300, IPC
+394, BNSS 337, IPC 354C) clustered at 0.37-0.38 with no clear leader, exactly what that signal exists to
+catch. The original trigger's exclusion list treated this the same as `civil_scope_mismatch` -- a mistake,
+not a coincidence: `has_ambiguous_top_hit` and `has_classifier_flag` are both statements about how
+confident THIS TURN'S OWN, ISOLATED retrieval is (a candidate-pool margin; a classifier score over the
+query's own embedding) -- the same shape as `is_abstention`'s similarity floor, not the same shape as
+`civil_scope_mismatch`'s positive, phrase-based domain determination, which stays excluded regardless of
+conversation history.
+
+**Extended the trigger** to `is_new_topic()==False AND (is_abstention OR has_ambiguous_top_hit OR
+has_classifier_flag) AND NOT civil_scope_mismatch` -- `civil_scope_mismatch` remains the one hard
+exclusion. The `followup_carry_forward_trigger` log now records which of the three fired
+(`trigger_weak_evidence`/`trigger_ambiguous_top_hit`/`trigger_classifier_flag`), not just that one did --
+per instruction, if one of them dominates in real traffic that's the one worth looking at, and collapsing
+three signals into one boolean would have made that unanswerable.
+
+**Named risk, checked rather than assumed bounded**: does widening the trigger open a path for a
+genuinely unrelated follow-up to get answered from carried sections? Yes -- but that path was ALREADY
+open via `is_abstention` alone, before this widening: `is_new_topic()` only checks absence of legal
+vocabulary, never relatedness to the prior subject, so "what's the weather like today" after a theft
+question already read as a follow-up and already found weak evidence under the ORIGINAL, narrower
+trigger. Widening to three signals makes the existing gap fire in more cases, not a new category of
+exposure. Bounded the same way: C5's own citation-grounding (the LLM can't fabricate a citation the
+carried sections don't support) and `sections_carried_forward` never being silent.
+
+**Captured as a pinned test, not just a comment, per instruction** -- `tests/integration/
+test_followup_carry_forward.py`'s `test_genuinely_unrelated_pivot_still_answers_from_carried_sections`
+seeds theft, asks about theft, then asks about the weather, and asserts the CURRENT (known, accepted)
+behaviour: `abstained=False`, `sections_carried_forward=True`, sections inherited from the theft turn.
+Deliberately asserting what happens, not what should happen -- when `is_new_topic` eventually gains a
+real relatedness signal, this specific test should start failing, which is the point of pinning it here
+instead of only describing it in a comment.
+
+Live end-to-end verification after this shipped: re-ran the four-signal check against real production
+retrieval for the exact reported query -- with the extended trigger, `not new_topic and (False or True or
+False) and not False and not touches_violence` evaluates to `True`, confirming the trigger now fires for
+this exact case. Full non-integration (253 passed) and integration (102 passed) suites both clean, no
+unrelated breakage.
+
+## Follow-up continuity, is_new_topic relatedness: scoped, not built (2026-09-23)
+
+Requested scope, not a build: `is_new_topic`'s "absence of crime vocabulary" proxy failed in both
+directions in one session -- it read an obvious follow-up as a new topic (the original bug), and after
+the fix, it reads ANYTHING with no legal words as a follow-up regardless of whether it's actually related
+(the weather case just pinned). The proposed cheap candidate: cosine similarity between the current
+query's embedding and the prior turn's -- both embeddings computed by the same local ONNX embedder
+`semantic_search()` already calls, no Groq cost either way.
+
+**Checked directly before recommending it, not assumed to work because it's cheap** -- the real
+question was never the cost, it was whether the signal actually separates the cases that matter. Computed
+real cosine similarities (`app.services.embeddings.embedder`, the actual running model) across five real
+query pairs:
+
+| Pair | Cosine similarity | Shape |
+|---|---|---|
+| "punishment for defamation" -> "what happens if I am the one doing it" | 0.1388 | GENUINE follow-up |
+| "punishment for theft" -> "what's the weather like today" | 0.0255 | UNRELATED pivot |
+| "punishment for defamation" -> "punishment for theft" | **0.4834** | DIFFERENT topic, still in-domain |
+| "punishment for theft" -> "is bail available for that" | 0.1961 | GENUINE follow-up |
+| "punishment for defamation" -> "does that apply if it was said online" | 0.2003 | GENUINE follow-up |
+
+**Does not work as a direct relatedness gate.** The genuinely unrelated pivot (weather, 0.0255) does score
+lowest, as hoped -- but the GENUINE follow-ups (0.14-0.20) score LOWER than a query about a completely
+DIFFERENT legal topic (0.4834, the highest of all five pairs). A short, pronoun-heavy referential
+follow-up ("what happens if I am the one doing it") carries little semantic content of its own and
+embeds close to almost nothing, including its own real antecedent -- while a full, well-formed legal
+question about an unrelated offence embeds as generically "legal-sounding" and scores moderately against
+ANY other legal question, related or not. A threshold tuned to accept genuine follow-ups (~0.10-0.20)
+would ALSO accept a genuine topic switch to a different real offence (0.48); a threshold tuned to reject
+topic switches would ALSO reject genuine follow-ups. Re-ran the same check comparing the follow-up query
+against the prior turn's actual RETRIEVED SECTION TEXT instead of its raw query text (a plausibly richer
+comparison) -- same shape, same problem: "punishment for defamation" scored 0.3539 against the THEFT
+section, higher than "what happens if I am the one doing it" scored against its OWN real antecedent
+(0.0879).
+
+**What it DOES plausibly deliver, narrower than what was asked**: a coarse "is this even remotely
+law-adjacent" floor. The unrelated-pivot case sits 5-20x lower than every genuine-follow-up case measured,
+which is a real, usable gap for catching a wholesale domain pivot (the weather case specifically) even
+though it can't distinguish "same specific subject" from "different specific legal subject" -- for that
+finer question, the query's own retrieval signals (`is_abstention`/`has_ambiguous_top_hit`/
+`has_classifier_flag`, already computed, already free) are asking a more directly useful question ("does
+ANY known legal content match this text well") than "does this resemble the PREVIOUS question's text."
+
+**What a real fix would cost, if built**: not a threshold picked from five examples (what this scoping
+pass did, deliberately not enough to ship on). The classifier and `has_ambiguous_top_hit`'s own margin
+threshold were both calibrated against a real held-out eval set before shipping (docs/evaluation.md,
+HEADLINE RESULT 5 and Option E's own entries) -- a relatedness signal needs the same discipline: a labeled
+set of real/plausible sequences (genuine-continuation, in-domain-topic-switch, off-domain-pivot), a
+decision about what to embed and compare (query-vs-prior-query and query-vs-prior-sections behaved
+similarly, not identically, in this quick check -- worth comparing properly, not picking one by feel), and
+a threshold chosen against measured false-positive/false-negative rates on that set, the same way
+`AMBIGUOUS_TOP_HIT_MARGIN`/`DOMAIN_GATE_THRESHOLD` were. Cheap in Groq terms, real in eval-design terms --
+not scoped further here since building it wasn't asked for, only sizing whether the obvious candidate
+actually works, and it doesn't, cleanly, on its own.

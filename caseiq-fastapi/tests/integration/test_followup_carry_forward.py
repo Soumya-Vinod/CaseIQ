@@ -45,11 +45,19 @@ _DEFAMATION_TEXT = (
     "both."
 )
 
+# Real IPC 379 text, verbatim -- confirmed directly against a live production response during
+# this same session's write-guard deploy verification (docs/evaluation.md), not retyped from
+# memory.
+_THEFT_TEXT = (
+    "379. Punishment for theft.--Whoever commits theft shall be punished with imprisonment of "
+    "either description for a term which may extend to three years, or with fine, or with both."
+)
 
-async def _seed_defamation_section(db):
-    act = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
-    sv = await _make_version(db, act, "499", _DEFAMATION_TEXT, date(1862, 1, 1))
-    sv.embedding = await embedder.embed(f"Defamation. {_DEFAMATION_TEXT}")
+
+async def _seed_section(db, act_code: str, section: str, text: str, label: str):
+    act = await _make_act(db, act_code, commenced_on=date(1862, 1, 1))
+    sv = await _make_version(db, act, section, text, date(1862, 1, 1))
+    sv.embedding = await embedder.embed(f"{label}. {text}")
     # This test drives the real HTTP app through its real lifespan (unlike test_abstention.py,
     # which calls semantic_search()/is_abstention() directly) -- app.main's own startup event
     # runs assert_embedding_config_matches_corpus() against whatever's actually in the test DB,
@@ -59,6 +67,10 @@ async def _seed_defamation_section(db):
     sv.embedding_model = embedder.model_id
     await db.commit()
     return act, sv
+
+
+async def _seed_defamation_section(db):
+    return await _seed_section(db, "IPC", "499", _DEFAMATION_TEXT, "Defamation")
 
 
 async def _client(schema_ready, monkeypatch):
@@ -149,4 +161,72 @@ async def test_followup_with_no_legal_vocabulary_answers_from_carried_sections(
     second_sections = {(s["act"], s["section"]) for s in second["legal_sections"]}
     assert second_sections == first_sections, (
         "second turn's sections should be exactly the carried-forward first-turn sections"
+    )
+
+
+async def test_genuinely_unrelated_pivot_still_answers_from_carried_sections(
+    _schema_ready, monkeypatch,
+):
+    """PINS A KNOWN, ACCEPTED TRADEOFF -- does not assert this is correct, asserts what
+    actually happens (docs/evaluation.md, follow-up-continuity entry's own carry-forward-scope
+    addendum). `is_new_topic()` only checks ABSENCE of legal vocabulary, never RELATEDNESS to
+    the prior subject -- "what's the weather like today" has no crime words either, reads as a
+    follow-up exactly like a genuine one does, finds nothing relevant of its own, and inherits
+    the theft sections from turn 1 -- a wrong answer's WORTH of citations under a real question
+    that has nothing to do with them.
+
+    Deliberately captured as a pinned test, not a bug report: this is the same underlying gap
+    that already existed via `is_abstention` alone before the trigger was widened to include
+    `has_ambiguous_top_hit`/`has_classifier_flag` (see this session's own scoping in
+    docs/evaluation.md) -- widening the trigger didn't create this exposure, it's already
+    accepted, bounded by C5's own citation-grounding (the LLM still can't fabricate a citation
+    the carried sections don't support) and by `sections_carried_forward` never being silent.
+    When `is_new_topic()` eventually gets a real relatedness signal (see docs/evaluation.md's
+    own scoping of cosine-similarity-against-the-prior-turn-embedding as the cheap candidate),
+    THIS test is what should start failing -- that's the point of pinning it here instead of
+    only describing it in a comment.
+    """
+    engine, session_factory, client = await _client(_schema_ready, monkeypatch)
+    session_id = "test-followup-carry-forward-weather"
+    try:
+        async with session_factory() as seed_db:
+            await _seed_section(seed_db, "IPC", "379", _THEFT_TEXT, "Theft")
+
+        async with client:
+            async with app.router.lifespan_context(app):
+                r1 = await client.post("/api/v1/legal/query", json={
+                    "query": "what is the punishment for theft",
+                    "session_id": session_id, "skip_incident_date": True,
+                })
+                assert r1.status_code == 200, r1.text
+                first = r1.json()
+                assert first["abstained"] is False, first
+                first_sections = {(s["act"], s["section"]) for s in first["legal_sections"]}
+                assert ("IPC", "379") in first_sections
+
+                r2 = await client.post("/api/v1/legal/query", json={
+                    "query": "what's the weather like today",
+                    "session_id": session_id, "skip_incident_date": True,
+                })
+                assert r2.status_code == 200, r2.text
+                second = r2.json()
+    finally:
+        app.dependency_overrides.clear()
+        limiter.reset()
+        from app.db.base import Base
+        async with engine.begin() as conn:
+            await _assert_safe_to_truncate(conn)
+            table_names = ", ".join(f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables))
+            await conn.exec_driver_sql(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE")
+        await engine.dispose()
+
+    # THE PINNED, KNOWN-ACCEPTED BEHAVIOUR: a genuinely unrelated pivot still gets answered
+    # from carried-forward theft sections, visibly labelled -- not abstained, not silent.
+    assert second["abstained"] is False, second
+    assert second["sections_carried_forward"] is True
+    second_sections = {(s["act"], s["section"]) for s in second["legal_sections"]}
+    assert second_sections == first_sections, (
+        "the weather query currently inherits exactly the theft sections -- this is the known "
+        "gap, pinned deliberately; if this assertion starts failing, is_new_topic has gained "
+        "some form of relatedness check and this test (and its own docstring) should be updated"
     )

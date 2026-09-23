@@ -397,12 +397,38 @@ async def process_query(
     # found live -- "what is the punishment for defamation" followed by "what happens if I am
     # the one doing it" abstained on the second turn, because that query carries no legal
     # vocabulary of its own and retrieval ran on it alone, with no awareness that it continues
-    # the first turn's subject. Trigger is deliberately narrow: is_new_topic()==False (this
-    # turn continues the prior subject -- see app.services.llm.is_new_topic's own comment for
-    # the bag-of-words bug that had to be fixed before this signal was trustworthy) AND this
-    # turn's OWN retrieval would abstain specifically on WEAK EVIDENCE -- not on civil-scope
-    # mismatch, an ambiguous top hit, or a classifier flag, none of which a borrowed section
-    # set from an unrelated prior turn should be allowed to override.
+    # the first turn's subject.
+    #
+    # EXTENDED (docs/evaluation.md, follow-up-continuity entry's own carry-forward-scope
+    # addendum): found live AGAIN, after shipping -- the browser test of this exact sequence
+    # still abstained. Traced, not guessed: `is_abstention` correctly did NOT fire (38%
+    # similarity, above the 35% floor) -- `has_ambiguous_top_hit` did (the top candidates for a
+    # vocabulary-free query cluster together with no clear leader, exactly what that signal
+    # exists to catch). The original trigger excluded it on the theory that it was the same
+    # kind of signal as `civil_scope_mismatch` (a real domain boundary). It isn't:
+    # `has_ambiguous_top_hit` and `has_classifier_flag` are both statements about how confident
+    # THIS TURN'S OWN, ISOLATED retrieval is (a candidate-pool margin; a classifier score over
+    # the query's own embedding) -- the same shape as `is_abstention`'s similarity floor, not
+    # the same shape as `civil_scope_mismatch`'s positive, phrase-based domain determination,
+    # which is true regardless of how confident retrieval felt and stays excluded.
+    #
+    # Trigger: is_new_topic()==False (this turn continues the prior subject -- see
+    # app.services.llm.is_new_topic's own comment for the bag-of-words bug that had to be
+    # fixed before this signal was trustworthy) AND at least one of the three "this turn's own
+    # evidence is weak in isolation" signals fired -- not civil-scope mismatch, which stays a
+    # hard exclusion regardless of conversation history.
+    #
+    # KNOWN, NAMED RISK, not fixed here: is_new_topic's own "no crime words -> follow-up"
+    # heuristic doesn't check RELATEDNESS, only vocabulary absence -- a genuinely unrelated
+    # pivot ("what's the weather like today" after a theft question) also reads as
+    # is_new_topic=False and also finds weak evidence, so carry-forward already answers it from
+    # the wrong sections. This was already true via is_abstention alone before this extension;
+    # widening to three trigger signals makes the existing gap fire more often, not a new class
+    # of exposure. Bounded by C5's own citation-grounding (the LLM still can't fabricate a
+    # citation the carried sections don't support) and by this being visible, never silent --
+    # see below. tests/integration/test_followup_carry_forward.py's own "weather" test pins
+    # this exact known-wrong behaviour deliberately, so a future fix to is_new_topic's
+    # relatedness has something to flip.
     #
     # Deliberately VISIBLE, not silent (per instruction -- "an answer that looks freshly
     # retrieved but isn't is the shape this project keeps finding"): `sections` itself becomes
@@ -413,18 +439,25 @@ async def process_query(
     # label it as continuing the earlier question rather than presenting it as a fresh answer.
     sections_carried_forward = False
     weak_evidence = is_abstention(sections)
-    if (not new_topic and weak_evidence and not civil_scope_mismatch
-            and not has_ambiguous_top_hit(sections) and not has_classifier_flag(sections)
-            and not touches_violence_or_harm(payload.query)):
+    ambiguous_top_hit = has_ambiguous_top_hit(sections)
+    classifier_flag = has_classifier_flag(sections)
+    if (not new_topic and (weak_evidence or ambiguous_top_hit or classifier_flag)
+            and not civil_scope_mismatch and not touches_violence_or_harm(payload.query)):
         prior_sections = await _last_retrieved_sections(db, payload.session_id, user.id if user else None)
         # Counted, not just logged on success -- how often the trigger condition fires AT ALL
         # (regardless of whether a prior turn had anything to carry) is what tells us if
         # is_new_topic's bag-of-words check is too loose, per instruction: "if it fires on
-        # nearly every follow-up, the ... check is too loose and we'd want to know."
+        # nearly every follow-up, the ... check is too loose and we'd want to know." WHICH
+        # signal fired is logged explicitly, not just that one did -- three independent signals
+        # collapsed into one boolean would mean no way to tell, if one of them turns out to
+        # dominate in real traffic, which one is actually worth looking at.
         logger.info(
             "followup_carry_forward_trigger", session_id=payload.session_id,
             found_prior_sections=bool(prior_sections),
             carried_section_count=len(prior_sections),
+            trigger_weak_evidence=weak_evidence,
+            trigger_ambiguous_top_hit=ambiguous_top_hit,
+            trigger_classifier_flag=classifier_flag,
         )
         if prior_sections:
             sections = prior_sections
