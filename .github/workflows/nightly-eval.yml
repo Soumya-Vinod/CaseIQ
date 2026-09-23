@@ -211,6 +211,22 @@ jobs:
         # from this job's caseiq_eval, same Postgres service, no conflict.
         run: pytest tests/integration/test_punishment_verification.py -m integration -v
 
+      - name: Pre-flight -- retention cleanup's session-ownership logic can still fire
+        # Same reasoning as the punishment-suppression check above, applied
+        # to scripts/retention_cleanup.py (docs/evaluation.md, "Retention
+        # automation" entries): the session-ownership rule (a claimed
+        # session's pre-login turns must survive past the 30-day anonymous
+        # window, deleted only once past the 12-month claimed window) is a
+        # correctness property that a quiet retention-cleanup.yml run --
+        # zero errors, a plausible-looking row count -- cannot distinguish
+        # from "the predicate silently regressed to a naive per-row user_id
+        # check and is now deleting logged-in users' own history." Forces
+        # the exact seeded shape (a claimed session with an old pre-login
+        # turn) through the real dry_run()/execute_deletes() functions every
+        # night, not just on push. Same caseiq_integration_test database the
+        # punishment-suppression check above already uses.
+        run: pytest tests/integration/test_retention_cleanup.py -m integration -v
+
       - name: Pre-flight -- ungrounded-response detection branch can still fire
         # Same reasoning as the punishment-suppression check just above,
         # for a different guardrail (docs/evaluation.md, "confident

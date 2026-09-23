@@ -1,0 +1,89 @@
+name: Data retention cleanup
+
+# Enforces docs/dpdp-compliance.md §6's stated retention policy -- the
+# highest-consequence automation in this project (docs/evaluation.md,
+# "Retention automation" entry): it permanently destroys user data on a
+# schedule with nobody watching. scripts/retention_cleanup.py has the full
+# design reasoning; this workflow is only the scheduling/wiring around it.
+#
+# GitHub Actions against DATABASE_URL_DIRECT, not arq: the same pattern
+# db-backup.yml and observability-alerts.yml already run against production
+# twice over. arq needs Redis, which this project evaluated and explicitly
+# declined to provision for background jobs (docs/deployment.md) --
+# provisioning a stateful add-on for cron jobs that only need a database
+# already reachable from a GitHub runner is the wrong trade. This workflow
+# also replaces the `cleanup_audit_logs` arq cron job, which turned out to
+# have NEVER ACTUALLY RUN (docs/evaluation.md, "audit_logs never self-
+# pruning") -- not extending a working mechanism, building the first real
+# one.
+#
+# Scheduled AFTER both existing nightly jobs (db-backup.yml 02:17 UTC,
+# nightly-eval.yml 03:30 UTC) so the most recent full backup -- which
+# already dumps every table this job touches (users, legal_queries,
+# query_responses, complaints, audit_logs, corpus_versions) -- is never
+# more than ~26 hours stale relative to any delete this job performs. No
+# dedicated pre-delete backup; see scripts/retention_cleanup.py's own
+# docstring for why the existing nightly one is sufficient.
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      delete:
+        description: "Actually delete (unchecked = dry run, always safe)"
+        type: boolean
+        default: false
+
+jobs:
+  retention-cleanup:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: caseiq-fastapi
+    env:
+      # Same shape as observability-alerts.yml/nightly-eval.yml -- a fake,
+      # CI-only value, not a real secret. This script never hashes anything
+      # (unlike scripts/backfill_legal_query_ip_hash.py, which genuinely
+      # needs the real production SECRET_KEY for its hash_ip() calls to
+      # correlate with already-stored rows) -- DELETE ... WHERE created_at <
+      # cutoff has no dependency on this value at all, so there's no reason
+      # to provision or reference a real secret just to satisfy Settings'
+      # own required-field validation at import time.
+      SECRET_KEY: ci-retention-cleanup-not-a-real-secret-32-chars-min
+      DATABASE_URL_DIRECT: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
+      DATABASE_URL_RAW: ${{ secrets.NEON_DATABASE_URL_DIRECT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: caseiq-fastapi/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Scheduled run -- dry run only (INTERIM, see below)
+        # DELIBERATE INTERIM STATE, not the finished design: the schedule
+        # trigger only ever dry-runs right now, regardless of this script's
+        # own --delete flag, because production has not yet had its first
+        # real run reviewed by a human (docs/evaluation.md -- "Report before
+        # the first production run" was the explicit instruction this
+        # workflow was built under). The finished, actually-automated state
+        # is this step running `python -m scripts.retention_cleanup --delete
+        # --yes` on schedule, unattended, same as db-backup.yml and
+        # nightly-eval.yml already do. Promote it by changing ONLY this
+        # step's run line to add `--delete --yes` -- do that once a manual
+        # workflow_dispatch (delete=true) run has been reviewed and the
+        # first real deletion's counts look right, not before, and not
+        # automatically on some later date.
+        if: github.event_name == 'schedule'
+        run: python -m scripts.retention_cleanup
+
+      - name: Manual dispatch -- dry run
+        if: github.event_name == 'workflow_dispatch' && inputs.delete != true
+        run: python -m scripts.retention_cleanup
+
+      - name: Manual dispatch -- REAL DELETE
+        if: github.event_name == 'workflow_dispatch' && inputs.delete == true
+        run: python -m scripts.retention_cleanup --delete --yes

@@ -6279,3 +6279,102 @@ the one originally logged), the remaining 22 a known bounded set rather than an 
 much larger gap. The caveat itself was NOT removed -- 22 real gaps remain and the underlying defect
 class isn't eliminated, only bounded -- rewriting it to claim otherwise would repeat, one layer up,
 the exact mistake this whole entry is about.
+
+## `audit_logs` never self-pruning -- stated as fact, wrong, corrected before scoping retention (2026-09-20)
+
+The retention-automation scoping pass (immediately below) started from a premise -- "audit_logs
+already self-prunes at 90 days" -- that turned out to be false, caught by checking rather than
+building on top of it. `cleanup_audit_logs` has only ever existed as an arq cron job
+(`app.tasks.worker`), and the arq worker has never been deployed anywhere this project runs
+(`docs/deployment.md`: "No worker service deployed... background workers aren't free on Render";
+confirmed no GitHub Actions workflow calls it either, by grep). Queried production directly rather
+than trusting the doc: 1,209 rows, oldest dated 2026-08-13 -- 38 days old at the time of checking,
+under the 90-day cutoff. **That is not evidence of pruning working; it's the same "a counter sitting
+at zero is consistent with two different explanations" shape this project has now named five times
+over** (embedding mismatch, abstention threshold, punishment-suppression, grounding, and now this) --
+the table simply hasn't existed long enough for any row to be old enough to test the claim either
+way. Same family as `EthicsRule` and the rate-limiting scaffolding (`"Looks wired, isn't"` entry,
+2026-09-19; `HEADLINE RESULT 6`, 2026-09-08) -- a mechanism that was written, wired, and documented as
+working, and had never once actually run. Corrected in the user's own framing of the scoping ask
+before any code was written, not discovered after building on top of the wrong premise.
+
+## Retention automation: scoped, then built (2026-09-20/21)
+
+**Scope, agreed before writing any code**: three tables need an enforced deletion policy
+(`docs/dpdp-compliance.md` §6) -- `audit_logs` (90 days, already had a query, never had anywhere to
+run it), `legal_queries`/`query_responses` (30 days for a session never claimed by a login, 12 months
+for one that was -- see below), `complaints` (24 months, real row removal, not anonymisation, since
+an anonymised complaint is neither filable nor useful for anything once its unredacted PII is
+stripped, keeping the storage cost with none of the benefit). GitHub Actions against
+`DATABASE_URL_DIRECT`, not arq: the same pattern `db-backup.yml` and `observability-alerts.yml`
+already run against production twice over, and provisioning Redis to keep one cron job on arq (which
+was never provisioned in the first place, see the entry above) was the wrong trade against a database
+already reachable from a runner.
+
+**The one genuine correctness trap, found during scoping, built around from the start**: a `legal_
+queries` row's applicable retention window is NOT decided by that row's own `user_id`.
+`app/api/v1/conversations.py`'s own ownership model -- a session's owner is the `user_id` on its
+EARLIEST logged-in row, not "any row with `user_id` set" -- means a session that started anonymous
+and was later claimed by a mid-conversation login has pre-login turns with `user_id` NULL that are
+still genuinely that user's own conversation (visible on their history page, deletable via `DELETE
+/legal/conversations/{id}`). A naive `WHERE user_id IS NULL AND created_at < 30 days` would silently
+delete a logged-in user's own history out from under them -- indistinguishable from working, until
+someone's history quietly got shorter. `scripts/retention_cleanup.py`'s `_legal_query_delete_
+predicate()` computes "claimed" at the SESSION level (does this `session_id` have ANY row with
+`user_id` set, ever) using the exact same query shape `_session_owner()` uses, and applies the
+12-month window to every row in a claimed session, including its pre-login ones.
+
+**Built, not just designed**: `scripts/retention_cleanup.py` (dry-run default, `--delete` required to
+write, `--yes` to skip the interactive confirmation prompt in CI -- same `scripts.lib.production_
+guard` gate every other writable script under `scripts/` already uses), `.github/workflows/
+retention-cleanup.yml` (scheduled 04:00 UTC, after both `db-backup.yml` 02:17 and `nightly-eval.yml`
+03:30, so the most recent full backup -- which already dumps every table this touches -- is never
+more than ~26 hours stale relative to any delete), and `tests/integration/test_retention_cleanup.py`
+(13 tests, real Postgres, real seeded rows with explicit `created_at` values, all passing).
+
+**The ceiling: a hardcoded constant, not a rolling average -- deliberately, on the user's own
+correction of my initial proposal.** A trailing-average ceiling learns from its own failures: one
+over-deleting run inflates the average and loosens the guard for the very next run, which is a safety
+check that gets weaker exactly when it should be getting suspicious. A hardcoded number that
+occasionally blocks a legitimate large batch fails in the safe direction instead, and revisiting it
+by hand once a year is cheap. Checked over ALL THREE tables before deleting from ANY -- an
+all-or-nothing gate, not per-table, so a bug inflating one table's count can't be partially masked by
+the other two looking fine.
+
+**The ceiling was NOT actually seeded from a real dry-run number, and that's stated here rather than
+glossed over**: the plan was to seed it from this script's own first real dry-run against production
+(see the next entry), but that run returned 0/0/0 for all three tables -- the project is too young
+for any row to have crossed even the shortest window (30 days, never-claimed) yet. There was no real
+deletion volume to calibrate against. `_CEILINGS` in `scripts/retention_cleanup.py` is a deliberately
+conservative placeholder guess instead (500/200/50), with an explicit comment marking it as
+provisional and due for revisiting once the first genuinely non-zero dry-run numbers exist -- likely
+soon, since the oldest `audit_logs` row is already ~39 days old against a 90-day cutoff. Said plainly
+rather than let a placeholder quietly read as a calibrated number: this is a guess, sized
+conservatively, not yet a measurement.
+
+**Verification, both halves the user asked for**:
+- *Now*: `tests/integration/test_retention_cleanup.py`'s
+  `test_claimed_sessions_pre_login_turns_survive_past_anonymous_window` is the direct regression test
+  for the session-ownership trap -- seeded first, before any of the other tests, per instruction,
+  because it's the exact case that would have shipped silently.
+- *Later*: a new nightly pre-flight step in `nightly-eval.yml`, same reasoning and same shape as the
+  existing punishment-suppression and grounding checks -- a quiet, successful `retention-cleanup.yml`
+  run cannot distinguish "the session-ownership predicate is genuinely still correct" from "it
+  regressed to a naive per-row check and is now silently deleting logged-in users' history," any more
+  than `punishments_suppressed_mismatch` sitting at 0 could distinguish a working prompt fix from a
+  broken branch. Forces the exact seeded shape through the real functions every night, not just on
+  push.
+
+**`cleanup_audit_logs` removed from `app.tasks.worker`**, not left duplicated in two places nobody
+would remember to keep in sync -- it never ran there anyway (entry above). The other three arq jobs
+(`refresh_news`, `backfill_embeddings`, `check_for_updates`) are unrelated to retention and weren't
+touched.
+
+**Not yet done, deliberately**: the schedule trigger in `retention-cleanup.yml` only ever dry-runs
+right now, regardless of the script's own `--delete` flag -- production has not yet had its first
+real run reviewed by a human, which was the explicit instruction this whole build was done under
+("Report before the first production run"). The dry-run-against-production report, and the resulting
+seeded ceiling constants, are the next entry. User-facing wording (`AccountPage.tsx`'s three
+"documented policy, not automated" lines, `dpdp-compliance.md` §6) is drafted but deliberately not
+applied yet either -- same gating principle as the cognizability coverage-note entry above: it
+changes only after this is verified running, not when the code lands.

@@ -3,8 +3,10 @@ and writes one async audit-log row per /api/ call WITHOUT blocking the response 
 except Swagger/ReDoc/OpenAPI-schema requests (_AUDIT_EXCLUDED_PREFIXES), which carry
 no audit signal and were previously logged on every docs-page load. The client IP is
 never stored raw, only a keyed hash (see app.core.security.hash_ip), and rows older
-than settings.AUDIT_LOG_RETENTION_DAYS are deleted daily by
-app.tasks.worker.cleanup_audit_logs.
+than settings.AUDIT_LOG_RETENTION_DAYS are deleted by scripts.retention_cleanup
+(.github/workflows/retention-cleanup.yml, daily) -- moved off app.tasks.worker's
+arq cron 2026-09-21 after it turned out to have never actually run (docs/
+evaluation.md, "audit_logs never self-pruning").
 """
 import time
 import uuid

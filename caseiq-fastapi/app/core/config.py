@@ -402,8 +402,25 @@ class Settings(BaseSettings):
 
     # --- Audit log retention (M2 hygiene) ---
     # Unbounded audit-log growth was flagged as a defect (D6); rows older than
-    # this are deleted daily by app.tasks.worker.cleanup_audit_logs.
+    # this are deleted by scripts.retention_cleanup (2026-09-21 -- moved off
+    # app.tasks.worker's arq cron, which never actually ran; see docs/
+    # evaluation.md's "audit_logs never self-pruning" entry for why).
     AUDIT_LOG_RETENTION_DAYS: int = 90
+
+    # --- Data retention (docs/dpdp-compliance.md §6), enforced by
+    # scripts.retention_cleanup (2026-09-21) ---
+    # Anonymous legal_queries/query_responses (a session never claimed by a
+    # login -- see scripts/retention_cleanup.py's own docstring for exactly
+    # what "claimed" means, same definition app.api.v1.conversations'
+    # _session_owner() uses, deliberately not a per-row user_id check).
+    LEGAL_QUERY_RETENTION_DAYS_ANONYMOUS: int = 30
+    # A session a login has claimed at any point -- covers ALL of that
+    # session's rows, including any pre-login turns, same ownership grant
+    # DELETE /legal/conversations/{id} already honours.
+    LEGAL_QUERY_RETENTION_MONTHS_CLAIMED: int = 12
+    # complaints -- a person may need to re-download a filed draft well
+    # after filing; see docs/dpdp-compliance.md §6 for the reasoning.
+    COMPLAINT_RETENTION_MONTHS: int = 24
 
 
 @lru_cache
