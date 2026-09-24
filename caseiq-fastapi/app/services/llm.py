@@ -104,6 +104,25 @@ you did not cite. Phrase imprisonment as "Up to N years", "Minimum N years, may 
 text directly, so this exact phrasing is what makes that check possible. 5-7 steps. BNS replaced
 IPC from 1 July 2024."""
 
+# FIXED (docs/evaluation.md, "defamation, first turn, confidence 0%" entry): the schema below used
+# to be a literal `"structured_data": {{}}` -- the model followed that instruction correctly,
+# leaving `laws_applicable` empty on every turn `is_new_topic()` classifies as a follow-up, which
+# `apply_grounding_check` then (correctly) reads as "nothing survived verification" and suppresses
+# confidence/severity to zero -- a real citation, real retrieval, accurate prose, presented to the
+# user as an unconfident, ungrounded answer. No commit or comment anywhere ever explained the
+# terseness as a deliberate tradeoff (traced to this file's very first commit) -- an unexamined
+# default, not a considered design being overridden here. `laws_applicable` AND `punishments` both
+# now required, not just the first: C5's own citation-verification rule (see _STRUCTURED_PROMPT's
+# own RULES below) requires every `punishments[]` entry's act+section to already appear in
+# `laws_applicable` -- adding one without the other would leave `punishments` permanently
+# unverifiable on every follow-up turn, the same gap under a different field. Field shapes and the
+# imprisonment-phrasing constraint are copied verbatim from _STRUCTURED_PROMPT's own schema, not
+# reinvented -- app.legal_corpus.parsing.punishment_clause's extract_claim_terms parses claims
+# against that exact phrasing set ("Up to N years", "Minimum N years, may extend to life", "Life
+# imprisonment", "Death or imprisonment for life"); a follow-up claim phrased differently would
+# silently fall out as UNVERIFIABLE rather than actually get checked. Everything else about this
+# prompt (the terse conversational tone, omitting immediate_steps/critical_deadlines/your_rights/
+# dos_and_donts) has no downstream dependency and is left exactly as it was.
 _FOLLOWUP_PROMPT = """You are CaseIQ with full memory of this conversation. The user is asking a \
 FOLLOW-UP about the same situation. Your only source of law is BNS/BNSS/BSA/IPC/CrPC -- criminal \
 law and procedure only.
@@ -119,7 +138,17 @@ part and explicitly say you won't provide the rest -- don't drop it silently. Do
 helpline number or contact list yourself -- a verified one is attached separately.
 
 Return ONLY valid JSON:
-{{"conversational_summary": "Direct 3-6 sentence answer. Cite sections inline (e.g. 'Under BNS 303...').", "structured_data": {{}}}}"""
+{{"conversational_summary": "Direct 3-6 sentence answer. Cite sections inline (e.g. 'Under BNS 303...').", \
+"structured_data": {{"laws_applicable": [{{"act": "BNS 2023", "section": "303", "title": "Theft", \
+"why_applies": "..."}}], "punishments": [{{"act": "BNS 2023", "section": "303", "offence": "Theft", \
+"imprisonment": "Up to 3 years", "fine": "As court decides"}}]}}}}
+RULES: laws_applicable/punishments follow the SAME grounding rule as a fresh answer -- cite ONLY \
+sections from "RETRIEVED LEGAL SECTIONS" above, leave both empty if none apply, never invent a \
+section or a number. Every punishments[] entry's act+section MUST match one already in \
+laws_applicable -- never a punishment for a section you did not cite. Phrase imprisonment as \
+"Up to N years", "Minimum N years, may extend to life", "Life imprisonment", or "Death or \
+imprisonment for life" -- exact phrasing, checked against the retrieved text directly. Omit a \
+field rather than fill it from general expectation."""
 
 # ADDED 2026-09-20 (docs/evaluation.md scoping/build entry): unlike
 # _STRUCTURED_PROMPT/_FOLLOWUP_PROMPT, the excerpts here are pre-filtered by

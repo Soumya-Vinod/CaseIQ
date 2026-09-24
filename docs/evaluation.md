@@ -6923,7 +6923,7 @@ False) and not False and not touches_violence` evaluates to `True`, confirming t
 this exact case. Full non-integration (253 passed) and integration (102 passed) suites both clean, no
 unrelated breakage.
 
-## Follow-up continuity, is_new_topic relatedness: scoped, not built (2026-09-23)
+## Follow-up continuity, is_new_topic relatedness: OPEN DESIGN PROBLEM, not scoped, not scheduled (2026-09-23)
 
 Requested scope, not a build: `is_new_topic`'s "absence of crime vocabulary" proxy failed in both
 directions in one session -- it read an obvious follow-up as a new topic (the original bug), and after
@@ -6945,9 +6945,13 @@ query pairs:
 | "punishment for theft" -> "is bail available for that" | 0.1961 | GENUINE follow-up |
 | "punishment for defamation" -> "does that apply if it was said online" | 0.2003 | GENUINE follow-up |
 
-**Does not work as a direct relatedness gate.** The genuinely unrelated pivot (weather, 0.0255) does score
-lowest, as hoped -- but the GENUINE follow-ups (0.14-0.20) score LOWER than a query about a completely
-DIFFERENT legal topic (0.4834, the highest of all five pairs). A short, pronoun-heavy referential
+**Does not work as a direct relatedness gate -- an inversion, not a tuning problem.** The genuinely
+unrelated pivot (weather, 0.0255) does score lowest, as hoped -- but the GENUINE follow-ups (0.14-0.20)
+score LOWER than a query about a completely DIFFERENT legal topic (0.4834, the highest of all five
+pairs). That ordering is backwards from what a threshold needs: the cases that SHOULD read as related
+score below a case that SHOULD read as unrelated. No single cutoff value fixes an inversion -- moving the
+threshold up or down trades one wrong answer for the other, it doesn't separate the two classes, because
+the classes aren't separated in the underlying number to begin with. A short, pronoun-heavy referential
 follow-up ("what happens if I am the one doing it") carries little semantic content of its own and
 embeds close to almost nothing, including its own real antecedent -- while a full, well-formed legal
 question about an unrelated offence embeds as generically "legal-sounding" and scores moderately against
@@ -6978,3 +6982,55 @@ a threshold chosen against measured false-positive/false-negative rates on that 
 `AMBIGUOUS_TOP_HIT_MARGIN`/`DOMAIN_GATE_THRESHOLD` were. Cheap in Groq terms, real in eval-design terms --
 not scoped further here since building it wasn't asked for, only sizing whether the obvious candidate
 actually works, and it doesn't, cleanly, on its own.
+
+**The state, named plainly rather than left implicit**: `is_new_topic()` is "absence of crime
+vocabulary" -- a bag-of-words proxy for relatedness, not a measurement of it. It has now been shown
+wrong in both directions on the same day: it read a real follow-up as a new topic before the fix (the
+original bug), and after the fix it reads anything with no legal words as a follow-up whether or not
+it's actually related to what came before (the weather case). The obvious cheap fix -- cosine similarity
+-- doesn't repair this; the finding above is an inversion in the underlying signal, not a threshold that
+needs tuning. Follow-up-continuity carry-forward (the two entries above) genuinely works and is
+genuinely visible to the user when it fires -- that part shipped, was tested against the real reported
+sequence, and is live in production. But it is built on top of `is_new_topic()`'s own unrepaired weak
+proxy, which decides WHEN carry-forward is even considered in the first place. This is a known
+limitation carried forward with the feature, not a solved problem sitting underneath it -- no
+relatedness signal exists yet, none is scheduled, and the next person reaching for cosine similarity as
+the obvious candidate should find this entry before re-deriving the same negative result.
+
+## Defamation, first turn, confidence 0%: a different failure class -- nothing was inert, the composition was wrong (2026-09-24)
+
+Reported live, in the browser, testing the shipped carry-forward fix: "what is the punishment for
+defamation" -- a question the user considered the FIRST thing typed -- came back with a 0% match-strength
+banner and an ungrounded-response warning, while the sources panel correctly showed IPC 500 at 83% with
+accurate prose citing all five real sections. Diagnosed before touching anything, per instruction.
+
+Reproduced exactly: seeded one prior turn mentioning "defamation," then sent the exact reported query as a
+second turn in that session. `is_followup: True`, `confidence_score: 0.0`, `citations_grounded: False`,
+`laws_applicable: None` -- retrieval had genuinely found IPC 500 at 0.849 similarity; the model's own prose
+named it correctly; `structured_data.laws_applicable` was simply never populated.
+
+**Root cause: `_FOLLOWUP_PROMPT`'s own schema example is `"structured_data": {{}}`** -- a literal empty
+object, instructing the model to cite only inline in prose on any turn `is_new_topic()` classifies as a
+follow-up. Unchanged since this file's very first commit (`6a08d180`) -- no comment anywhere explaining the
+terseness as a deliberate tradeoff; it was scaffolded that way and never revisited against what depends on
+`laws_applicable` being populated. `apply_grounding_check` then did exactly its documented job: `had_laws`
+was `False` going in (never stripped by C5 -- never produced), so severity and confidence were correctly
+suppressed. Checked, not assumed: `is_new_topic()`'s own logic for a non-empty query (`return not (cur &
+prev)`) is byte-identical to before this session's own `is_new_topic` fix (which only touches the
+`not cur` branch, empty vocabulary -- "defamation" is non-empty); `_FOLLOWUP_PROMPT` and `grounding.py`
+are both untouched by any commit in this session. The trigger here was session reuse across a long
+testing session (browser `sessionStorage` persists per tab, and "defamation" was asked about more than
+once across today's rounds of testing), not anything shipped today.
+
+**Worth recording as its own kind of finding, not filed under the usual "something was inert or
+misconfigured" shape this file's entries mostly are**: `is_new_topic()` classified correctly relative to
+its own (crude) rule. `_FOLLOWUP_PROMPT` followed its own schema exactly. `apply_grounding_check`
+suppressed exactly what it was built to suppress, exactly when it should have. Citation verification and
+punishment verification had nothing to check and correctly did nothing. Every layer behaved exactly as
+designed, in isolation -- and the COMPOSITION of those correct, individually-defensible behaviours
+produced a materially wrong-looking answer (a real citation, real retrieval, real accurate prose, wrapped
+in a 0%-confidence warning telling the user not to trust it). Nothing here was wired-but-inert, nothing
+was a stale config value, nothing silently failed -- the shape this project's own retrospective habit is
+tuned to catch. This is a different failure class: correct parts, wrong composition. Scoped, not yet
+fixed -- see the two follow-on scoping entries (conversational UI, `_FOLLOWUP_PROMPT`/`is_new_topic`
+options) for what's being considered and why.
