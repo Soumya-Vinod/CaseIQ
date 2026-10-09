@@ -426,6 +426,35 @@ are solid multiplies the surface area of everything still being fixed.
   model card) needs updating together, in the same change, not piecemeal -- a partial update
   (ingest the act, forget the scope check) is the failure mode most worth naming in advance.
 
+- [ ] **K-EXP4.** **Golden-set before/after is a first-class deliverable of any corpus expansion, not
+  a check at the end.** Applies to K-EXP1, K-EXP2, and any other act added later (an IT Act scope
+  was referenced 2026-10-09 but isn't in this checklist yet; this binds it too once it is). Source:
+  `docs/evaluation.md`, "Header-fix re-ingest" (2026-10-09). A formatting-only rewrite of six existing
+  rows moved MRR (0.730 → 0.729) and pushed one query's answer to rank 5 of 5. Its prediction --
+  "no golden query cites these sections, so nothing will move" -- is not a valid test, because every
+  row in `section_versions` competes in every query's ranking. A new act adds every one of its
+  sections as a new competitor in all 89 rankings at once, so **Recall@5 and MRR on the existing 44
+  in-scope queries, and the out-of-scope abstain rate, can move with no defect present** -- a new
+  section can be a closer vector or lexical match than the current correct answer without anything
+  being wrong with either. Required, in order:
+  1. **Baseline**: full golden set run against the exact corpus the ingest will write to, immediately
+     before it, with the per-query `golden_set_results.json` **committed** (the 09-18/19 runs
+     committed only totals, which is why the company-law delta in that entry can't be bisected).
+  2. **After**: the same run immediately after, diffed **per query** against the baseline -- every
+     moved rank traced to the specific section that displaced it, not just the totals compared.
+  3. **Decision recorded in advance, before the ingest, for what happens if the 0.909 Recall@5 floor
+     (or 44/45 out-of-scope) trips because a new section legitimately outranks the old answer**:
+     **NOT YET DECIDED -- must be filled in before this work starts.** Options:
+     (a) the floor stays fixed and the expansion doesn't ship until each newly-missed query is traced;
+     a miss where the new section is a genuinely correct answer is resolved by adding it to that
+     query's acceptable set (checked against source, with the reason recorded), a miss where it isn't
+     is a real regression and blocks;
+     (b) re-baseline the floor to the post-ingest number after per-query review -- which is a
+     lowered floor, with its cost stated: the metric is quantised at 1/44, so a floor lowered by one
+     query stops detecting one query breaking (the reason the floor was kept at 0.909 on 2026-10-09);
+     (c) something else, stated. The fragile point already on record (bigamy, correct answer at rank 5 of 5, see
+     `docs/evaluation.md`) is the likeliest first casualty and should be checked first.
+
 ---
 
 ## Sequencing

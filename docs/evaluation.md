@@ -7337,8 +7337,18 @@ first since 08-30. The 09-14 in-place edit never produced one.
   character the tokenizer doesn't see, and 174's bracket insertions are probably past the model's input
   window (not separately checked).
 - **A fresh parse of all five acts now reproduces all 2,155 production rows byte-for-byte: 0 differing.**
-  The other 2,149 rows still read `parser_version=10`, since `--resume` doesn't rewrite unchanged rows.
-  Their text is byte-identical to v11 output, but the label is stale.
+
+**`parser_version` no longer means what it reads as -- a stale label, same class as this week's allowlist
+comments.** The six rewritten rows say `11`. The other 2,149 still say `10`, because `--resume` skips a row
+whose text is unchanged and never touches its metadata. Their text is byte-identical to v11 output, so
+"v10" on a row now means "last written under v10", not "produced by v10's logic and possibly different from
+v11". Nothing currently keys on it. Anything that does -- a staleness check ("re-ingest every row below
+the current version"), a provenance display, an audit query -- will read 2,149 correct rows as outdated
+and 6 as distinct, when all 2,155 are what v11 produces. Before anything uses this column as a signal,
+either re-stamp unchanged rows on a resume pass, or define the column as "version that last wrote this
+row" and name it accordingly. Same failure shape as `"255"`'s removal and the two "corrected at the row
+level" comments: a field that was true when written, stated in a form that reads as a stronger claim than
+it makes.
 
 **Golden set, re-run against production -- predicted "should not move", and it did:**
 `Recall@5 = 0.909 (40/44)` (unchanged), out-of-scope `44/45` (unchanged), Option E false positives `1/44`
@@ -7350,23 +7360,50 @@ which crosses IPC 494's unchanged 0.4922. **376AB's content didn't change -- onl
 dropped), and that was enough to move a vector across a neighbour 0.003 away, on a query about an
 unrelated offence.
 
-**The reasoning that missed it, named**: "none of the 89 queries cite these sections, so nothing should
-move." Wrong in exactly the way the 2026-09-19 offence_attributes re-run was right. That table never
-participates in ranking, so nothing COULD move there. `section_versions` embeddings are the ranking, and a
-changed row competes against every query, not only the ones that cite it. Checking which queries a
-change can touch means checking which top-k lists the changed rows sit near, not which golden answers
-name them.
+**The prediction was wrong, and it was ours.** "None of the 89 golden queries cite these sections, so the
+numbers won't move" was first written in this session's diagnosis, as the argument that allowlisting
+wouldn't distort the golden set. It was then adopted into the instruction for this re-ingest ("nothing
+should move -- confirm it rather than assume it"). Confirming it is the only reason it was caught. **It is
+not a valid test for retrieval impact.** Whether a golden query *cites* a section says nothing about
+whether that section *competes* in the query's ranking. Every row in `section_versions` competes in every
+ranking, so a changed row can displace the answer to any query, cited or not. IPC 376AB's content never
+changed: two characters of formatting raised its similarity to an unrelated query by 0.0097 (0.4895 →
+0.4992), enough to overtake IPC 494, which had led it by 0.0027. The 2026-09-19 offence_attributes re-run's identical prediction was
+right for a structural reason (that table never participates in ranking), not because "no golden query
+cites it" was ever the test.
 
-**Now fragile, worth knowing before tonight's nightly**: bigamy's correct answer sits at exactly rank 5,
-the edge of Recall@5. Its other acceptable section, BNS 82, is 6th (0.4865). One more slip -- any future
-change that nudges a sixth section above IPC 494 -- drops Recall to 39/44 = 0.886, below the nightly's
-0.909 floor, and turns the job red for a reason that looks like a retrieval regression, not a formatting
-change. That isn't a reason to change anything now, but it is the likeliest next red.
+**The general rule, stated so it can be applied rather than remembered: any write to `section_versions`
+-- new rows, changed text, re-embedding, formatting-only -- can move any query's ranking, and the only way
+to know whether it did is to measure the full golden set before and after.** There is no pre-write
+reasoning that substitutes for that, including "these sections aren't in any expected answer".
 
-**One more movement, not attributable to this write**: a held-out out-of-scope company-law query's
-`top_similarity` reads 0.3057 now against 0.2817 in the committed results file. Its top hit is BNSS 517,
-which this re-ingest didn't touch, and CrPC 185 (the only re-ingested row in its top 10) scores 0.2838
-old / 0.2916 new, neither of which is 0.2817. The committed file dates from 2026-09-14 (`991e5b2c`).
-The 09-18/09-19 production re-runs recorded only aggregates, so the change happened somewhere between
-09-14 and today: 09-15's `retrieval.py` change (`5a109208`) is in that window, but that wasn't checked.
-It abstains either way (`caught_by: ambiguous_top_hit`).
+**Named fragile point -- start here if the nightly goes red on Recall@5**: "What is the punishment for
+bigamy?" now has its correct answer at **rank 5 of 5**: IPC 494, 0.4922, ahead of 6th-placed BNS 82
+(0.4865, also acceptable) by 0.0057. One slip -- any change that lifts a sixth section above IPC 494 --
+makes it a miss: Recall@5 drops to 39/44 = **0.886**, below the 0.909 floor, and the nightly goes red in a
+way that reads as a retrieval regression when it may be a formatting or corpus change elsewhere. **The
+floor stays at 0.909, deliberately.** The metric is quantised at 1/44 (0.0227 per query), so there is no
+tolerance smaller than a whole query to add, and dropping the floor to 0.886 would give up the one thing
+it detects: a single in-scope query breaking. The cost of that choice is that a red nightly needs this
+diagnosis before it's treated as a regression: check bigamy's rank first, then whether the night's
+corpus differs from the last green one.
+
+**OPEN, unexplained -- recorded because it's unexplained, not omitted because it's harmless**: the
+held-out out-of-scope query "Two directors on my company's board are in a deadlock..." (domain
+`company`) now records `top_similarity` 0.3057, against 0.2817 in the results file committed on
+2026-09-14 (`991e5b2c`). It abstains either way (`caught_by: ambiguous_top_hit`). What was established:
+- **No similarity changed.** `top_similarity` is the similarity of the first result in FUSED (RRF) order
+  that has one, not the maximum. 0.3057 is BNSS 517 and 0.2817 is CrPC 369, both computed against
+  today's embeddings, and neither row has been written since 08-30. So on 09-14 the fused order put
+  CrPC 369 ahead of BNSS 517, and today it doesn't. **What moved is the fused rank order.**
+- **Ruled out**: a change to either section's text or embedding (both unchanged since 08-30, embedder
+  identity unchanged); CrPC 185 as the source of the 0.2817 (its old/new similarities are 0.2838/0.2916);
+  any of the six pre-write rows scoring 0.2817 (none does).
+- **Not ruled out**: today's write, through rank fusion -- a re-ingested row (CrPC 185 is now 9th in this
+  query's top 10) shifting position in the lexical or vector list changes other rows' fused ranks without
+  changing any similarity. Also 09-15's `app/services/retrieval.py` change (`5a109208`, the only change to
+  that file since 09-14), and anything else between 09-14 and 10-09.
+- **Why it can't be pinned down now**: the 09-18 and 09-19 production re-runs regenerated
+  `golden_set_results.json` but their per-query output was never committed. This file recorded only their
+  totals, so there is no per-query snapshot between 09-14 and today to bisect against. The fix for next
+  time is cheap: commit the regenerated results file with every golden-set run that's recorded here.
