@@ -71,6 +71,25 @@ What someone judges before reading any code. Fix these and the project stops *lo
   twice. Fix: make the strip loop/repeat (`+` on the whole prefix unit, or a `while` loop) rather
   than firing once, mirroring `parse_crpc_schedule.py`'s own generalised `(?:\d+\[\s*)*` fix for the
   same underlying pattern.
+- [ ] **B10.** 🚩 **`scripts/ci_check_section_completeness.py` asserts coverage it doesn't have.** Found
+  2026-10-09, on the check's first-ever CI run (nightly-eval workflow_dispatch 37948295242, `597c37da`):
+  it printed `CORPUS COMPLETENESS: clean (0 allowlisted exception(s), 0 new findings, 0 act(s)
+  uncheckable).` while not checking BNSS or BSA at all. The check only iterates its own `PDFS` map,
+  which lists BNS, IPC and CrPC. BNSS and BSA are left out of that map rather than run and counted as
+  skipped, so they never reach the `unchecked_acts` list the "uncheckable" count is built from (that
+  list only fills when an act IN the map has no extractable ToC), and rows from those two acts are
+  skipped silently in the loop (`if toc is None: continue`). The module's own docstring says BNSS/BSA
+  are structurally unavailable to it and that it "prints that explicitly rather than silently passing
+  them as checked". The code does the opposite of that sentence. **Why this is a defect, not a
+  cosmetic label**: the summary line claims full coverage over exactly the two acts whose merged
+  content was already known to be undetectable (`docs/evaluation.md`, "BNSS/BSA missing-section
+  detection: already built; merged-content detection is a permanent limit", 2026-09-20). **A clean
+  first run is exactly what someone would later cite as evidence the corpus is sound**, and this one
+  covered 3 of 5 acts while saying it covered all of them. Same class as this week's other stale
+  labels (`"255"`, the "corrected at the row level" comments, `parser_version`): a field true of
+  something narrower than what it reads as. Fix (not done): include BNSS/BSA in the act list and
+  count them under "uncheckable" with the reason, so the line reads e.g. `2 act(s) uncheckable (BNSS,
+  BSA: no ToC)`; and make the docstring's promise a test, not a sentence.
 
 ---
 
@@ -498,9 +517,33 @@ conversation is the same shape one step earlier.
   - enough of the top-k list for a later run to be diffed by section: every returned result (TOP_K =
     10) as rank, act, section, similarity (similarity can be null for lexical-only RRF hits, and must
     be stored as null, not dropped);
-  - run identity, so a diff knows what it's comparing: `schema_version`, git commit, the
-    `corpus_versions` id and checksum the run read, the embedder `model_id`, and a timestamp. "Did the
-    corpus differ between these two runs" is the second question K-EXP4's red-nightly triage asks.
+  - run identity, so a diff knows what it's comparing: `schema_version`, git commit, timestamp, the
+    embedder `model_id`, and a **content-only corpus hash** -- NOT `corpus_versions.checksum`
+    (corrected 2026-10-09; this bullet originally named that checksum). Definition: for every
+    current row (`valid_to IS NULL`), the line `act_code:section_number:version_no:
+    sha256(marginal_note):sha256(section_text)`, the lines sorted, sha256 over the newline-joined
+    result. **No database-generated IDs.** Production on 2026-10-09 after the header-fix re-ingest:
+    `5745346906fa7a3932d0aca3ef1a1b7e9b78f5e544c05f24fddcb5d0e3b5c86b` (2,155 rows).
+    `marginal_note` is included because it's half of every row's embedding input
+    (`f"{marginal_note}. {section_text[:2000]}"`) and the old checksum ignores it.
+    **Why `corpus_versions.checksum` can't be used**: `compute_checksum()` (`app/legal_corpus/
+    corpus_version.py`) hashes `act_id:section_number:version_no:sha256(section_text)`, and `act_id`
+    is a UUID generated when each database first inserts the act. Two databases with byte-identical
+    content therefore can never produce the same checksum, and every nightly-eval run starts from a
+    fresh database. As a cross-run field it would report "corpus changed" on every single comparison.
+    Shown, not argued, on 2026-10-09: production `30d2617a44c0...` vs the nightly's `e4d39480ba98...`
+    on content later proven identical, by recomputing production's checksum with the nightly's act
+    IDs (taken from its SQL echo log) and getting `e4d39480ba98...` exactly. That checksum is still
+    valid for what it does, detecting change within one database over time. It just isn't a content
+    identity.
+  - **the environment that turns content into rankings**, added 2026-10-09 because content identity
+    turned out not to be enough: fastembed, onnxruntime, tokenizers and numpy versions, and the
+    Postgres server and pgvector versions. Only fastembed is pinned in `requirements.txt`, and on
+    2026-10-09 CI resolved onnxruntime 1.31.0 / tokenizers 0.23.3 / numpy 2.5.3 on pg17, where the
+    production-verifying local stack was 1.30.0 / 0.23.1 / 1.26.4 against Neon pg18.6. On content
+    identical by the hash above, the nightly scored MRR 0.740 and the production run 0.729 (Recall@5,
+    out-of-scope and false positives identical). That gap is open (see the MRR note below the
+    mandatory step).
   **What it would take** (estimated, not started): (1) in `eval_golden_set.py`, keep the full `sections`
   list each query already gets back from `semantic_search` and write it out per query, plus the
   explicit `top_similarity_section` and `outranked_by` fields and the run-identity block, under
@@ -509,13 +552,28 @@ conversation is the same shape one step earlier.
   v2 files slot-by-slot by section and **refuses** to compare a v1 file against a v2 one, so the
   discontinuity below is enforced, not remembered. (3) **Mandatory, not a suggestion -- the gate on
   the rewrite itself**: run the v2 emitter once against production (read-only), against the same corpus
-  as the 2026-10-09 run (`corpus_versions` `ingest-2026-10-09T13:55:53Z`, checksum `30d2617a44c0...`),
-  and require the totals to match it exactly: Recall@5 0.909 (40/44), MRR 0.729, out-of-scope 44/45,
+  as the 2026-10-09 run (content hash `5745346906fa...`; production's `corpus_versions` row
+  `ingest-2026-10-09T13:55:53Z`), and require the totals to match it exactly: Recall@5 0.909 (40/44), MRR 0.729, out-of-scope 44/45,
   Option E false positives 1/44, and every in-scope query's rank unchanged. If anything differs on an
   unchanged corpus, the emitter changed behaviour, not just format, and that has to be found and fixed
   before the new format becomes the baseline. Only a run that passes this gets committed as the first
   v2 snapshot. If the corpus has changed by then, re-run the v1 emitter on that corpus first and match
-  against that instead, never against a remembered number. Roughly half a day including verification;
+  against that instead, never against a remembered number. **The match has to be same-environment**
+  (same database, same stack), v1 against v2: on 2026-10-09 identical content gave MRR 0.729 on
+  production and 0.740 in CI, so a cross-environment comparison would fail this gate for reasons
+  that have nothing to do with the emitter. **Open, and it blocks a clean definition of this gate:**
+  the 0.011 gap is unexplained. Checked and ruled out, read-only against production: (a) the
+  embedding pipeline changing since 09-06 -- all 2,155 stored vectors equal a local re-embed of their
+  exact stored input, min cosine 1.00000000, 0 rows below 1 − 1e-6; (b) different inputs -- every
+  production `marginal_note` matches a local fresh parse, 0 of 2,155 differ, and CI-vs-production text
+  identity is proven by the checksum recomputation above. CI's own marginal notes weren't read (its
+  database is gone); they're inferred identical because they come from the same parser over the same
+  PDFs that produced byte-identical text; (c) tie order inside the lexical candidate list -- 27 of 44 in-scope
+  queries have tied `ts_rank_cd` groups, but reversing every tied group moves no correct answer's
+  rank (MRR delta 0.0000). There's no approximate vector index (exact scan), so vector order is
+  deterministic for identical vectors. Not yet tested: CI's floating stack versions producing
+  different vectors, pg17-vs-pg18 full-text ranking, and ties straddling the candidate-pool `LIMIT`.
+  Roughly half a day including verification;
   output grows from 24.7 KB today to an estimated ~100 KB per run (89 queries × 10 results at ~80
   bytes each). Uploading the nightly's results file is NOT part of this item -- split out as K-EXP6,
   because it needs none of this.
