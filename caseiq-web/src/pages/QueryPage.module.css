@@ -9,6 +9,34 @@
   margin-bottom: 2.1rem;
 }
 
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.newConversation {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.newConversation:hover {
+  border-color: var(--gold-border);
+  color: var(--text);
+}
+
 .eyebrow {
   font-family: var(--font-ui);
   font-size: 0.72rem;
@@ -141,8 +169,74 @@
   cursor: pointer;
 }
 
-.resultsGrid {
+/* Each turn keeps its own full two-column layout (REVERTED per instruction
+   -- collapsing sources into a single stacked column lost the point of the
+   product); what varies per turn is whether that body renders at all. The
+   thread itself just stacks turns vertically. */
+.thread {
   margin-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.25rem;
+}
+
+.turn {
+  min-width: 0;
+}
+
+.turnQuery {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* An older, collapsed turn -- question only, click to fold the full
+   two-column answer back open for review. Newest turn never uses this;
+   it always renders the plain, non-interactive .turnQuery above. */
+.turnQueryButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: var(--tap-min);
+  background: none;
+  border: none;
+  padding: 0 0 0.7rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;
+}
+
+.turnQueryButton:hover .turnQueryText {
+  color: var(--text);
+}
+
+.turnQueryText {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.turnQueryToggleIcon {
+  flex-shrink: 0;
+  color: var(--gold);
+  font-size: 0.7rem;
+}
+
+.turnMeta {
+  margin-top: 1.2rem;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.resultsGrid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 2rem;
@@ -196,12 +290,4 @@
   margin-top: 1.5rem;
   color: var(--text-dim);
   font-size: 0.88rem;
-}
-
-.pageFooter {
-  margin-top: 2.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.68rem;
-  color: var(--text-dim);
 }
