@@ -7078,3 +7078,230 @@ confirmed exercised, not just deployed.
 Full backend suite run before deploy: 253 non-integration + 102 integration, all passing, 0 failures --
 no existing test referenced the old prompt's literal content, so nothing needed updating alongside this
 change.
+
+## Three row-level fixes made on the belief the parser was fixed -- invisible for 26 nights because the only re-parse from source was the job they broke (2026-10-09)
+
+**The finding is not "BNS 255 broke the nightly."** It's that on 2026-09-14 three separate row-level
+fixes (BNS 254/255, IPC 174/174A, IPC 376A/376AB -- "Corpus completeness: a parser boundary failure"
+above) were applied directly to production rows, and then an allowlist entry and two comments were
+written as if the parsers had been fixed. They hadn't been. `"255"` was removed from
+`KNOWN_TRUNCATION_EXCEPTIONS` ("fixed at the row level... not allowlisted around anymore"), and
+`ci_check_section_completeness.py`'s `KNOWN_COMPLETENESS_EXCEPTIONS` was left empty with a comment saying all
+three pairs "were corrected at the row level in this same change." Both statements were true of the
+database and false of the code that produces it. The 09-14 entry itself says the fix happened "at the
+source rather than allowlisted around." "Source" there meant the stored row, not the parser. The s.373
+entry (2026-09-18) gets closer: "itself only ever patched at the data level, never the regex level." It
+says this about 376AB/174A in passing, as context for a different bug, and nobody connected it to the
+allowlist entry.
+
+**Why nothing noticed for 26 nights**: production's corpus has exactly one `corpus_versions` row
+(`ingest-2026-08-30T14:12:41Z`, 2,155 sections) -- it has never been re-ingested, so nothing on the
+production side ever re-parses from source. The six corrected rows still carry `recorded_at` 2026-08-30
+and `version_no` 1, so the correction was an in-place UPDATE outside the ingest/versioning path. The
+only thing in the project that re-parses all five PDFs from scratch is `nightly-eval.yml`'s cache-miss
+ingest. The same commit (`991e5b2c`) that removed `"255"` also changed `scripts/ingest_sections.py`,
+which is part of the corpus cache key. That forced a cache miss, the fresh ingest ran the unfixed
+GazetteParser, BNS 255 came out at 119 chars again, and the gate correctly blocked BNS. The step exited
+1, so the cache was never saved, so every following night missed the cache and failed the same way:
+every scheduled run from 2026-09-14 through 2026-10-09 (last green: 2026-09-13). The completeness check
+added in that same commit has never once run in CI. It sits after the step that failed.
+
+**The divergence, measured rather than inferred**: a fresh parse of all five acts with the then-current
+parsers, compared against every current production row (read-only), differed in **exactly 6 of 2,155** --
+the three pairs, each at its exact pre-fix length (BNS 254/255 1,481/119; IPC 174/174A 1,932/85; IPC
+376A/376AB 1,156/62). Every other row was byte-identical. IPC passed the ingest gate anyway, because all
+13 of its truncation flags are allowlisted and `_is_title_echo()` misses these two on the number-prefix
+technicality (09-14 entry). That's why the logs read "the other four ingested fine." IPC was queued to
+fail next: the completeness check would have reported 4 findings the night BNS got through. Fixing BNS
+alone would only have moved the red one step down the job. **Checked for the same shape elsewhere and
+not found**: `offence_attributes` (both First Schedules) matched production row-for-row at the same
+parser versions (`crpc-schedule-v9` 479 rows, `bnss-schedule-v1` 398 rows). Every CrPC First Schedule
+correction lives inside the pipeline (`apply_*`), so a fresh ingest reproduces it.
+
+**The fixes, each measured across every line it could touch before being written:**
+
+- **BNS (`GazetteParser` v11)**: `_HEADER_RE`'s lookahead rejected `255.—Public servant...` (em-dash
+  straight after the period). Across BNS/BNSS/BSA there are 101 line-start `N.—` occurrences. 100 are
+  `Explanation 1.—`/`Exception 2.—` lines that reach the number only through the marginal-note prefix
+  group. Allowing the em-dash unconditionally split ~40 real sections across all three acts (BSA 57:
+  2,259 → 88 chars). The shipped version uses a regex conditional and accepts the em-dash only when the
+  prefix group did not match. Measured effect: exactly BNS 254 and 255 change. BNSS and BSA come out
+  byte-identical, with no new truncation flags, no missing sections and no unexpected ones.
+- **IPC (`LegacyActParser` v11)**: after bracket stripping, the two headers read `376AB.Punishment` (no
+  space after the period) and `174A .Non-appearance` (space before it). Neither matches `\.\s+`. One
+  added alternative, `\s?\.(?=[A-Z])`. Measured across both acts this parser handles: IPC gains 7 new
+  header matches. 5 are ToC lines (171D, 171G, 376DA, 376DB, 489A) that dedupe-keep-longest discards,
+  with no effect; 2 are the real 174A/376AB bodies. Exactly IPC 174/174A/376A/376AB change, and the
+  other 559 are byte-identical. **One side effect, in CrPC, checked rather than inferred from 552 → 499**:
+  s.185 loses one contiguous span, its final 53 characters, exactly `' 1.Ins. by Act 45 of 1978, s. 15
+  (w.e.f. 18.12.1978).'` -- a page-bottom amendment footnote (followed in the raw text by page number
+  `95`) that was glued onto the end of the section. The 499 characters before it are byte-identical,
+  ending `...or any other law for the time being in force.` Nothing operative removed. That footnote has
+  been in production's stored s.185 since 08-30; it now matches as a header candidate, and the existing
+  footnote check excises it.
+
+**Byte-identity, decided rather than footnoted**: with both fixes, a fresh parse still differs from
+production in 6 rows, but in the other direction now: BNS 255, the four IPC rows (BNS 254 now matches
+exactly), and CrPC 185. Closed by re-ingesting those 6 rows so production matches the parser, not by
+bending the parser to match the hand edits, because in every case the hand edit is the odd one out:
+- BNS 255: parser 726 chars vs production 723. Two differences: the source's own `255.—Public`
+  (hand-edited to `255. Public`), and a stray page number, `...intending thereby to save, or 80 knowing
+  it...`, which the hand edit removed. Stripping that "80" in the parser doesn't reuse any existing
+  logic: `section_boundary.py`'s `_BARE_PAGE_NUMBER_RE` only trims page numbers at the END of a section.
+  And the same artifact is in 62 other stored rows (next entry), so stripping it is a corpus-wide change,
+  not a one-row one.
+- IPC 174/174A/376A/376AB: formatting only. The parser keeps the source's mid-line amendment markers
+  (`2[`...`]`) and its spacing (`174A .Non-`). Production keeps those markers in 147 (`N[`) and 207 (`]`)
+  other IPC rows. The four hand-edited rows are the only ones stripped of them.
+- CrPC 185: the footnote removal above.
+
+**Regression coverage**: `tests/test_section_header_merges.py`, 18 tests. The real parsers run against
+the real tracked PDFs, deliberately with no `skipif` (the PDFs are tracked; a missing source must fail,
+not skip). The tests cover both regexes in isolation, including the 100-of-101 `Explanation N.—`
+rejection, each pair's real content, CrPC 185's footnote, and the BNS/IPC gates passing with the
+documented allowlist. Confirmed failing against the HEAD parsers first, without touching git state
+(HEAD's two parser modules loaded from `git show` and injected through a pytest plugin). All five
+real-PDF pair tests and the BNS gate test fail. Then all 18 pass. Full non-integration suite: 271 passed.
+Both allowlist comments are rewritten to say what happened, and that a database edit never justifies
+removing or withholding an entry -- only a fresh parse that passes does.
+
+**The cache key gap that would have bitten next**: `nightly-eval.yml`'s corpus key never included
+`scripts/_crpc_first_schedule_transcription.py`, `_crpc_row_mismatch_transcription.py` or
+`_crpc_cognizable_bailable_verification.py`, which hold the hand-transcribed data `parse_crpc_schedule.py`
+applies. That was harmless while every night missed the cache. Once the nightly is green, a
+transcription-only change would restore a stale cached `offence_attributes` table without anything
+noticing -- the exact failure the content-addressed key exists to prevent. Now globbed
+(`scripts/_crpc_*.py`), so a new module of that shape can't be left out the same way.
+
+**What the 26 red nights did and didn't cost, stated narrowly**: the golden set last ran on 2026-09-19,
+by hand against production after the CrPC re-ingestion (Recall@5 0.909, out-of-scope 44/45, false
+positives 1/44). Nothing it imports has changed since: `app/services/retrieval.py` last changed
+2026-09-15, and post-09-19 `config.py` changes are retention windows, Groq keys and `DEMO_TRIM_MODE`
+only. So the gap is the missing nightly signal, not a likely unmeasured regression. **The canary, said
+precisely** (this was first overstated as "never ran"): `test_retention_cleanup.py`,
+`test_punishment_verification.py` and `test_grounding.py` all ran and passed inside backend-ci's pytest
+step on every push, `90ef8fd1` included. What never ran is their NIGHTLY re-execution against an
+unchanged codebase, and the retention step's loud-on-skip parser -- the one piece built specifically
+because a skipped pytest run exits 0. backend-ci's plain `pytest -q` has no such check.
+
+**Pending, in this order**: push; targeted production re-ingest of the 6 rows (`ingest_sections --act
+<X> --resume --yes`, which updates in place and re-embeds only rows whose text changed), backup first;
+verify the 6 rows against the live database directly, confirm a fresh parse reproduces all 2,155, and
+re-run the golden set. None of the 89 golden queries cite these sections, so the numbers should not move.
+
+## Page numbers inside sentences in stored corpus text: a fourth defect class invisible to every existing check (2026-10-09)
+
+BNS 182's stored text reads `...or so nearly resembling as to be calculated to 64 deceive, any
+currency-note or bank-note...`. That "64"
+is a printed page number sitting on its own line in the middle of a sentence, which the parser joins into
+the section body. It's in the embedding input and in what the model is shown as grounding. Nothing
+detects it. It isn't length-suspicious, it doesn't end mid-sentence, it isn't a title echo, it isn't a
+merged neighbour, and it passes the ingest gate, the completeness check and every downstream check.
+Earlier classes of the same kind in this file: complete-and-wrong First Schedule rows (HEADLINE RESULT
+3); the over-long half of a merged section, carrying another offence's text under a correct citation
+(2026-09-14); and "complete" rows with no usable cognizable/bailable value ("395/395 measured the wrong
+field"). This is the fourth.
+
+**Measured, per act, against stored text, not just raw lines**: a bare 1-4 digit line between a
+lowercase/comma/semicolon end and a lowercase start, then confirmed present (as `prev NUM next`) inside
+an accepted section's stored text:
+
+| Act | Raw mid-sentence page-number lines | Confirmed in stored section text | Distinct sections |
+|---|---|---|---|
+| BNS | 26 | 26 | 26 |
+| BNSS | 0 | 0 | 0 |
+| BSA | 0 | 0 | 0 |
+| IPC | 5 | 5 | 5 |
+| CrPC | 35 | 32 | 32 |
+| **Total** | **66** | **63** | **63** |
+
+BNS 255 is one of BNS's 26 (`...save, or 80 knowing it...`). Its 09-14 hand edit removed its "80", but
+nothing removed the other 62. The 3 CrPC lines not found in stored text fall outside every accepted
+section. **The count is a lower bound for the class, not its size**: the shape only catches a page break
+inside a sentence. A page number landing between two sentences (`...fine. 64 Whoever...`) has a
+different signature and isn't counted.
+
+**Why existing logic doesn't cover it**: `section_boundary.py`'s `_BARE_PAGE_NUMBER_RE` /
+`trim_trailing_furniture` recognise a bare page-number line only while scanning back from the END of a
+section, to trim trailing furniture. Nothing strips one in the middle of the body.
+
+**Left explicitly unfixed**. Scope: ~63 rows (BNS 26, IPC 5, CrPC 32), each a one-token deletion in
+stored text plus a re-embed, through a parser change to mid-body furniture handling. That change needs
+the same measure-everything-it-touches pass as the header fixes above, because a bare-number line inside
+a body is not always furniture.
+
+## backend-ci red on every push since 2026-09-20 -- on false positives, the ignored-red-build outcome this project reasoned about for ruff, happening to a different job (2026-10-09)
+
+When ruff was added to `backend-ci.yml`, it was made report-only on stated grounds (that step's own
+comment): "a red build for a pre-existing backlog is how a build gets ignored." It happened anyway, to a
+different step. `ci_check_crpc_schedule_vocabulary` failed every backend-ci run from `f0d99e96`
+(2026-09-20) through `90ef8fd1` (2026-09-24), 6 consecutive pushes, while pytest in the same job passed
+each time. The 2026-09-24 `_FOLLOWUP_PROMPT` entry above reports "253 non-integration + 102 integration,
+all passing." That was true of the suite and said nothing about the build, which was red. The Lint step
+runs after the failing step, so it was skipped on every one of those runs too: the ruff report it was
+made report-only to protect hasn't run since 09-20.
+
+**Every flag was a false positive.** The checker flagged s.120B, 175, 225A and 511 because it ran only
+`apply_known_corrections` + `apply_known_row_replacements` -- 2 of the 5 correction passes the real
+ingest applies -- and checked 130 rows instead of the 479 that ship. All four are correct in the real
+pipeline output, which matches production row-for-row. This is the second time this checker drifted from
+the pipeline by copying its step list. The first, on 2026-09-18, missing `apply_known_row_replacements`,
+is recorded in the length-filter entry above.
+
+**Fixed structurally, not by copying the list a third time**: `parse_crpc_schedule.pipeline_rows()` is
+now the single source of the correction sequence, with its ordering rationale. `ingest_offence_attributes.py`,
+the checker and the parser's own `__main__` all call it; verified to produce production's exact 479 rows.
+Running on the real output, the checker now flags 4 rows, all known (s.153B, s.352's deliberately-unpatched
+own row, s.376A). 14 of its 17 `_KNOWN_DEFERRED_SECTIONS` entries no longer flagged at all -- the
+transcription passes had fixed them -- and left in, they'd only suppress a future regression in exactly
+those sections. Pruned to 3, and the checker now prints any entry that stops flagging.
+
+**The general form**: a red build that stays red on a known-wrong reason can't carry a real failure. This
+one happened to mask nothing, but the nightly was red for that whole stretch too, so both backend CI jobs
+were red at once. Only frontend-ci was green.
+
+## Retention verified by hand against production, fifteen days into live delete authority (2026-10-09)
+
+Retention's schedule has run `--delete --yes` since 2026-09-24. The nightly canary that exists to prove
+the session-ownership predicate still works was wired into `nightly-eval.yml` after the step that has
+failed every night since 09-14, so it has never run on its nightly schedule (it did run in backend-ci's
+pytest on every push -- see the corpus entry above). Checked by hand, read-only (`READ ONLY` transactions
+throughout; the predicate stress test rolled back), before any other work:
+
+- **Eligible right now, by the script's own `dry_run()`**: 0/0/0. `audit_logs` 1,296 rows, oldest 08-13,
+  under 90 days; `legal_queries` 59, oldest 09-12; `complaints` 17, oldest 09-01. `query_responses`
+  orphans: 0 (the cascade works).
+- **Runs**: all 16 scheduled runs (09-24 → 10-09) succeeded at the real-deletion step. They actually
+  start 09:00-11:00 UTC, not the scheduled 04:00 (GitHub's schedule delay). **Per-run deleted counts
+  couldn't be read**: the only "counter" is structlog lines in the Actions log (nothing persists in the
+  database), and log download needs authentication this check didn't have.
+- **What it deleted, reconstructed instead**: the 2026-09-12 plaintext restore-drill dump
+  (`caseiq-backups/backup.dump`, which predates every retention run) held 69 `legal_queries` rows, created
+  09-06 05:00 → 09-08 16:29, all anonymous (66 never-claimed sessions, 3 empty-`session_id`). All 69 are
+  gone now; each crossed its 30-day window between 10-06 and 10-08. All 5 users in that dump still exist.
+  No claimed-session row from it is missing -- though it contained none, so it can't test the predicate.
+  Those runs (10-06 → 10-09) are the first with a non-zero count, so they should be the first to log
+  `retention_cleanup_nonzero_deletion`. That line is `_CEILINGS`' own documented revisit trigger, and the
+  first non-zero deletion is the gate for the `AccountPage.tsx` / `dpdp-compliance.md` §6 wording changes.
+  Both are now due, pending a read of those logs.
+- **The predicate, on real data**: the script's own `_legal_query_delete_predicate`, run against
+  production with `LEGAL_QUERY_RETENTION_DAYS_ANONYMOUS` forced to 0. All 49 anonymous rows (37
+  never-claimed, 12 empty-`session_id`) become eligible. The one claimed session's pre-login row and its
+  9 logged-in rows do not. That's correct.
+- **The 08-30 → 09-05 gap, accounted for**: `audit_logs` records ~240 successful `POST /legal/query`
+  requests in that span, and none of their rows exist, not even in the 09-12 dump. They were removed
+  deliberately on 2026-09-06: "The 217 pre-existing rows in `legal_queries`/`query_responses`... were
+  truncated immediately before this code shipped" ("Storage vs. live-response split for PII" entry),
+  when stored text switched to redacted. The audit count is consistent with 217 but not 1:1 (an audit
+  row is a request, not a stored row). The only API-level deletions in the whole audit history are 2
+  account deletions (`DELETE /auth/me` 204) and 1 conversation deletion, all on 09-06 during the Phase C
+  verification. 09-12's 190 `legal_query` audit rows against 3 surviving query rows is the integration
+  tests writing `audit_logs` to production that day ("Self-contained integration tests were writing to
+  production Neon"), not missing queries. Nothing in the gap is unexplained.
+
+**The date that matters**: production's only claimed-session pre-login row was created 2026-09-17
+06:49:22 UTC and crosses the 30-day anonymous window at **2026-10-17 06:49 UTC**. At recent start times
+the 10-17 run will be the first real run to evaluate the exact case the predicate exists for, with 10-18
+at the latest. Until then, production has never exercised it. **The nightly has to be green before
+10-17**, so the canary's nightly run and its loud-on-skip check are live the first time the predicate
+faces that case for real.
