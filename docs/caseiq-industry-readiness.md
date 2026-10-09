@@ -451,6 +451,8 @@ conversation is the same shape one step earlier.
   1. **Baseline**: full golden set run against the exact corpus the ingest will write to, immediately
      before it, with the per-query `golden_set_results.json` **committed** (the 09-18/19 runs
      committed only totals, which is why the company-law delta in that entry can't be bisected).
+     **Blocked by K-EXP5**: in the current results format this baseline can't be diffed by section,
+     so the gate would fail the first time it's used.
   2. **After**: the same run immediately after, diffed **per query** against the baseline -- every
      moved rank traced to the specific section that displaced it, not just the totals compared.
   3. **Decided 2026-10-09: what happens if the 0.909 Recall@5 floor (or 44/45 out-of-scope) trips
@@ -475,6 +477,50 @@ conversation is the same shape one step earlier.
        query breaking (the reason the floor was kept at 0.909 on 2026-10-09).
      The fragile point already on record (bigamy, correct answer at rank 5 of 5, see
      `docs/evaluation.md`) is the likeliest first casualty and should be checked first.
+
+- [ ] **K-EXP5.** **BLOCKS K-EXP4: the golden-set results file must record sections, not just scores,
+  before any expansion baseline is taken.** Recorded 2026-10-09; **not to be started until that
+  night's nightly-eval run has gone out** (the first fresh-ingest run after the header fixes -- the
+  emitter it runs must be the one already measured, not a changed one).
+  **Why it blocks**: K-EXP4 requires a per-query baseline immediately before any corpus ingest, and
+  `docs/evaluation.md`'s section-not-score rule (2026-10-09) says a cross-run diff compares which
+  section occupies each slot and compares a score only for the same section in both runs. Today's
+  `scripts/eval_golden_set.py` writes, per out-of-scope query, `top_similarity` with no section, and per
+  in-scope query only the correct answer's `rank` -- not what outranks it. A baseline in that format
+  can't be diffed under the rule, so K-EXP4's gate would fail the first time it's used. This has to land
+  before the IT Act baseline (or any other expansion's), not alongside it.
+  **What the emitter needs to record, per query**:
+  - the section behind `top_similarity` (act + section), not just the value -- on 2026-10-09 the
+    company-law query's 0.2817 → 0.3057 "drift" was two different rows (CrPC 369, BNSS 517) in the
+    same slot, invisible in the file;
+  - for in-scope queries, the sections ranked above the correct answer, not just its rank -- the
+    bigamy rank 4 → 5 slip was traced to IPC 376AB only by re-querying by hand;
+  - enough of the top-k list for a later run to be diffed by section: every returned result (TOP_K =
+    10) as rank, act, section, similarity (similarity can be null for lexical-only RRF hits, and must
+    be stored as null, not dropped);
+  - run identity, so a diff knows what it's comparing: `schema_version`, git commit, the
+    `corpus_versions` id and checksum the run read, the embedder `model_id`, and a timestamp. "Did the
+    corpus differ between these two runs" is the second question K-EXP4's red-nightly triage asks.
+  **What it would take** (estimated, not started): (1) in `eval_golden_set.py`, keep the full `sections`
+  list each query already gets back from `semantic_search` and write it out per query, plus the
+  explicit `top_similarity_section` and `outranked_by` fields and the run-identity block, under
+  `schema_version: 2`. The stdout summary lines stay exactly as they are, because nightly-eval's
+  threshold check parses stdout, not the JSON. (2) A small `scripts/diff_golden_runs.py` that diffs two
+  v2 files slot-by-slot by section and **refuses** to compare a v1 file against a v2 one, so the
+  discontinuity below is enforced, not remembered. (3) `nightly-eval.yml` uploads the results file as
+  a workflow artifact -- today every nightly run writes it on the runner and discards it, so no nightly
+  run has ever been recorded per query. (4) Run once against production (read-only), confirm the
+  totals match the 2026-10-09 run (Recall@5 0.909, MRR 0.729, 44/45, 1/44), and commit that file as
+  the first v2 snapshot. Roughly half a day including verification; output grows from 24.7 KB today to an
+  estimated ~100 KB per run (89 queries × 10 results at ~80 bytes each).
+  **The discontinuity, stated as a reason to land this early, not to defer it**: runs recorded before
+  the change can't be section-diffed against runs after it. On the old side of the line today: **6
+  committed per-query snapshots** of `docs/golden_set_results.json` (2026-08-31, two on 2026-09-06,
+  2026-09-08, 2026-09-14, 2026-10-09), plus **at least 2 production runs recorded only as totals** in
+  `docs/evaluation.md` (2026-09-18, 2026-09-19), plus **every nightly-eval golden-set run**, none of
+  which persisted per-query output at all. Every run recorded in the old format is one more that can
+  never be bisected by section, so the line should be drawn before the next run that matters, which is
+  the expansion baseline.
 
 ---
 
