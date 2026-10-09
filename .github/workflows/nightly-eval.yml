@@ -20,6 +20,9 @@ name: Nightly eval (corpus + golden set)
 #     guard, the 2000-char embedding-input truncation in ingest.py,
 #     versioning, judicial_status/acts seed data) -- NOT just the thin
 #     scripts/*.py CLI wrappers, which contain none of the actual logic
+#   - scripts/parse_*_schedule.py and scripts/_crpc_*.py -- the First
+#     Schedule parsers and the hand-transcribed/verified data they apply
+#     (the _crpc_ modules were missing until 2026-10-09)
 #   - app/services/embeddings.py -- the embedder implementations
 #     themselves, not just their model_id label
 #   - the running embedder's ACTUAL model_id + EMBEDDING_DIM -- read from
@@ -102,10 +105,17 @@ jobs:
           EMBEDDING_DIM=$(python -c "from app.core.config import settings; print(settings.EMBEDDING_DIM)")
           echo "resolved embedder identity: $MODEL_ID (dim=$EMBEDDING_DIM)"
           HASH=$({
+            # scripts/_crpc_*.py: the hand-transcription and verification
+            # data parse_crpc_schedule.py applies (first-schedule, row-
+            # mismatch, cognizable/bailable). Missing from this key until
+            # 2026-10-09 -- a transcription-only change would have restored
+            # a stale cached offence_attributes table. Globbed, not listed,
+            # so a new _crpc_ module can't be silently left out the same way.
             find app/legal_corpus app/services/embeddings.py \
                  scripts/ingest_sections.py scripts/ingest_offence_attributes.py \
                  scripts/ingest_bnss_offence_attributes.py scripts/seed_judicial_status.py \
                  scripts/parse_crpc_schedule.py scripts/parse_bnss_schedule.py \
+                 scripts/_crpc_*.py \
                  documents -type f -print0 | sort -z | xargs -0 sha256sum
             echo "model_id=$MODEL_ID"
             echo "embedding_dim=$EMBEDDING_DIM"
