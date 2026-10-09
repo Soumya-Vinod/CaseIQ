@@ -1,7 +1,7 @@
 {
   "n_in_scope": 44,
   "recall_at_5": 0.9090909090909091,
-  "mrr": 0.7297979797979799,
+  "mrr": 0.7286616161616162,
   "in_scope": [
     {
       "question": "What is the punishment for theft?",
@@ -317,9 +317,9 @@
     },
     {
       "question": "What is the punishment for bigamy?",
-      "rank": 4,
+      "rank": 5,
       "recall_at_5": true,
-      "reciprocal_rank": 0.25,
+      "reciprocal_rank": 0.2,
       "ambiguous_top_hit_false_positive": false,
       "classifier_false_positive": false
     },
@@ -453,7 +453,7 @@
       "question": "Two directors on my company's board are in a deadlock over a major decision, how is this resolved legally?",
       "would_abstain": true,
       "caught_by": "ambiguous_top_hit",
-      "top_similarity": 0.2817,
+      "top_similarity": 0.3057,
       "domain": "company",
       "split": "heldout",
       "adversarial": false

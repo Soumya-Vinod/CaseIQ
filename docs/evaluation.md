@@ -7305,3 +7305,68 @@ the 10-17 run will be the first real run to evaluate the exact case the predicat
 at the latest. Until then, production has never exercised it. **The nightly has to be green before
 10-17**, so the canary's nightly run and its loud-on-skip check are live the first time the predicate
 faces that case for real.
+
+## Header-fix re-ingest: landed and verified live -- and the golden set moved when it "shouldn't" have (2026-10-09)
+
+Closes the "Pending" paragraph of the row-level-fixes entry above. The deploy was confirmed first
+(`origin/main` = local HEAD = `35bf3e21`). A read-only pre-flight came next, because `--resume` is only
+narrow if two conditions hold. Computed `valid_from` matched the stored value for all five acts (BNS
+2025-10-06, BNSS/BSA 2023-12-25, IPC 1862-01-01, CrPC 1974-04-01), so every row takes the update-in-place
+branch, never a new version. And there were 0 NULL embeddings, so no unchanged row gets re-embedded. The
+local embedder (`onnx:sentence-transformers/all-MiniLM-L6-v2`) matches the corpus's `embedding_model`.
+Backed up next, outside the repo (`corpus-row-backups/2026-10-09-header-fix/`): the 6 target rows plus BNS
+254 in full, embeddings included; text and embedding MD5 for all 2,155 current rows; the single existing
+`corpus_versions` row. That has to be a targeted export, because `db-backup.yml` deliberately excludes
+the corpus tables.
+
+**The write**: one `python -m scripts.ingest_sections --all --resume --yes`, the nightly's own command
+shape, so production gets one coherent snapshot rather than three per-act ones. `confirm_writable_target`
+fired on the real Neon host. Exit 0. `BNS updated_in_place=1 skipped=357`, `BNSS 0/531`, `BSA 0/170`,
+`IPC 4/559`, `CrPC 1/532`: exactly 6 rows written, 0 inserted, 0 new versions, nothing blocked. New
+`corpus_versions` row `ingest-2026-10-09T13:55:53Z` (2,155 sections, checksum `30d2617a44c0...`) -- the
+first since 08-30. The 09-14 in-place edit never produced one.
+
+**Verified against the live database, not the ingest's own printout**:
+- Exactly the six changed (text MD5 or embedding MD5 vs the backup): BNS 255, IPC 174/174A/376A/376AB,
+  CrPC 185. The other 2,149 kept the same id, `version_no`, `parser_version` and both MD5s. Still 2,155
+  rows, none closed.
+- The six are now `parser_version=11`, same ids, `version_no` 1. Lengths: BNS 255 723 → 726, IPC 174
+  1,311 → 1,318, 174A 611 → 613, 376A 576 → 577, 376AB 578 → 578, CrPC 185 552 → 499.
+- Every one's stored embedding equals a fresh embedding of its stored text (cosine 1.000000). IPC 174 and
+  376A got new text but byte-identical vectors. That's consistent: 376A's only change is one whitespace
+  character the tokenizer doesn't see, and 174's bracket insertions are probably past the model's input
+  window (not separately checked).
+- **A fresh parse of all five acts now reproduces all 2,155 production rows byte-for-byte: 0 differing.**
+  The other 2,149 rows still read `parser_version=10`, since `--resume` doesn't rewrite unchanged rows.
+  Their text is byte-identical to v11 output, but the label is stale.
+
+**Golden set, re-run against production -- predicted "should not move", and it did:**
+`Recall@5 = 0.909 (40/44)` (unchanged), out-of-scope `44/45` (unchanged), Option E false positives `1/44`
+(unchanged), **MRR 0.730 → 0.729**. Traced, not rounded away. "What is the punishment for bigamy?"
+(acceptable: IPC 494, BNS 82) went from rank 4 to rank 5. IPC 376AB entered its top 3. That query's
+cosine against 376AB's old embedding (from the backup) was 0.4895; against the new one it's 0.4992,
+which crosses IPC 494's unchanged 0.4922. **376AB's content didn't change -- only its formatting did**
+(`376AB. Punishment` → the source's own `376AB.Punishment`, plus the closing `]` the 09-14 hand edit had
+dropped), and that was enough to move a vector across a neighbour 0.003 away, on a query about an
+unrelated offence.
+
+**The reasoning that missed it, named**: "none of the 89 queries cite these sections, so nothing should
+move." Wrong in exactly the way the 2026-09-19 offence_attributes re-run was right. That table never
+participates in ranking, so nothing COULD move there. `section_versions` embeddings are the ranking, and a
+changed row competes against every query, not only the ones that cite it. Checking which queries a
+change can touch means checking which top-k lists the changed rows sit near, not which golden answers
+name them.
+
+**Now fragile, worth knowing before tonight's nightly**: bigamy's correct answer sits at exactly rank 5,
+the edge of Recall@5. Its other acceptable section, BNS 82, is 6th (0.4865). One more slip -- any future
+change that nudges a sixth section above IPC 494 -- drops Recall to 39/44 = 0.886, below the nightly's
+0.909 floor, and turns the job red for a reason that looks like a retrieval regression, not a formatting
+change. That isn't a reason to change anything now, but it is the likeliest next red.
+
+**One more movement, not attributable to this write**: a held-out out-of-scope company-law query's
+`top_similarity` reads 0.3057 now against 0.2817 in the committed results file. Its top hit is BNSS 517,
+which this re-ingest didn't touch, and CrPC 185 (the only re-ingested row in its top 10) scores 0.2838
+old / 0.2916 new, neither of which is 0.2817. The committed file dates from 2026-09-14 (`991e5b2c`).
+The 09-18/09-19 production re-runs recorded only aggregates, so the change happened somewhere between
+09-14 and today: 09-15's `retrieval.py` change (`5a109208`) is in that window, but that wasn't checked.
+It abstains either way (`caught_by: ambiguous_top_hit`).
