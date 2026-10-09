@@ -530,16 +530,21 @@ conversation is the same shape one step earlier.
   next run that matters, which is the expansion baseline.
 
 - [ ] **K-EXP6.** **Upload nightly-eval's golden-set results as a workflow artifact -- independent of
-  K-EXP5, about ten minutes, and the thing that makes a red nightly diagnosable.** Recorded 2026-10-09,
+  K-EXP5, about ten minutes, and the only record of the changes the job log can't show.** Recorded 2026-10-09,
   split out of K-EXP5 on purpose: bundled with a half-day emitter rewrite, it would wait on that work
   for no reason. **Not to be touched until 2026-10-09's nightly run has gone out** (no workflow change
   ahead of the first fresh-ingest run after the header fixes).
-  **Why it matters**: the golden-set step already writes the full per-query results file every night
-  (`docs/golden_set_results.json` on the runner) and the per-query stdout report
-  (`caseiq-fastapi/golden_set_output.txt`), then discards both when the job ends. So a red nightly
-  tells us which total moved, not which query moved it. That is why `docs/evaluation.md`'s "check
-  bigamy first" guidance is a heuristic someone has to remember and re-run by hand, instead of a file
-  we open.
+  **Why it matters, stated narrowly** (an earlier draft of this justification was broader, and wrong):
+  the golden-set step already writes the full per-query results file every night
+  (`docs/golden_set_results.json` on the runner), then discards it when the job ends. The job log, which
+  Actions retains, already shows a lot: the totals, every in-scope query that falls past rank 5 or out of
+  the top 10 by name and rank, every query flagged as a false positive by name, and each out-of-scope
+  query's verdict and `top_similarity`. So a bigamy slip to rank 6 would already be named in the log.
+  **The upload exists for the changes the log cannot show**: rank movement inside the top 5 (2026-10-09's
+  MRR 0.730 → 0.729 was bigamy moving 4 → 5, which appears in no list the log prints) and, until K-EXP5,
+  what displaced a query. That 2026-10-09 change was found by a manual production run. Had it happened
+  in a nightly, the gate and the log would both have reported it as fine: the Recall floor held, MRR
+  isn't gated, and the log's only trace would be a total 0.001 lower.
   **What it takes**: one `actions/upload-artifact` step after the golden-set step, with `if:
   ${{ !cancelled() }}` -- it MUST run when the threshold check fails, since a red night is exactly the
   night the file is needed, and the step's own `exit 1` would otherwise skip it. Paths are resolved
@@ -554,13 +559,14 @@ conversation is the same shape one step earlier.
   ever ran, and that gate names the offending sections in its own output (`...NOT in the
   known_truncation_exceptions allowlist: ['255']`), so those nights had no results file to lose and
   already said what broke. The earlier green runs (2026-09-12/13) discarded their files too, but they
-  were green. **The real cost is every future red night**, above all a night where every gate passes and
-  the golden set is what drops. The job log (retained by Actions) does keep the stdout report, which
-  names any in-scope query that fell out of the top 5 ("Hits beyond top 5 ... (rank 6)") or out of the
-  top 10, plus each out-of-scope query's verdict. So a bigamy slip to rank 6 would be named. What doesn't
-  survive the run is everything else in the per-query file: every in-scope rank inside the top 5 (where
-  an MRR drop like 2026-10-09's lives), the false-positive flags per query, and, until K-EXP5, any
-  record of what displaced a query at all.
+  were green. **The real cost is going forward**: every night, red or green, on which a query moves
+  inside the top 5 or is displaced by a different section. The log records only the total that moved,
+  never which query moved it or what moved it.
+  **Ordering against K-EXP5**: K-EXP6 first is correct -- it needs nothing K-EXP5 builds, and every night
+  it isn't in place is a night of within-top-5 movement nobody can look at afterward. But every nightly
+  file uploaded before K-EXP5 lands is in the old format and can never be section-diffed. A gap of weeks
+  between the two is fine. A gap of months accumulates a long run of per-query files that answer "which
+  query moved" but never "what moved it", so K-EXP5 should follow within weeks, not be left open-ended.
 
 ---
 
