@@ -255,6 +255,34 @@ Highest-leverage work in the project. Most student RAG projects have zero measur
 - [ ] **E5.** **Query expansion** — map lay phrasing ("landlord won't return my deposit") to legal terminology before embedding.
 - [ ] **E6.** **HyDE or multi-query retrieval** — generate a hypothetical answer, embed that. Works well when queries and documents use different vocabularies, which is exactly your situation.
 - [ ] **E7.** **Vector index tuning** — you have no ANN index. Add HNSW and benchmark recall/latency against exact search.
+- [ ] **E8.** 🚩 **Retrieval has uncontrolled inputs, in a system with 0.0027 margins.** Recorded
+  2026-10-09; full measurement in K-EXP5's MRR note. The live margins: IPC 494 led IPC 376AB by 0.0027
+  on the bigamy query before the re-ingest, and bigamy's answer now leads 6th place by 0.0057.
+  - **Neon's Postgres version is an uncontrolled input -- true regardless of what caused the
+    2026-10-09 gap.** A managed upgrade can change rankings with no commit, no gate and no
+    notification. Measured, not assumed: under the same UTF-8 locale class, PG17.2's `to_tsvector`
+    differs from PG18's for **27 of 2,155** rows of this corpus. That didn't change any golden-set rank
+    this time. At these margins, it can.
+  - **Physical row order is also an uncontrolled input, and it caused the measured gap**:
+    `_lexical_candidates` orders by `ts_rank_cd DESC` with no tiebreaker, and 27 of 44 in-scope
+    queries have tied lexical groups. A single tie (IPC 489B / BNS 179 at 0.005000 on the
+    counterfeiting query) is the entire 0.729-vs-0.740 difference between production and CI.
+    Physical order changes on any row rewrite, restore, dump/reload, `VACUUM FULL` or Neon branch.
+  - **So CI and production are two different systems, not one system and its reference copy.** 0.729
+    on Neon PG18.6 is the real operating number, because it's the one serving users. A fresh build
+    isn't the reference that production is measured against. They're two environments that happen to
+    rank one tie differently.
+  - **Fix, not built**: a deterministic tiebreaker in both candidate queries' `ORDER BY` (e.g. `rank
+    DESC, act_code, section_number`, and the same for vector distance) and in the RRF sort (fused
+    score, then section key), so ranking becomes a function of content and query only. **It will itself
+    move rankings** -- choosing an order for every tie picks a winner for each one -- so it's a
+    retrieval change that needs the full per-query golden-set before/after (the retrieval-impact rule,
+    `docs/evaluation.md` 2026-10-09). After it, two remaining measured inputs to close: pin CI's
+    Postgres major version to production's (the CI service image is `pgvector:pg17`, production is
+    18.6) and lock the full Python dependency set (only fastembed is pinned).
+  - **Ordering against E7**: an HNSW index makes vector search approximate, which is a third
+    uncontrolled input of the same kind. It shouldn't land before the deterministic tiebreak, and needs
+    the same before/after.
 
 ---
 
@@ -542,8 +570,10 @@ conversation is the same shape one step earlier.
     2026-10-09 CI resolved onnxruntime 1.31.0 / tokenizers 0.23.3 / numpy 2.5.3 on pg17, where the
     production-verifying local stack was 1.30.0 / 0.23.1 / 1.26.4 against Neon pg18.6. On content
     identical by the hash above, the nightly scored MRR 0.740 and the production run 0.729 (Recall@5,
-    out-of-scope and false positives identical). That gap is open (see the MRR note below the
-    mandatory step).
+    out-of-scope and false positives identical). **Explained** (see the note below the mandatory step):
+    not the stack and not the Postgres version, but tie order among equal full-text scores, which
+    follows physical row order. Version and stack still go in the record, because both are measured
+    inputs to tokenisation or vectors (E8), just not the cause of this gap.
   **What it would take** (estimated, not started): (1) in `eval_golden_set.py`, keep the full `sections`
   list each query already gets back from `semantic_search` and write it out per query, plus the
   explicit `top_similarity_section` and `outranked_by` fields and the run-identity block, under
@@ -558,21 +588,45 @@ conversation is the same shape one step earlier.
   unchanged corpus, the emitter changed behaviour, not just format, and that has to be found and fixed
   before the new format becomes the baseline. Only a run that passes this gets committed as the first
   v2 snapshot. If the corpus has changed by then, re-run the v1 emitter on that corpus first and match
-  against that instead, never against a remembered number. **The match has to be same-environment**
-  (same database, same stack), v1 against v2: on 2026-10-09 identical content gave MRR 0.729 on
-  production and 0.740 in CI, so a cross-environment comparison would fail this gate for reasons
-  that have nothing to do with the emitter. **Open, and it blocks a clean definition of this gate:**
-  the 0.011 gap is unexplained. Checked and ruled out, read-only against production: (a) the
-  embedding pipeline changing since 09-06 -- all 2,155 stored vectors equal a local re-embed of their
-  exact stored input, min cosine 1.00000000, 0 rows below 1 − 1e-6; (b) different inputs -- every
-  production `marginal_note` matches a local fresh parse, 0 of 2,155 differ, and CI-vs-production text
-  identity is proven by the checksum recomputation above. CI's own marginal notes weren't read (its
-  database is gone); they're inferred identical because they come from the same parser over the same
-  PDFs that produced byte-identical text; (c) tie order inside the lexical candidate list -- 27 of 44 in-scope
-  queries have tied `ts_rank_cd` groups, but reversing every tied group moves no correct answer's
-  rank (MRR delta 0.0000). There's no approximate vector index (exact scan), so vector order is
-  deterministic for identical vectors. Not yet tested: CI's floating stack versions producing
-  different vectors, pg17-vs-pg18 full-text ranking, and ties straddling the candidate-pool `LIMIT`.
+  against that instead, never against a remembered number. **What this gate can and can't be,
+  stated so nobody specifies a check that can't be met**: run v1 and v2 **back-to-back against the
+  same database**, with no write in between. That is achievable, on production or on one CI database.
+  **Any cross-database version of this check is unachievable as things stand -- CI against
+  production, and also same-version against same-version.** That's because of the cause below, not
+  the PG17/PG18.6 mismatch: a fresh local PG18 with Neon-identical tsvectors still differed from Neon.
+  So a cross-database totals match can't validate the emitter until E8's deterministic tiebreak lands.
+  **The 2026-10-09 MRR gap (0.729 production vs 0.740 CI), explained -- measured, read-only against
+  production, one variable at a time**:
+  - Ruled out, the embedding pipeline: all 2,155 stored vectors equal a local re-embed of their exact
+    stored input (min cosine 1.00000000).
+  - Ruled out, different inputs: all 2,155 production `marginal_note`s match a fresh parse, and text
+    identity is proven by the checksum recomputation above.
+  - Ruled out, the Postgres major version: local clusters with Neon's locale class (UTF-8
+    `LC_CTYPE`, the same as CI's `en_US.utf8` container), loaded with production's exact rows in CI
+    insert order, with vector lists computed exactly in Python (validated: 44/44 queries identical to
+    production's real `_vector_candidates`) and the harness validated against Neon (reproduces 0.7287).
+    PG17.2 → 0.7400. PG18.2 → **also 0.7400**, with tsvectors identical to Neon's stored
+    `search_vector` for **2,155/2,155** rows.
+  - **Cause**: one query, "What is the punishment for counterfeiting currency?". Its lexical list has
+    IPC 489B and BNS 179 tied at exactly `ts_rank_cd` 0.005000. Neon returns 489B 6th and 179 7th, a
+    fresh database the reverse. IPC 489B is the #1 vector hit, so that single tie decides whether it
+    outranks IPC 489A in the fused list. Swapping only that pair in Neon's own list moves the correct
+    answer from rank 2 to rank 1: 0.5/44 = 0.0114, the entire gap. With no tiebreaker in
+    `_lexical_candidates`' `ORDER BY`, tied rows come back in an order that depends on their physical
+    placement and the scan plan. Neither is controlled, and both differ between a freshly bulk-loaded
+    database and a long-lived one that has had rows rewritten (6 were rewritten in place that same
+    day).
+  - **A correction to this item's own earlier text**: it said tie order was "ruled out" because
+    reversing every tied group at once moved no correct answer. That was wrong. Reversing all groups
+    together also swapped the 489A/489D tie, and the combination happened to leave rank 2 unchanged.
+    It never tested the single permutation that mattered. Same lesson as the rest of the week: a test
+    that can't fail on the case in question isn't evidence about it.
+  - And the first version of the version-isolation test was itself confounded, also on the record: its
+    clusters used `LC_CTYPE=C`, under which Postgres's text-search parser treats every non-ASCII
+    character as a letter (`—whoever`, `“coin”` as tokens). It also scored 0.7400 on both versions,
+    but since its tokenisation and its row order both differed from Neon, that result can't be
+    attributed to anything. A per-row tsvector-identity check against Neon is now a precondition for
+    any such test.
   Roughly half a day including verification;
   output grows from 24.7 KB today to an estimated ~100 KB per run (89 queries × 10 results at ~80
   bytes each). Uploading the nightly's results file is NOT part of this item -- split out as K-EXP6,
@@ -612,6 +666,15 @@ conversation is the same shape one step earlier.
   retention period long enough to compare against the last green night (the default 90 days is fine).
   Then confirm on the next real run that the artifact exists and opens, rather than assuming the step
   worked because it was green.
+  **Companion step, same workflow change -- measure the nightly's content-only corpus hash** (K-EXP5's
+  definition), so production's `5745346906fa...` stops being matched by inference. The current
+  workflow can't show it: the ingest log prints only the first 12 characters of `corpus_versions.
+  checksum`, which is act-ID-dependent anyway, and SQLAlchemy's echo truncates long text parameters.
+  What it takes: a few-line script that computes the K-EXP5 content hash over the job's own database
+  and prints it, run right after the ingest/restore step (so cache-hit nights are measured too).
+  Then compare it once, by hand, with `5745346906fa7a3932d0aca3ef1a1b7e9b78f5e544c05f24fddcb5d0e3b5c86b`.
+  Same timing constraint as the upload itself: not before 2026-10-09's scheduled nightly has gone out,
+  so the earliest run it can measure is the one after.
   **The retrospective loss, stated accurately, not overstated**: little historical diagnostic data is
   actually gone. All 26 red nights (2026-09-14 → 10-09) failed at the ingest gate, before the golden set
   ever ran, and that gate names the offending sections in its own output (`...NOT in the
