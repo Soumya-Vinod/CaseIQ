@@ -507,20 +507,60 @@ conversation is the same shape one step earlier.
   `schema_version: 2`. The stdout summary lines stay exactly as they are, because nightly-eval's
   threshold check parses stdout, not the JSON. (2) A small `scripts/diff_golden_runs.py` that diffs two
   v2 files slot-by-slot by section and **refuses** to compare a v1 file against a v2 one, so the
-  discontinuity below is enforced, not remembered. (3) `nightly-eval.yml` uploads the results file as
-  a workflow artifact -- today every nightly run writes it on the runner and discards it, so no nightly
-  run has ever been recorded per query. (4) Run once against production (read-only), confirm the
-  totals match the 2026-10-09 run (Recall@5 0.909, MRR 0.729, 44/45, 1/44), and commit that file as
-  the first v2 snapshot. Roughly half a day including verification; output grows from 24.7 KB today to an
-  estimated ~100 KB per run (89 queries × 10 results at ~80 bytes each).
+  discontinuity below is enforced, not remembered. (3) **Mandatory, not a suggestion -- the gate on
+  the rewrite itself**: run the v2 emitter once against production (read-only), against the same corpus
+  as the 2026-10-09 run (`corpus_versions` `ingest-2026-10-09T13:55:53Z`, checksum `30d2617a44c0...`),
+  and require the totals to match it exactly: Recall@5 0.909 (40/44), MRR 0.729, out-of-scope 44/45,
+  Option E false positives 1/44, and every in-scope query's rank unchanged. If anything differs on an
+  unchanged corpus, the emitter changed behaviour, not just format, and that has to be found and fixed
+  before the new format becomes the baseline. Only a run that passes this gets committed as the first
+  v2 snapshot. If the corpus has changed by then, re-run the v1 emitter on that corpus first and match
+  against that instead, never against a remembered number. Roughly half a day including verification;
+  output grows from 24.7 KB today to an estimated ~100 KB per run (89 queries × 10 results at ~80
+  bytes each). Uploading the nightly's results file is NOT part of this item -- split out as K-EXP6,
+  because it needs none of this.
   **The discontinuity, stated as a reason to land this early, not to defer it**: runs recorded before
   the change can't be section-diffed against runs after it. On the old side of the line today: **6
   committed per-query snapshots** of `docs/golden_set_results.json` (2026-08-31, two on 2026-09-06,
   2026-09-08, 2026-09-14, 2026-10-09), plus **at least 2 production runs recorded only as totals** in
-  `docs/evaluation.md` (2026-09-18, 2026-09-19), plus **every nightly-eval golden-set run**, none of
-  which persisted per-query output at all. Every run recorded in the old format is one more that can
-  never be bisected by section, so the line should be drawn before the next run that matters, which is
-  the expansion baseline.
+  `docs/evaluation.md` (2026-09-18, 2026-09-19). Nightly runs aren't on either side yet: none has
+  persisted per-query output at all until K-EXP6 lands, and nightly artifacts uploaded under K-EXP6
+  before this item lands will be per-query but v1, so they're old-side too. Every run recorded in the
+  old format is one more that can never be bisected by section, so the line should be drawn before the
+  next run that matters, which is the expansion baseline.
+
+- [ ] **K-EXP6.** **Upload nightly-eval's golden-set results as a workflow artifact -- independent of
+  K-EXP5, about ten minutes, and the thing that makes a red nightly diagnosable.** Recorded 2026-10-09,
+  split out of K-EXP5 on purpose: bundled with a half-day emitter rewrite, it would wait on that work
+  for no reason. **Not to be touched until 2026-10-09's nightly run has gone out** (no workflow change
+  ahead of the first fresh-ingest run after the header fixes).
+  **Why it matters**: the golden-set step already writes the full per-query results file every night
+  (`docs/golden_set_results.json` on the runner) and the per-query stdout report
+  (`caseiq-fastapi/golden_set_output.txt`), then discards both when the job ends. So a red nightly
+  tells us which total moved, not which query moved it. That is why `docs/evaluation.md`'s "check
+  bigamy first" guidance is a heuristic someone has to remember and re-run by hand, instead of a file
+  we open.
+  **What it takes**: one `actions/upload-artifact` step after the golden-set step, with `if:
+  ${{ !cancelled() }}` -- it MUST run when the threshold check fails, since a red night is exactly the
+  night the file is needed, and the step's own `exit 1` would otherwise skip it. Paths are resolved
+  from the workspace root, not the job's `caseiq-fastapi` working directory: `docs/golden_set_results.json`
+  and `caseiq-fastapi/golden_set_output.txt`. `if-no-files-found: warn`, because on a night that fails
+  before the golden set runs there's nothing to upload, and that shouldn't fail the upload step too. A
+  retention period long enough to compare against the last green night (the default 90 days is fine).
+  Then confirm on the next real run that the artifact exists and opens, rather than assuming the step
+  worked because it was green.
+  **The retrospective loss, stated accurately, not overstated**: little historical diagnostic data is
+  actually gone. All 26 red nights (2026-09-14 → 10-09) failed at the ingest gate, before the golden set
+  ever ran, and that gate names the offending sections in its own output (`...NOT in the
+  known_truncation_exceptions allowlist: ['255']`), so those nights had no results file to lose and
+  already said what broke. The earlier green runs (2026-09-12/13) discarded their files too, but they
+  were green. **The real cost is every future red night**, above all a night where every gate passes and
+  the golden set is what drops. The job log (retained by Actions) does keep the stdout report, which
+  names any in-scope query that fell out of the top 5 ("Hits beyond top 5 ... (rank 6)") or out of the
+  top 10, plus each out-of-scope query's verdict. So a bigamy slip to rank 6 would be named. What doesn't
+  survive the run is everything else in the per-query file: every in-scope rank inside the top 5 (where
+  an MRR drop like 2026-10-09's lives), the false-positive flags per query, and, until K-EXP5, any
+  record of what displaced a query at all.
 
 ---
 
