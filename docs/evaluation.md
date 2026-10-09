@@ -7388,14 +7388,30 @@ it detects: a single in-scope query breaking. The cost of that choice is that a 
 diagnosis before it's treated as a regression: check bigamy's rank first, then whether the night's
 corpus differs from the last green one.
 
-**OPEN, unexplained -- recorded because it's unexplained, not omitted because it's harmless**: the
-held-out out-of-scope query "Two directors on my company's board are in a deadlock..." (domain
-`company`) now records `top_similarity` 0.3057, against 0.2817 in the results file committed on
-2026-09-14 (`991e5b2c`). It abstains either way (`caught_by: ambiguous_top_hit`). What was established:
-- **No similarity changed.** `top_similarity` is the similarity of the first result in FUSED (RRF) order
-  that has one, not the maximum. 0.3057 is BNSS 517 and 0.2817 is CrPC 369, both computed against
-  today's embeddings, and neither row has been written since 08-30. So on 09-14 the fused order put
-  CrPC 369 ahead of BNSS 517, and today it doesn't. **What moved is the fused rank order.**
+**A per-query diff compares sections, not scores -- because the row behind a score can change between
+runs.** The held-out out-of-scope query "Two directors on my company's board are in a deadlock..."
+(domain `company`; abstains either way, `caught_by: ambiguous_top_hit`) records `top_similarity` 0.3057
+today against 0.2817 in the results file committed on 2026-09-14 (`991e5b2c`). First read as drift in
+that query's top similarity, which is wrong: **0.3057 and 0.2817 are two different rows occupying the
+same slot**, so comparing them as "the top similarity moved by 0.024" compares two different things.
+`top_similarity` is the similarity of the first result in FUSED (RRF) order that has one, not the
+maximum. 0.3057 is BNSS 517 and 0.2817 is CrPC 369, both computed against today's embeddings, and neither
+row has been written since 08-30, so neither number changed. On 09-14 the fused order put CrPC 369 ahead
+of BNSS 517; today it doesn't. **No similarity moved. The ranking did.** Under RRF that needs no score
+change at all: a row moving in either input list (vector or lexical) shifts every other row's fused
+position.
+
+**The rule**: a golden-set comparison across runs diffs *which sections* occupy each slot first, and
+compares a score only between the same section in both runs. A score compared without its section can
+report drift that never happened, or hide a real displacement behind two coincidentally similar numbers.
+**A gap this exposes in the results file itself**: `golden_set_results.json` stores `top_similarity`
+for each out-of-scope query without the section it belongs to (and in-scope entries store only the
+correct answer's rank, not what outranks it), so today the file supports exactly the score-only
+comparison this rule says not to make. Recording the top-k section ids per query would make it
+checkable. Not built; noted.
+
+**Still OPEN -- the ordering change itself is unexplained, and recorded as such rather than omitted
+because the query abstains either way**. What was established:
 - **Ruled out**: a change to either section's text or embedding (both unchanged since 08-30, embedder
   identity unchanged); CrPC 185 as the source of the 0.2817 (its old/new similarities are 0.2838/0.2916);
   any of the six pre-write rows scoring 0.2817 (none does).
