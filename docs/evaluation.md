@@ -7034,3 +7034,47 @@ was a stale config value, nothing silently failed -- the shape this project's ow
 tuned to catch. This is a different failure class: correct parts, wrong composition. Scoped, not yet
 fixed -- see the two follow-on scoping entries (conversational UI, `_FOLLOWUP_PROMPT`/`is_new_topic`
 options) for what's being considered and why.
+
+## `_FOLLOWUP_PROMPT` fix built and verified against the exact reported sequence (2026-09-24)
+
+Closes the previous entry. Scope was deliberately narrowed to fix (a) alone -- extend
+`_FOLLOWUP_PROMPT`'s schema to require `laws_applicable` and `punishments`, copying `_STRUCTURED_PROMPT`'s
+field shapes and exact imprisonment-phrasing constraints verbatim (`punishment_clause.py`'s
+`extract_claim_terms` parses claims against that literal phrasing set -- a differently-worded follow-up
+claim would otherwise fall out as UNVERIFIABLE rather than actually get checked). `punishments` was added
+alongside `laws_applicable`, not after it: C5's own citation-verification rule requires every
+`punishments[]` entry's act+section to already appear in `laws_applicable`, so shipping one without the
+other would have left `punishments` permanently unverifiable on every follow-up turn -- the same gap
+under a different field name. Option (b) (`is_new_topic()` requiring 2+ shared words before treating a
+query as related) was explicitly folded into the existing relatedness-open-problem entry above rather
+than built alongside this -- it doesn't fix this bug (the failure here was an empty schema, not a
+misclassification; `is_new_topic()` classified this turn as a follow-up correctly, by its own rule), and
+building it under this fix's banner would have blurred two separate decisions into one.
+
+**Token cost measured with a real call, not estimated.** Two live Groq calls, same realistic
+defamation-follow-up content, comparing `usage.completion_tokens` directly: OLD `_FOLLOWUP_PROMPT`
+(empty schema) = 69 completion tokens, `laws_applicable`/`punishments` both empty as designed. NEW
+prompt = 171 completion tokens, both fields correctly populated. **Delta: +102 completion tokens per
+follow-up turn.** In absolute terms this lands inside the +60-100 range estimated when this was scoped.
+Worth calling out separately, though: **that's +148% relative to the old prompt's own 69-token baseline**
+-- a large proportional jump on a small base, not just a small absolute one, and the base itself (a
+terse conversational reply) is now the norm for every follow-up turn CaseIQ answers, of which there are
+many per session. Absolute cost is the number that matters against the daily Groq ceiling, but the
+relative jump is the one that would go unnoticed reading only the absolute delta -- recorded here so
+it's on record before it compounds with any future change that also touches this prompt.
+
+**Verified against the exact reported sequence, live in production, after deploy (`git_commit:
+90ef8fd1`)** -- not a synthetic reproduction, the literal reported repro steps: asked "what is the
+punishment for defamation," then asked the identical question again in the same `session_id`. Confirmed
+before trusting the result that turn 2 actually exercised the fixed code path rather than coincidentally
+passing through the always-correct fresh-query prompt: `"defamation"` is in `_CRIME_TERMS` and present in
+both `cur` and `prev`, so `is_new_topic()` returns `False` on turn 2 and routing does go through
+`_FOLLOWUP_PROMPT`. Result: `abstained: false`, `confidence_score: 0.849`, `citations_grounded: true`,
+`laws_applicable` populated with IPC 500, CrPC 199, BNSS 222 (three of the six retrieved sections cited),
+`punishments` populated with IPC 500's "Up to 2 years" / fine entry -- confidence and severity intact,
+matching turn 1 exactly rather than collapsing to zero. The reported bug is fixed and the fix is
+confirmed exercised, not just deployed.
+
+Full backend suite run before deploy: 253 non-integration + 102 integration, all passing, 0 failures --
+no existing test referenced the old prompt's literal content, so nothing needed updating alongside this
+change.
