@@ -19,11 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from parse_crpc_schedule import (
-    PARSER_VERSION, PDF_PATH, apply_cognizable_bailable_verification,
-    apply_first_schedule_transcription, apply_known_corrections, apply_known_row_replacements,
-    apply_row_mismatch_transcription, complete_rows, extract_lines, reconstruct_rows,
-)
+from parse_crpc_schedule import PARSER_VERSION, PDF_PATH, complete_rows, pipeline_rows
 from sqlalchemy import delete
 
 from app.db.base import SessionLocal
@@ -37,14 +33,7 @@ async def main(skip_prompt: bool = False) -> None:
     source_hash = hashlib.sha256(pdf_bytes).hexdigest()
 
     diags: list[dict] = []
-    raw_lines = extract_lines(PDF_PATH, diags)
-    rows = reconstruct_rows(raw_lines, diags)
-    rows = apply_known_corrections(rows)
-    rows = apply_known_row_replacements(rows)
-    rows = apply_row_mismatch_transcription(rows)
-    rows = apply_first_schedule_transcription(rows)
-    rows = apply_cognizable_bailable_verification(rows)
-    rows = complete_rows(rows)
+    rows = complete_rows(pipeline_rows(diags))
 
     # act='IPC', not 'CrPC': the First Schedule classifies IPC offences by
     # IPC section number -- CrPC itself is procedure. See

@@ -49,10 +49,7 @@ Usage: python -m scripts.ci_check_crpc_schedule_vocabulary
 """
 from __future__ import annotations
 
-from scripts.parse_crpc_schedule import (
-    PDF_PATH, apply_known_corrections, apply_known_row_replacements, complete_rows,
-    extract_lines, reconstruct_rows,
-)
+from scripts.parse_crpc_schedule import complete_rows, pipeline_rows
 
 # Confirmed against the real corpus (this module's own docstring) -- not
 # guessed at. Lowercased; compared after stripping trailing "."/"]".
@@ -85,13 +82,23 @@ _TEMPLATE_PREFIXES = (
 # evaluation.md's own entries account for. Adding a section here without
 # a matching entry there is exactly the drift this list exists to make
 # visible instead of silent.
+#
+# PRUNED 2026-10-09 from 17 entries to 3, once this check ran on the real
+# pipeline_rows() output instead of a stale subset of it: the other 14 (119,
+# 120, 153, 153A, 193, 212, 221, 225, 235, 294A, 307, 312, 451, 506) no longer
+# flag -- the row-mismatch and First Schedule transcription passes fixed them.
+# Left in, they'd only suppress a future regression in exactly those sections.
+# main() reports any entry that stops flagging, so this can't silently go
+# stale again.
 _KNOWN_DEFERRED_SECTIONS = frozenset({
     # Sub-clause-merge pattern (docs/evaluation.md) -- multiple real
     # sub-clauses in the source, each with its own court value, merged
-    # into fewer rows than the source contains. One named root cause,
-    # not 16 independent defects.
-    "119", "120", "153", "153A", "153B", "193", "212", "221", "225",
-    "235", "294A", "307", "312", "352", "451", "506",
+    # into fewer rows than the source contains.
+    "153B",
+    # s.352's own stored row, deliberately left wrong ("Ditto. Ditto.") --
+    # see the row-mismatch transcription entry; downstream walks see the
+    # repaired value via _CHAIN_REPAIR_ANTECEDENTS, the row itself isn't.
+    "352",
     # s.376A's own truncation (docs/evaluation.md, s.373/374/376 entry) --
     # a dropped leading word ("Court of" missing from "Court of
     # Session."), a DIFFERENT mechanism from the sub-clause merges above,
@@ -126,21 +133,28 @@ def _print_group(label: str, rows: list) -> None:
 
 
 def main() -> None:
+    # The SAME rows scripts/ingest_offence_attributes.py writes -- via the one
+    # shared pipeline_rows(), not a copied step list. Copying is how this check
+    # drifted twice (docs/evaluation.md, 2026-10-09): it sat red on every push
+    # from 2026-09-20, flagging s.120B/175/225A/511 -- rows the transcription
+    # passes it never ran had already fixed in production.
     diags: list[dict] = []
-    raw_lines = extract_lines(PDF_PATH, diags)
-    rows = reconstruct_rows(raw_lines, diags)
-    rows = apply_known_corrections(rows)
-    rows = apply_known_row_replacements(rows)
-    complete = complete_rows(rows)
+    complete = complete_rows(pipeline_rows(diags))
 
     flagged = [r for r in complete if not looks_like_real_court_value(r.triable_by)]
     known = [r for r in flagged if r.section_number in _KNOWN_DEFERRED_SECTIONS]
     new = [r for r in flagged if r.section_number not in _KNOWN_DEFERRED_SECTIONS]
 
+    stale = sorted(_KNOWN_DEFERRED_SECTIONS - {r.section_number for r in flagged})
+
     print(f"{len(complete)} complete rows checked, {len(flagged)} flagged total\n")
     _print_group("Known-deferred (see docs/evaluation.md, does not fail this check)", known)
     print()
     _print_group("NEW -- not in _KNOWN_DEFERRED_SECTIONS", new)
+    if stale:
+        # Not a failure -- a fix is good news -- but an entry that no longer
+        # flags is a suppression waiting to hide a regression. Remove it.
+        print(f"\nSTALE -- in _KNOWN_DEFERRED_SECTIONS but no longer flagged, remove: {stale}")
 
     if new:
         print(f"\nFAILED: {len(new)} row(s) flagged that aren't part of the known, quantified "

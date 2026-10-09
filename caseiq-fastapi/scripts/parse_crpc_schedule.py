@@ -1171,11 +1171,23 @@ def _structurally_complete_rows(rows: list[ScheduleRow]) -> list[ScheduleRow]:
     return [r for r in rows if _clean(r)]
 
 
-if __name__ == "__main__":
-    # merge_orphan_fragments (above) is NOT called here -- measured net
-    # negative (0 sections gained, 1 lost), see its own docstring for why.
-    diags: list[dict] = []
-    raw_lines = extract_lines(PDF_PATH, diags)
+def pipeline_rows(diags: list[dict], pdf_path: str = PDF_PATH) -> list[ScheduleRow]:
+    """Every row the real ingest sees, after every correction pass, in the
+    one order that's correct -- BEFORE complete_rows(), which callers apply
+    themselves. The single source of this sequence for
+    scripts/ingest_offence_attributes.py, scripts/ci_check_crpc_schedule_
+    vocabulary.py and this module's own __main__.
+
+    Extracted 2026-10-09 because the vocabulary checker had drifted out of
+    sync with the ingest TWICE by copying the step list (docs/evaluation.md:
+    first missing apply_known_row_replacements, 2026-09-18; then missing all
+    three transcription/verification passes, red on every push from
+    2026-09-20 on rows those passes already fix).
+
+    merge_orphan_fragments (above) is NOT called here -- measured net
+    negative (0 sections gained, 1 lost), see its own docstring for why.
+    """
+    raw_lines = extract_lines(pdf_path, diags)
     rows = reconstruct_rows(raw_lines, diags)
     rows = apply_known_corrections(rows)
     rows = apply_known_row_replacements(rows)
@@ -1193,7 +1205,12 @@ if __name__ == "__main__":
     # on the rows that step produces, including the newly-transcribed 173) and BEFORE
     # complete_rows() (complete_rows() now requires all three fields, not just triable_by --
     # this is what supplies cognizable/bailable for the rows that check actually validates).
-    rows = apply_cognizable_bailable_verification(rows)
+    return apply_cognizable_bailable_verification(rows)
+
+
+if __name__ == "__main__":
+    diags: list[dict] = []
+    rows = pipeline_rows(diags)
     print(f"rows: {len(rows)}")
 
     complete = complete_rows(rows)
