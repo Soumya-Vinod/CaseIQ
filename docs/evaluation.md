@@ -7423,3 +7423,93 @@ because the query abstains either way**. What was established:
   `golden_set_results.json` but their per-query output was never committed. This file recorded only their
   totals, so there is no per-query snapshot between 09-14 and today to bisect against. The fix for next
   time is cheap: commit the regenerated results file with every golden-set run that's recorded here.
+
+## The golden set's MRR has an error bar: a full-text coin flip, decided by physical row layout (2026-10-09)
+
+**Headline: cross-database MRR comparisons below ~0.012 carry no signal.** Every MRR figure in this file
+since hybrid full-text retrieval landed (2026-08-30) -- 0.730, 0.729, 0.740 among them -- was measured on
+a system with a coin flip in it. Equal
+full-text scores come back in an order set by physical row layout, and that order decides fused ranks.
+The first green nightly in 26 days is the occasion for this entry, not its subject.
+
+**The run that exposed it** (nightly-eval `workflow_dispatch` 37948295242, `597c37da`, 2026-10-09 14:59
+UTC, a manual dispatch, not the scheduled nightly), recorded by hand in the shape K-EXP5 says a run
+record should carry, since the emitter doesn't yet:
+- git `597c37da44fa11a561a7490ecbb924de68c8626a`; fresh ingest (cache miss, then the corpus cache was
+  saved, the first save since 2026-09-13); all five acts ingested with no gate blocks: 358 + 531 + 170 +
+  563 + 533 = 2,155 sections, plus 479 CrPC and 398 BNSS First Schedule rows.
+- content-only corpus hash: **inferred, not measured**, as `5745346906fa7a3932d0aca3ef1a1b7e9b78f5e544c05f24fddcb5d0e3b5c86b`
+  (production's measured value). Text identity with production is proven; marginal-note identity is
+  inferred from the same parser over the same PDFs. Measuring it on a nightly is K-EXP6's companion
+  step. Its `corpus_versions.checksum` was `e4d39480ba98...`, which differs from production's
+  `30d2617a44c0...` only because that checksum includes database-generated act IDs. Recomputing
+  production's rows with this run's act IDs (from its SQL echo log) gives `e4d39480ba98...` exactly.
+- environment: embedder `onnx:sentence-transformers/all-MiniLM-L6-v2` (dim 384); fastembed 0.8.0,
+  onnxruntime 1.31.0, tokenizers 0.23.3, numpy 2.5.3; Postgres 17 (`pgvector/pgvector:pg17`, locale
+  `en_US.utf8`).
+- pre-flights: embedding config OK; corpus completeness "clean" on its first-ever run (but see
+  readiness B10: it never checked BNSS/BSA while claiming 0 uncheckable acts); punishment-suppression
+  5/5; retention canary 13 passed, 0 skipped; grounding 4/4.
+- golden set: **Recall@5 0.909 (40/44), MRR 0.740, out-of-scope 44/45, Option E false positives 1/44.**
+  "All thresholds held."
+
+**The gap and its cause.** Production, on content proven identical, scores MRR 0.729. Traced one
+variable at a time, read-only against production (full detail in `docs/caseiq-industry-readiness.md`,
+K-EXP5's MRR note and E8):
+- Not the embeddings: all 2,155 stored vectors equal a local re-embed of their exact stored input (min
+  cosine 1.00000000).
+- Not the inputs: all 2,155 marginal notes match a fresh parse.
+- Not the Postgres version: production's rows and vectors loaded into throwaway local clusters, with
+  the harness validated against Neon (reproduces 0.7287) and vector lists validated against production's
+  real `_vector_candidates` (44/44). PG17.2 gives 0.7400, and so does **PG18.2, with tsvectors
+  identical to Neon's for 2,155/2,155 rows**.
+- **The cause is one query and one tie**: "What is the punishment for counterfeiting currency?". IPC
+  489B and BNS 179 tie at exactly `ts_rank_cd` 0.005000, and Neon returns them in the opposite order to a
+  freshly loaded database, because `_lexical_candidates` has no tiebreaker. IPC 489B is the #1 vector
+  hit, so that one tie decides whether it outranks IPC 489A. Swapping only that pair in Neon's own list
+  moves the correct answer from rank 2 to 1: **0.5/44 = 0.01136, against a measured 0.0113. Nothing
+  is unaccounted for.**
+- It's user-visible: production serves IPC 489B first for that question today, with the accepted answers
+  2nd and 3rd.
+
+**Corrections, kept on the record:**
+- An earlier test "ruled out" tie order by reversing every tied group at once and seeing no change. That
+  reversal also swapped the 489A/489D tie, and the combination happened to leave rank 2 intact. It never
+  tested the one permutation that mattered. A test that can't fail on the case in question isn't
+  evidence about it. Both of us read that result as correct.
+- The Postgres-version hypothesis was the project owner's; the run that refuted it was confounded the
+  first time. The first local clusters used `LC_CTYPE=C`, under which Postgres's text-search parser
+  treats every non-ASCII character as a letter, so `—Whoever` and `“coin”` became tokens with the
+  punctuation glued on. Only a per-row tsvector-identity check against Neon exposed it. **The em-dash
+  cost this investigation a run tonight, and cost BNS 255 its section header this morning (`255.—Public
+  servant...`, the 2026-10-09 parser entry) -- in two unrelated subsystems on the same day.**
+
+**What still stands -- the half that keeps today's work standing.** Same-database comparisons remain
+valid. This morning's 0.730 → 0.729 attribution holds. Strictly, its physical layout wasn't
+unchanged: the re-ingest rewrote 6 rows in place, which moves them. It holds because the movement was
+*traced*, not inferred from layout: bigamy's rank 4 → 5 came from IPC 376AB's vector similarity rising
+0.4895 → 0.4992 past IPC 494's 0.4922. That's a deterministic vector-side change, not a tie. And the
+arithmetic closes: (0.25 − 0.20)/44 = 0.0011364, exactly the observed 0.7298 → 0.7287, so no tie moved
+anywhere else in that comparison. The rule, then: a same-database comparison is trustworthy when the
+difference is fully accounted for by traced, non-tie changes; a cross-database comparison isn't
+trustworthy below the tie error bar at all.
+
+**The size of the error bar -- the scale of one flip, not a bound on the noise.** One query swapping two
+adjacent ranks moves MRR by between 0.0011 (a 4 ↔ 5 swap) and 0.0114 (1 ↔ 2, the case observed here,
+the largest one adjacent swap can produce). Larger totals are possible: a tie can move a query more than
+one rank, several queries can flip at once (27 of the 44 in-scope queries carry full-text ties in their
+candidate pool), and a tie at rank 5/6 moves Recall@5 by 1/44 -- bigamy's answer sits at exactly rank 5.
+So "~0.012" is the measured scale of one flip. It doesn't guarantee that a cross-database difference
+above it is signal.
+
+**One open item it plausibly bears on, not verified**: the company-law out-of-scope query's fused-order
+change (0.2817 → 0.3057 `top_similarity`, two different rows in the same slot, earlier entry). Tie
+order is now a known mechanism for exactly that kind of reordering with no similarity moving, and 6
+rows changed physical position this morning. That's consistent with it, not a demonstration of it.
+
+**Ordering consequence**: the deterministic, content-keyed tiebreaker (readiness E8, key
+`(act_code, section_number, version_no)` with `COLLATE "C"`, explicitly not `section_versions.id`) is a
+prerequisite for any MRR gate and for K-EXP5's cross-database check. Don't gate a metric with a coin
+flip in it. Until it lands, MRR stays ungated, and K-EXP5's mandatory check runs v1 and v2
+back-to-back on one database. The tiebreaker will itself move rankings, so it needs its own full
+per-query before/after. Not started.
