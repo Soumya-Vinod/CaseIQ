@@ -31,35 +31,52 @@ from .footnotes import is_footnote_shaped
 from .schedule_exclusion import exclude_schedule_region
 from .section_boundary import trim_trailing_furniture
 
-# Group 1: an optional marginal-note prefix sharing the line with the section
-#          number (BNSS/BSA quirk). Marginal notes wrap across lines in the
-#          PDF's original two-column layout and pdfplumber's column-unaware
-#          extraction drops an arbitrary fragment of one next to the number --
-#          e.g. "Trial of 4. (1) All offences..." or "Classes of 6. Besides
-#          the High Courts...". The fragment does NOT reliably end in "." (it's
-#          a mid-sentence wrap, not a full clause), so this only requires it to
-#          start with a capital letter and end in whitespace before the digits.
-# Group 2: the section number itself.
+# `pfx`: an optional marginal-note prefix sharing the line with the section
+#        number (BNSS/BSA quirk). Marginal notes wrap across lines in the
+#        PDF's original two-column layout and pdfplumber's column-unaware
+#        extraction drops an arbitrary fragment of one next to the number --
+#        e.g. "Trial of 4. (1) All offences..." or "Classes of 6. Besides
+#        the High Courts...". The fragment does NOT reliably end in "." (it's
+#        a mid-sentence wrap, not a full clause), so this only requires it to
+#        start with a capital letter and end in whitespace before the digits.
+# `num`: the section number itself.
 # Lookahead: the number's "." must be followed by whitespace, an immediate "("
 #            (BNSS/BSA's "2.(1)" -- no space before the paren), or an immediate
 #            capital letter (BNSS also has bare "15.The State Government..."
-#            with no space at all after the period).
+#            with no space at all after the period) -- OR, only when `pfx`
+#            did NOT match, an immediate em-dash: BNS's "255.—Public servant
+#            disobeying..." (v11, below). The conditional is what keeps this
+#            narrow: of 101 line-start "N.—" occurrences across BNS/BNSS/BSA,
+#            100 are "Explanation 1.—"/"Exception 2.—" lines, which reach the
+#            number only THROUGH `pfx` -- allowing the em-dash unconditionally
+#            split ~40 real sections at those lines (measured, docs/
+#            evaluation.md).
 # The strong discriminator that keeps this from over-matching prose is the
 # unconditional requirement immediately after the optional prefix: digits
 # directly followed by a literal "." -- "Rules 45 and 46" never matches
 # because "45" isn't immediately followed by ".".
 _HEADER_RE = re.compile(
     r"(?:^|\n)"
-    r"(?:[A-Z][^\n]{0,80}\s)?"
-    r"(\d{1,3}[A-Z]{0,2})\."
-    r"(?=[\sA-Z(])",
+    r"(?P<pfx>[A-Z][^\n]{0,80}\s)?"
+    r"(?P<num>\d{1,3}[A-Z]{0,2})\."
+    r"(?=[\sA-Z(]|(?(pfx)(?!)|—))",
     re.MULTILINE,
 )
 
 
 class GazetteParser:
     name = "GazetteParser"
-    version = "10"
+    version = "11"
+    # v11: _HEADER_RE accepts an em-dash immediately after a BARE line-start
+    #     section number ("255.—Public servant..."), never after one reached
+    #     through the marginal-note prefix group. BNS 255 was never a header
+    #     before this: its whole body was appended to BNS 254 and only its
+    #     ToC line survived as "255". That was fixed 2026-09-14 by editing the
+    #     production rows directly, on the belief the parser had been fixed;
+    #     it hadn't, and every fresh ingest since (nightly-eval, 26 nights)
+    #     reproduced the original merge -- see docs/evaluation.md. Measured
+    #     effect across all three Gazette acts: exactly BNS 254 and 255
+    #     change; BNSS and BSA byte-identical.
     # v10: parsing/section_boundary.py's whole-line furniture recognition
     #     (trim_trailing_furniture, unchanged in structure since v7) now
     #     also recognises two more line SHAPES: a chapter/ToC sub-heading
@@ -215,7 +232,7 @@ class GazetteParser:
                 continue
             out.append(
                 RawSection(
-                    section_number=m.group(1).strip(),
+                    section_number=m.group("num").strip(),
                     section_title=None,  # Gazette body text doesn't reliably separate
                     section_text=body[:MAX_SECTION_TEXT_CHARS],  # a marginal-note title from operative text
                     char_start=m.start(),

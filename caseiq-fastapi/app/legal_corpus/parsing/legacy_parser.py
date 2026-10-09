@@ -52,8 +52,14 @@ _REPEALED_RE = re.compile(
 # that specific print run, not a new grammatical shape -- so s.17 (the one
 # General-Explanations entry with no period) silently fell back to its
 # near-empty ToC stub and was reported "missing" until this was added.
+#
+# A third separator (v11): the period glued directly to a capital letter, with
+# at most one space BEFORE it -- IPC's "376AB.Punishment..." and "174A .Non-
+# appearance..." once _extract_text has stripped their amendment-bracket
+# prefix ("1[", "4["). Neither matched "\.\s+", so both bodies were appended to
+# the preceding section (376A, 174) and only their ToC stubs survived.
 _HEADER_RE = re.compile(
-    r"(?:^|\n)\s*(\d{1,3}[A-Z]{0,2})(?:\.\s+(?:\(1\)\s+)?|\s+(?=[“\"'―]))([^\n]{5,200})",
+    r"(?:^|\n)\s*(\d{1,3}[A-Z]{0,2})(?:\.\s+(?:\(1\)\s+)?|\s?\.(?=[A-Z])|\s+(?=[“\"'―]))([^\n]{5,200})",
     re.MULTILINE,
 )
 
@@ -65,7 +71,17 @@ _HEADER_RE = re.compile(
 
 class LegacyActParser:
     name = "LegacyActParser"
-    version = "10"
+    version = "11"
+    # v11: _HEADER_RE accepts "N.Capital" / "N .Capital" as a header (see the
+    #     comment above it). IPC 174A and 376AB were fixed 2026-09-14 by
+    #     editing the production rows directly, on the belief the parser had
+    #     been fixed; it hadn't, and every fresh ingest since reproduced the
+    #     merge -- see docs/evaluation.md. Measured effect: IPC 174/174A/376A/
+    #     376AB change, all other 559 IPC sections byte-identical; in CrPC,
+    #     exactly one side effect -- s.185 loses a glued amendment footnote
+    #     ("1.Ins. by Act 45 of 1978, s. 15 (w.e.f. 18.12.1978).") that is now
+    #     recognised as a header candidate and excised by the existing
+    #     footnote check, as it should have been all along.
     # v10: parsing/section_boundary.py's whole-line furniture recognition
     #     (trim_trailing_furniture, unchanged in structure since v7) now
     #     also recognises two more line SHAPES: a chapter/ToC sub-heading

@@ -80,9 +80,13 @@ DEFAULTS = {
 # one of these should remove it from this list, not just leave the gate
 # silenced for it.
 KNOWN_TRUNCATION_EXCEPTIONS: dict[str, frozenset[str]] = {
-    # "255" removed 2026-09-14: fixed at the row level (parser boundary
-    # failure merged it into BNS 254 -- see docs/evaluation.md's
-    # corpus-completeness entry), not allowlisted around anymore.
+    # "255" removed 2026-09-14 on the belief it was fixed -- it wasn't: the
+    # fix edited the production rows (BNS 254/255) directly and never touched
+    # GazetteParser, so every fresh ingest still reproduced the merge and
+    # this gate blocked BNS in nightly-eval for 26 nights. Actually fixed in
+    # the parser 2026-10-09 (GazetteParser v11, docs/evaluation.md). A
+    # row-level correction never justifies removing an entry here; only a
+    # fresh parse that passes this gate does.
     "BNS": frozenset({"44", "229", "335", "337"}),
     "BNSS": frozenset({"17", "39", "112", "120", "141", "151", "162", "164", "261", "265",
                         "298", "329", "391", "410", "432", "453", "531"}),

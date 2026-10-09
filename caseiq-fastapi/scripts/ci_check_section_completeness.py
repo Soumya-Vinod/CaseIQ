@@ -64,9 +64,16 @@ from app.legal_corpus.parsing.toc import extract_expected_entries
 from app.models.corpus import Act, SectionVersion
 
 # (act, section_number): reason. Populated the moment a real instance is
-# found and can't be fixed immediately -- empty here because all three
-# confirmed instances (IPC 376A/376AB, BNS 254/255) were corrected at the
-# row level in this same change, not allowlisted around.
+# found and can't be fixed immediately. Empty because all three confirmed
+# instances (BNS 254/255, IPC 174/174A, IPC 376A/376AB) are fixed in the
+# PARSERS (GazetteParser v11, LegacyActParser v11, 2026-10-09). This comment
+# previously said they were "corrected at the row level", written on the same
+# mistaken belief as ingest_sections.py's "255" removal: the production rows
+# were edited, the parsers weren't, and a fresh ingest would have failed this
+# check on all of them -- it never got the chance, since nightly-eval failed
+# at ingestion every night from the day this check was added (docs/
+# evaluation.md, 2026-10-09). Allowlisting here is for a real instance that
+# a fresh parse still produces, never for one patched in the database.
 KNOWN_COMPLETENESS_EXCEPTIONS: dict[tuple[str, str], str] = {}
 
 PDFS = {
