@@ -7515,3 +7515,61 @@ prerequisite for any MRR gate and for K-EXP5's cross-database check. Don't gate 
 flip in it. Until it lands, MRR stays ungated, and K-EXP5's mandatory check runs v1 and v2
 back-to-back on one database. The tiebreaker will itself move rankings, so it needs its own full
 per-query before/after. Not started.
+
+## A dead test database reports green: the integration suite skips itself, and backend-ci can't tell (2026-10-10)
+
+Found while verifying C1a (a) locally. The first CI-equivalent run reported **"285 passed, 1 skipped"**
+and looked green. The one skip was **the entire 109-test integration suite**: the pgvector container
+had exited before pytest started. Re-run with the container kept alive: **394 passed, 0 skipped**.
+Nothing in the first run's output said a third of the suite hadn't run.
+
+**Mechanism.** `tests/integration/conftest.py` runs `_skip_if_unreachable()` at import: a 3-second TCP
+probe of `TEST_DATABASE_URL`, then `pytest.skip(..., allow_module_level=True)` on failure. That's
+deliberate, so `make test` works without a database. The whole directory collapses into one "skipped",
+pytest exits 0 on skips, and `-q` prints no reason.
+
+**backend-ci is exposed.** Its test step is plain `pytest -q`, with no skip check, no `-rs` and no
+count assertion. The `postgres` service is health-checked before steps run, so the ordinary case reaches
+it. But if the database is unreachable at collection time, the job passes with zero integration tests
+run. That could happen through a service crash after the health check, a port or env change that
+breaks the `5434` / `caseiq_integration_test` match, or a change to the conftest default. A database
+that dies *mid*-run is different: it produces connection errors, so the job goes red. **Every green
+backend-ci build this week could have been a partial run.** Nothing in the job distinguishes the two,
+and nothing here has checked: run logs need GitHub authentication this check didn't have. Each run's
+log answers it in one line ("394 passed" vs "… passed, 1 skipped"). The 10-09 entry's statement that
+the canary tests "ran and passed inside backend-ci's pytest step on every push" rests on the same
+unverified assumption and should be re-checked against those logs.
+
+**Fix shape, not built.** (1) **Primary: fail on any skip of the integration suite in CI.** For example,
+an env flag such as `REQUIRE_INTEGRATION_DB=1` turns `_skip_if_unreachable()`'s skip into a hard
+failure, set in backend-ci only, so `make test` keeps its local convenience. That catches the
+unreachable-database case at its source. (2) **Secondary: a floor on the integration test count**
+(currently 109 collected) in a CI step. That catches tests leaving collection by any other route,
+such as another module-level skip, a renamed directory or a marker change. It needs raising as tests
+are added, so it's the backstop, not the main control. Prefer (1), with (2) behind it. The nightly
+already has the pattern for one step: its retention-canary step parses pytest's output and fails when
+it sees "skipped". backend-ci has nothing equivalent for the suite.
+
+**The pattern: the second self-disabling check found this week.** The first was the retention canary's
+loud-on-skip parser (10-09 entries above). It was built precisely because a skipped pytest run exits 0,
+then wired after a step that failed every night, so it never ran. Both are checks whose failure mode
+is silence. A check that can be switched off by the very fault it exists to detect has to fail loudly
+when it doesn't run.
+
+## A test that asserted the defect: test_multi_row_section_does_not_crash (2026-10-10)
+
+`tests/integration/test_cognizability_lookup.py::test_multi_row_section_does_not_crash` seeded one
+section with two rows, bailable True and False, and **asserted that the lookup returned two cards with
+`{r["bailable"] for r in ipc_results} == {False, True}`**: two contradictory bail values for one
+section, as the expected result. That's the C1a defect (readiness C1a: a conditional classification
+shown as unconditional values, here two of them with no condition on either), written down as correct
+behaviour. The test existed to catch a 500 (`MultipleResultsFound`), which it did. But it also pinned
+the output shape, so the defect was guarded by CI. Changed in C1a (a) to assert one card with
+`unavailable_reason: "conditional"`.
+
+**The failure mode, named: a test encoding a bug is worse than no test.** No test means nobody checked.
+A test that asserts the bug means someone checked and signed it off. It turns the defect into the
+specification, and the first honest fix shows up as a regression that has to be argued past. **Worth a
+scan for others of the same shape**: tests whose expected values were copied from what the code
+produced at the time, rather than from the source law or a stated requirement. Not done yet. Noted
+here so it isn't lost.
