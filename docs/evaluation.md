@@ -7732,6 +7732,23 @@ run ever to reach it.
 now a separate `retention-canary` job in `nightly-eval.yml`, with its own `pgvector/pgvector:pg17` service.
 The step body is unchanged, including its loud-on-skip and 13-passed check. As its own job, no corpus or
 golden-set failure can skip it, and its failure can't skip the golden set. Merely moving the step earlier
-in the same job would have fixed only the first half. Verified locally: the step body under `bash -e`
-against the test container gives 13 passed, 0 skipped, exit 0. Seven scheduled runs remain before the
-2026-10-17 06:49 UTC crossing (10-11 → 10-17).
+in the same job would have fixed only the first half. Seven scheduled runs remain before the 2026-10-17
+06:49 UTC crossing (10-11 → 10-17).
+
+**And it had the `pipefail` defect too, since it was first wired.** The step ran `pytest ... | tee` under
+GitHub's default bash, which has no `pipefail`, so the step saw tee's exit code, not pytest's. Its own
+check fails on a skip or on fewer than 13 passes, but "13 passed, 1 failed" satisfies both. A failing
+canary test would have gone green, with the step printing "13 passed, 0 skipped -- session-ownership
+logic verified live tonight." That's the same defect backend-ci's test step had until this afternoon.
+Fixed with `set -o pipefail`. Verified locally, running the step body under `bash -e` against the test
+container:
+- as committed: 13 passed, exit 0;
+- with a deliberately failing 14th test added: "1 failed, 13 passed", **exit 1**;
+- the same failing test on the old body (no `pipefail`): **exit 0**, and the "verified live tonight"
+  line printed.
+
+**Nothing downstream identified the canary by step name**, so the move broke nothing silently.
+`observability-alerts.yml` polls production counters only, and `retention-cleanup.yml` mentions the canary
+in a comment. No script or doc reads nightly job or step results. The workflow's overall conclusion, and
+with it GitHub's failure email, still goes red when any job fails. backend-ci's comment that pointed at
+"the retention-canary step" now says "job".
