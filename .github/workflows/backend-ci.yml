@@ -64,7 +64,53 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Test (unit + integration, real local Postgres+pgvector, no Neon)
-        run: pytest -q
+        # REQUIRE_INTEGRATION_DB=1: an unreachable test database FAILS the run
+        # instead of skipping tests/integration/ wholesale. Without it, a dead
+        # database reported "285 passed, 1 skipped" and exited 0 -- the one
+        # skip was all 109 integration tests (docs/evaluation.md, 2026-10-10).
+        # pipefail so `| tee` can't swallow pytest's own exit code.
+        env:
+          REQUIRE_INTEGRATION_DB: "1"
+        run: |
+          set -o pipefail
+          pytest -q -rs --junitxml=pytest-results.xml | tee pytest_output.txt
+
+      - name: The integration suite actually ran (0 skipped, >= 90 integration tests passed)
+        # Secondary check behind REQUIRE_INTEGRATION_DB, same pattern as
+        # nightly-eval's retention-canary step. The SKIP assertion is the
+        # precise guard: the suite has no legitimate skips in CI (413 passed,
+        # 0 skipped, 2026-10-10), so any skip fails. The floor is only a
+        # backstop against collection COLLAPSE, which is all-or-nothing -- a
+        # module-level skip takes the whole integration suite at once, and an
+        # import error in one file surfaces as an error, not a silent pass.
+        # This catches collapse, not test count: leave it well below the real
+        # total (114 today), so consolidating a few tests never trips it. Don't
+        # chase the total with it.
+        run: |
+          python -c "
+          import sys
+          import xml.etree.ElementTree as ET
+          FLOOR = 90
+          cases = list(ET.parse('pytest-results.xml').getroot().iter('testcase'))
+          def outcome(c):
+              for tag in ('failure', 'error', 'skipped'):
+                  if c.find(tag) is not None:
+                      return tag
+              return 'passed'
+          skipped = [c for c in cases if outcome(c) == 'skipped']
+          integ = [c for c in cases if c.get('classname', '').startswith('tests.integration.')
+                   and outcome(c) == 'passed']
+          if skipped:
+              print(f'FAILED: {len(skipped)} test(s) were SKIPPED, not run. A skipped test proves '
+                    f'nothing; this must fail loudly, not pass quietly. First: '
+                    f'{skipped[0].get(\"classname\")}::{skipped[0].get(\"name\")}')
+              sys.exit(1)
+          if len(integ) < FLOOR:
+              print(f'FAILED: expected >= {FLOOR} integration tests passed, got {len(integ)}.')
+              sys.exit(1)
+          print(f'Integration suite ran: {len(integ)} passed (floor {FLOOR}), '
+                f'{len(cases)} tests total, 0 skipped.')
+          "
 
       - name: Every writable scripts/*.py must call the shared production-write guard
         # docs/evaluation.md, observability entry: a shared guard

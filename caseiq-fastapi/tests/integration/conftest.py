@@ -93,7 +93,17 @@ def _skip_if_unreachable() -> None:
     try:
         with socket.create_connection((parsed.hostname, parsed.port or 5432), timeout=3):
             pass
-    except OSError:
+    except OSError as exc:
+        # backend-ci sets REQUIRE_INTEGRATION_DB=1: there, an unreachable
+        # database must fail the run, not skip it. A module-level skip
+        # collapses the whole integration suite into "1 skipped" and pytest
+        # exits 0, so a dead database looked green (docs/evaluation.md,
+        # 2026-10-10). Locally `make test` still skips, as before.
+        if os.environ.get("REQUIRE_INTEGRATION_DB") == "1":
+            raise RuntimeError(
+                f"REQUIRE_INTEGRATION_DB=1 but no test Postgres is reachable at "
+                f"{TEST_DATABASE_URL} -- refusing to skip the integration suite"
+            ) from exc
         pytest.skip(
             f"no test Postgres reachable at {TEST_DATABASE_URL} -- see this file's docstring "
             f"for the docker run command to start one",
