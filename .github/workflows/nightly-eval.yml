@@ -221,55 +221,6 @@ jobs:
         # from this job's caseiq_eval, same Postgres service, no conflict.
         run: pytest tests/integration/test_punishment_verification.py -m integration -v
 
-      - name: Pre-flight -- retention cleanup's session-ownership logic can still fire
-        # Same reasoning as the punishment-suppression check above, applied
-        # to scripts/retention_cleanup.py (docs/evaluation.md, "Retention
-        # automation" entries): the session-ownership rule (a claimed
-        # session's pre-login turns must survive past the 30-day anonymous
-        # window, deleted only once past the 12-month claimed window) is a
-        # correctness property that a quiet retention-cleanup.yml run --
-        # zero errors, a plausible-looking row count -- cannot distinguish
-        # from "the predicate silently regressed to a naive per-row user_id
-        # check and is now deleting logged-in users' own history." Forces
-        # the exact seeded shape (a claimed session with an old pre-login
-        # turn) through the real dry_run()/execute_deletes() functions every
-        # night, not just on push. Same caseiq_integration_test database the
-        # punishment-suppression check above already uses.
-        #
-        # THIS IS CURRENTLY THE ONLY THING PROVING THE PREDICATE STILL WORKS,
-        # not a supplement to production evidence: real production has had
-        # nothing eligible to delete since retention-cleanup.yml's schedule
-        # was promoted to real deletion (docs/evaluation.md, 2026-09-23) --
-        # every scheduled run so far has been a genuine no-op, not a run that
-        # happened to find nothing. A canary that can silently not-run and
-        # still report success is worse than none (per instruction) -- pytest
-        # exits 0 if every test in this file is SKIPPED (e.g. the test
-        # Postgres service becomes unreachable), which would look identical
-        # to "ran clean" in this step's own exit code alone. The check below
-        # parses pytest's own summary line and fails the step explicitly if
-        # anything was skipped, or if fewer than the known 13 tests passed --
-        # a quiet skip must be loud here, not indistinguishable from success.
-        run: |
-          pytest tests/integration/test_retention_cleanup.py -m integration -v -rs | tee retention_canary_output.txt
-          python -c "
-          import re, sys
-          text = open('retention_canary_output.txt').read()
-          skipped = re.search(r'(\d+) skipped', text)
-          passed = re.search(r'(\d+) passed', text)
-          if skipped:
-              print(f'FAILED: {skipped.group(1)} retention canary test(s) were SKIPPED, not run -- '
-                    f'likely the test Postgres was unreachable. A skipped canary proves nothing '
-                    f'about whether the session-ownership predicate still works; this must fail '
-                    f'loudly, not pass quietly.')
-              sys.exit(1)
-          if not passed or int(passed.group(1)) < 13:
-              got = passed.group(1) if passed else '0'
-              print(f'FAILED: expected 13 passed retention canary tests, got {got}.')
-              sys.exit(1)
-          print(f'Retention canary: {passed.group(1)} passed, 0 skipped -- '
-                f'session-ownership logic verified live tonight.')
-          "
-
       - name: Pre-flight -- ungrounded-response detection branch can still fire
         # Same reasoning as the punishment-suppression check just above,
         # for a different guardrail (docs/evaluation.md, "confident
@@ -311,4 +262,100 @@ jobs:
               print('FAILED:', '; '.join(failures))
               sys.exit(1)
           print('All thresholds held.')
+          "
+
+  retention-canary:
+    # Its own job, not a golden-set step (moved 2026-10-10). As a step it ran
+    # after the corpus steps, and the corpus re-ingest failed every night
+    # 09-14 -> 10-09, so the canary never ran on its schedule
+    # (docs/evaluation.md, "Retention verified by hand against production").
+    # It has no corpus dependency. As a separate job, no corpus or golden-set
+    # failure can skip it, and its failure can't skip the golden set. Needed
+    # live before 2026-10-17 06:49 UTC, when production's only claimed-session
+    # pre-login row crosses the 30-day anonymous window.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: caseiq_integration_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: caseiq-fastapi
+    env:
+      # CI-only, never real -- no live Neon credentials here either.
+      SECRET_KEY: ci-nightly-eval-not-a-real-secret-32-chars-min
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5434"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: caseiq_integration_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: caseiq-fastapi/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Pre-flight -- retention cleanup's session-ownership logic can still fire
+        # Same reasoning as golden-set's punishment-suppression check, applied
+        # to scripts/retention_cleanup.py (docs/evaluation.md, "Retention
+        # automation" entries): the session-ownership rule (a claimed
+        # session's pre-login turns must survive past the 30-day anonymous
+        # window, deleted only once past the 12-month claimed window) is a
+        # correctness property that a quiet retention-cleanup.yml run --
+        # zero errors, a plausible-looking row count -- cannot distinguish
+        # from "the predicate silently regressed to a naive per-row user_id
+        # check and is now deleting logged-in users' own history." Forces
+        # the exact seeded shape (a claimed session with an old pre-login
+        # turn) through the real dry_run()/execute_deletes() functions every
+        # night, not just on push. tests/integration/conftest.py creates and
+        # migrates its own caseiq_integration_test database on this job's
+        # service; nothing here reads the corpus.
+        #
+        # THIS IS CURRENTLY THE ONLY THING PROVING THE PREDICATE STILL WORKS,
+        # not a supplement to production evidence: real production has had
+        # nothing eligible to delete since retention-cleanup.yml's schedule
+        # was promoted to real deletion (docs/evaluation.md, 2026-09-23) --
+        # every scheduled run so far has been a genuine no-op, not a run that
+        # happened to find nothing. A canary that can silently not-run and
+        # still report success is worse than none (per instruction) -- pytest
+        # exits 0 if every test in this file is SKIPPED (e.g. the test
+        # Postgres service becomes unreachable), which would look identical
+        # to "ran clean" in this step's own exit code alone. The check below
+        # parses pytest's own summary line and fails the step explicitly if
+        # anything was skipped, or if fewer than the known 13 tests passed --
+        # a quiet skip must be loud here, not indistinguishable from success.
+        run: |
+          pytest tests/integration/test_retention_cleanup.py -m integration -v -rs | tee retention_canary_output.txt
+          python -c "
+          import re, sys
+          text = open('retention_canary_output.txt').read()
+          skipped = re.search(r'(\d+) skipped', text)
+          passed = re.search(r'(\d+) passed', text)
+          if skipped:
+              print(f'FAILED: {skipped.group(1)} retention canary test(s) were SKIPPED, not run -- '
+                    f'likely the test Postgres was unreachable. A skipped canary proves nothing '
+                    f'about whether the session-ownership predicate still works; this must fail '
+                    f'loudly, not pass quietly.')
+              sys.exit(1)
+          if not passed or int(passed.group(1)) < 13:
+              got = passed.group(1) if passed else '0'
+              print(f'FAILED: expected 13 passed retention canary tests, got {got}.')
+              sys.exit(1)
+          print(f'Retention canary: {passed.group(1)} passed, 0 skipped -- '
+                f'session-ownership logic verified live tonight.')
           "
