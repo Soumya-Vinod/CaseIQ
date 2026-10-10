@@ -20,7 +20,9 @@ import pytest
 # same way the ingest scripts run it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from app.services.offence_attribute_consistency import rows_disagree  # noqa: E402
+from app.services.offence_attribute_consistency import (  # noqa: E402
+    base_section_number, rows_disagree,
+)
 from scripts import parse_bnss_schedule, parse_crpc_schedule  # noqa: E402
 
 # Measured against production 2026-10-10: 61 multi-row sections, 27 of them
@@ -117,6 +119,62 @@ class TestBNSSConditionalSectionsStayNoData:
         for r in clean:
             counts[r.section_number] += 1
         assert max(counts.values()) == 1
+
+
+
+class TestBNSSubsectionGrouping:
+    """Sub-sections grouped at lookup (2026-10-10). The BNSS parser's output
+    equals production's BNS rows on (section, cognizable, bailable, court), so
+    these are the outcomes production shows once the lookup groups."""
+
+    @pytest.mark.parametrize("stored, base", [
+        ("222(a)", "222"), ("351(2)", "351"), ("125", "125"),
+        # Never collapsed: IPC letter-suffixed numbering has no parentheses.
+        ("376AB", "376AB"), ("120B", "120B"), ("376A", "376A"),
+        # Only ONE trailing group, and only digits or lowercase letters.
+        ("111(2)(a)", "111(2)"), ("80(A)", "80(A)"), ("80(2a)", "80(2a)"),
+    ])
+    def test_base_section_number(self, stored, base):
+        assert base_section_number(stored) == base
+
+    @pytest.fixture(scope="class")
+    def bnss_groups(self, bnss_rows):
+        _, clean = bnss_rows
+        groups = defaultdict(list)
+        for r in clean:
+            groups[base_section_number(r.section_number)].append(r)
+        return groups
+
+    def test_bns_222_displays(self, bnss_groups):
+        group = bnss_groups["222"]
+        assert sorted(r.section_number for r in group) == ["222(a)", "222(b)"]
+        assert not rows_disagree(group)
+
+    def test_bns_351_is_conditional(self, bnss_groups):
+        group = bnss_groups["351"]
+        assert sorted(r.section_number for r in group) == ["351(2)", "351(3)", "351(4)"]
+        assert len({r.triable_by for r in group}) > 1  # court differs by sub-section
+        assert rows_disagree(group)
+
+    def test_bns_125_stored_under_both_keys_agrees(self, bnss_groups):
+        group = bnss_groups["125"]
+        assert sorted(r.section_number for r in group) == ["125", "125(a)", "125(b)"]
+        assert not rows_disagree(group)
+
+    def test_counts_moving_off_no_data(self, bnss_groups):
+        # The 82 BNS sections stored only under sub-section numbers: before the
+        # fix every one said "No row in our classification data".
+        only_suffixed = {
+            k: g for k, g in bnss_groups.items()
+            if all(base_section_number(r.section_number) != r.section_number for r in g)
+        }
+        assert len(only_suffixed) == 82
+        assert sum(1 for g in only_suffixed.values() if not rows_disagree(g)) == 50
+        assert sum(1 for g in only_suffixed.values() if rows_disagree(g)) == 32
+
+    def test_crpc_rows_have_no_subsection_suffix(self, crpc_groups):
+        # So the grouping can't merge anything on the IPC side.
+        assert all(base_section_number(s) == s for s in crpc_groups)
 
 
 def _says_both(raw: str, word: str) -> bool:

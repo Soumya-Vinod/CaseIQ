@@ -276,6 +276,23 @@ Each item moves a class of fact *out* of the model and *into* your system.
     would turn honest absences into one-branch assertions on the act in force. **Needs a test
     pinning BNS 77, 78(2), 303(2), 338 and 339 to the no-data state.** Right now the one path that
     behaves correctly is the one with nothing protecting it.
+- [ ] **C1e.** 🚩 **BNS sub-section rows were invisible to every exact-number lookup. Ahead of C1b,
+  C1c's re-parse and E8's tiebreaker.** Recorded 2026-10-10; fixed in the working tree the same day,
+  pending commit. 82 of 260 BNS sections with classification data (32%) said "No row in our
+  classification data" while their rows existed under `222(a)`-style sub-section numbers. That's on
+  the act in force, through all three surfaces, with a message asserting the system looked and found
+  nothing. It ranks ahead of the others because it's the widest reach of the classification defects
+  found this week, on the act in force, and the fix is small and touches no data. Fix: group at
+  lookup, not in storage, by stripping only one trailing parenthesised group (never `376AB`), feeding
+  C1a (a)'s check. Result: 50 sections now show a real value, 32 the conditional message. Full record
+  in `docs/evaluation.md`, "BNS sub-section rows were invisible to every lookup".
+  - **Rule for every surface, current and future: where the UI shows which sub-section a value belongs
+    to, show the values; where it can't, suppress.** Three cards labelled 351(2), 351(3), 351(4) each
+    state something true, so Arrest & bail shows them. A source card or detail sheet labelled "BNS
+    351" carrying one of those values states something false, so those suppress to the conditional
+    message. This is the rule, not a per-page preference. The next surface that displays
+    classifications has to decide which case it's in: does it label each value with its own
+    sub-section? If not, it groups and suppresses.
 - [ ] **C1d.** **Single-row court defects that C1a (a) can't catch.** Recorded 2026-10-10. Each is
   one row per section, so a cross-row mismatch check never sees it. These are fixable without a
   re-parse, as data overrides in the same pattern as the `_crpc_*` transcription modules:

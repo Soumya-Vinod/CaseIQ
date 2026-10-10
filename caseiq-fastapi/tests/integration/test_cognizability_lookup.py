@@ -167,3 +167,77 @@ class TestAttachOffenceAttributes:
         (s,) = await attach_offence_attributes(db, [{"act": "BNS", "section": "77"}])
         assert s["offence_attributes"] is None
         assert s["offence_attributes_unavailable"] == "no_data"
+
+
+class TestSubsectionRowsGroupedAtLookup:
+    """BNS stores many rows per sub-section ("222(a)"); a retrieved section
+    carries the bare number. Grouped at lookup, 2026-10-10 -- see
+    offence_attribute_consistency.SUBSECTION_SUFFIX_PATTERN."""
+
+    async def _bns(self, db):
+        return await _make_act(db, "BNS", commenced_on=date(2024, 7, 1))
+
+    async def test_bns_222_agreeing_subsections_display(self, db):
+        bns = await self._bns(db)
+        for sub in ("222(a)", "222(b)"):
+            await _seed_offence_row(db, bns, sub, cognizable=False, bailable=True,
+                                     triable_by="Any Magistrate.")
+        await db.commit()
+
+        (s,) = await attach_offence_attributes(db, [{"act": "BNS", "section": "222"}])
+        assert s["offence_attributes_unavailable"] is None
+        assert s["offence_attributes"]["bailable"] is True
+        assert s["offence_attributes"]["triable_by"] == "Any Magistrate."
+
+    async def test_bns_351_court_differs_is_conditional(self, db):
+        bns = await self._bns(db)
+        await _seed_offence_row(db, bns, "351(2)", cognizable=False, bailable=True,
+                                 triable_by="Any Magistrate.")
+        await _seed_offence_row(db, bns, "351(3)", cognizable=False, bailable=True,
+                                 triable_by="Magistrate of the first class.")
+        await db.commit()
+
+        (s,) = await attach_offence_attributes(db, [{"act": "BNS", "section": "351"}])
+        assert s["offence_attributes"] is None
+        assert s["offence_attributes_unavailable"] == "conditional"
+
+    async def test_bns_125_bare_and_subsection_rows_group_together(self, db):
+        bns = await self._bns(db)
+        for sec in ("125", "125(a)", "125(b)"):
+            await _seed_offence_row(db, bns, sec, cognizable=True, bailable=True,
+                                     triable_by="Any Magistrate.")
+        await db.commit()
+
+        (s,) = await attach_offence_attributes(db, [{"act": "BNS", "section": "125"}])
+        assert s["offence_attributes"]["cognizable"] is True
+        # And grouping really pulled in all three: one disagreeing sub-row flips it.
+        await _seed_offence_row(db, bns, "125(b)", cognizable=False, bailable=True,
+                                 triable_by="Any Magistrate.")
+        await db.commit()
+        (s,) = await attach_offence_attributes(db, [{"act": "BNS", "section": "125"}])
+        assert s["offence_attributes_unavailable"] == "conditional"
+
+    async def test_letter_suffixed_ipc_number_never_collapses(self, db):
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _seed_offence_row(db, ipc, "376AB", cognizable=True, bailable=False)
+        await db.commit()
+
+        (s,) = await attach_offence_attributes(db, [{"act": "IPC", "section": "376"}])
+        assert s["offence_attributes_unavailable"] == "no_data"
+        (s,) = await attach_offence_attributes(db, [{"act": "IPC", "section": "376AB"}])
+        assert s["offence_attributes"]["bailable"] is False
+
+    async def test_lookup_by_bare_number_finds_subsection_cards(self, db):
+        bns = await self._bns(db)
+        await _make_version(db, bns, "222", "Real section text.", date(2024, 7, 1))
+        for sub in ("222(b)", "222(a)"):
+            await _seed_offence_row(db, bns, sub, cognizable=False, bailable=True,
+                                     triable_by="Any Magistrate.")
+        await db.commit()
+
+        cards = [r for r in await lookup_by_section(db, "222") if r["act"] == "BNS"]
+        assert [c["section_number"] for c in cards] == ["222(a)", "222(b)"]
+        assert all(c["has_data"] and c["unavailable_reason"] is None for c in cards)
+        # Typed with its sub-section, still an exact match.
+        cards = [r for r in await lookup_by_section(db, "222(a)") if r["act"] == "BNS"]
+        assert [c["section_number"] for c in cards] == ["222(a)"]

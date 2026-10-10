@@ -30,7 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corpus import Act, SectionVersion
 from app.models.offence_attributes import OffenceAttributes
-from app.services.offence_attribute_consistency import CONDITIONAL, NO_DATA, rows_disagree
+from app.services.offence_attribute_consistency import (
+    CONDITIONAL, NO_DATA, SUBSECTION_SUFFIX_PATTERN, rows_disagree,
+)
 
 # offence_attributes.act is always "IPC" or "BNS" -- never CrPC/BNSS/BSA,
 # see that model's own docstring (the classified act, not the schedule it
@@ -213,13 +215,27 @@ async def lookup_by_section(db: AsyncSession, section_number: str) -> list[dict]
     own row-mismatch-transcription work (s.376 crashed this same way before today) -- but that work
     just made it far more common: many of the 40 newly-fixed sections are themselves multi-row.
     Fixed by fetching all matching rows and returning each as its own card, the same one-card-per-
-    real-row shape `search_by_name()` and the frontend's own `results.map(...)` already assume."""
+    real-row shape `search_by_name()` and the frontend's own `results.map(...)` already assume.
+
+    Sub-sections, 2026-10-10: a bare number ("222") also finds the rows BNS stores per sub-section
+    ("222(a)", "222(b)") -- before, it matched exactly, found nothing, and said "No row in our
+    classification data" for 82 BNS sections whose data exists. Each sub-section keeps its own card,
+    labelled with its own number, so its classification is stated for the sub-section it belongs to;
+    C1a's disagreement check stays per stored number here. A number typed WITH its sub-section
+    ("222(a)") still matches exactly. Only one trailing parenthesised group is stripped
+    (offence_attribute_consistency.SUBSECTION_SUFFIX_PATTERN), so IPC's "376AB" is never "376"."""
     results: list[dict] = []
     for act in _CLASSIFIED_ACTS:
         oa_rows = (await db.execute(
             select(OffenceAttributes).where(
-                OffenceAttributes.act == act, OffenceAttributes.section_number == section_number,
-            )
+                OffenceAttributes.act == act,
+                or_(
+                    OffenceAttributes.section_number == section_number,
+                    func.regexp_replace(
+                        OffenceAttributes.section_number, SUBSECTION_SUFFIX_PATTERN, "",
+                    ) == section_number,
+                ),
+            ).order_by(OffenceAttributes.section_number)
         )).scalars().all()
         if oa_rows:
             results.extend(await _attach_titles(db, oa_rows))

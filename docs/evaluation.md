@@ -7540,15 +7540,37 @@ log answers it in one line ("394 passed" vs "… passed, 1 skipped"). The 10-09 
 the canary tests "ran and passed inside backend-ci's pytest step on every push" rests on the same
 unverified assumption and should be re-checked against those logs.
 
-**Fix shape, not built.** (1) **Primary: fail on any skip of the integration suite in CI.** For example,
-an env flag such as `REQUIRE_INTEGRATION_DB=1` turns `_skip_if_unreachable()`'s skip into a hard
-failure, set in backend-ci only, so `make test` keeps its local convenience. That catches the
-unreachable-database case at its source. (2) **Secondary: a floor on the integration test count**
-(currently 109 collected) in a CI step. That catches tests leaving collection by any other route,
-such as another module-level skip, a renamed directory or a marker change. It needs raising as tests
-are added, so it's the backstop, not the main control. Prefer (1), with (2) behind it. The nightly
-already has the pattern for one step: its retention-canary step parses pytest's output and fails when
-it sees "skipped". backend-ci has nothing equivalent for the suite.
+**How much can vanish: the integration suite is 109 of 394 tests, so 28% of the suite can disappear
+silently.** That makes this week's backend-ci greens a weaker signal than they were treated as. That
+includes 10-09's "first green since 09-20", which was read as corpus health. Nothing is known to be
+wrong; nothing is known to be right either. The audit script below answers it run by run.
+
+**Fixed 2026-10-10 (built the same day, not left as a shape).** (1) **Primary**:
+`tests/integration/conftest.py`'s `_skip_if_unreachable()` raises instead of skipping when
+`REQUIRE_INTEGRATION_DB=1`. backend-ci's test step sets it; `make test` locally still skips, as
+before. (2) **Secondary**: a new backend-ci step after the tests reads pytest's JUnit report. It fails
+on **any** skipped test (the suite has none legitimately in CI) and on fewer than **90** integration
+tests passed. **The skip assertion is the precise guard**: it catches the real failure exactly. **The
+floor is only a backstop against collection collapse**, which is all-or-nothing. A module-level skip
+takes the whole suite (all 109 at the time); an import error in one file surfaces as an error, not a
+silent pass. So the floor catches collapse, not test count, and sits well below the real total (114 as
+of the BNS sub-section fix). It was briefly set to 114, the exact total. That would trip the first
+time two integration tests were consolidated, get bumped anyway, and turn "never lower it" into
+something nobody means. Same pattern as nightly-eval's retention-canary step. The test step also sets
+`pipefail`, because GitHub's default bash doesn't, and without it `pytest | tee` would hide pytest's
+exit code. **Verified locally by running the workflow's own `run:` bodies under `bash -e`** against the
+CI image (`pgvector/pgvector:pg17`):
+- database up: 394 passed, check step "109 passed (floor 109), 394 tests total, 0 skipped";
+- database unreachable with the flag: test step exits 2, `RuntimeError: REQUIRE_INTEGRATION_DB=1 but
+  no test Postgres is reachable`;
+- database unreachable *without* the flag (the old behaviour): pytest reproduces "285 passed, 1
+  skipped" and exits 0, and the check step fails on the skip;
+- floor alone (a synthetic report with no skips): 85 integration passes fails the check step, 114 passes
+  it (floor 90).
+
+**Auditing the past**: `caseiq-fastapi/scripts/audit_backend_ci_runs.py` (needs an authenticated `gh`)
+prints, for the last 50 backend-ci runs, the run id, head SHA, date, conclusion and pytest summary
+line, plus the count of runs that were green but partial.
 
 **The pattern: the second self-disabling check found this week.** The first was the retention canary's
 loud-on-skip parser (10-09 entries above). It was built precisely because a skipped pytest run exits 0,
@@ -7573,3 +7595,52 @@ specification, and the first honest fix shows up as a regression that has to be 
 scan for others of the same shape**: tests whose expected values were copied from what the code
 produced at the time, rather than from the source law or a stated requirement. Not done yet. Noted
 here so it isn't lost.
+
+## BNS sub-section rows were invisible to every lookup: 82 sections said "no row" when data existed (2026-10-10)
+
+**The defect.** BNSS's First Schedule classifies many BNS offences per sub-section, and
+`offence_attributes` stores them that way: **220 of 398 BNS rows** carry a suffix such as `222(a)` or
+`351(2)` (shapes `9(9)` ×164, `9(a)` ×56; CrPC/IPC has none). Every lookup matched the stored number
+exactly against the bare section number that retrieval and search carry. So **82 of the 260 BNS
+sections with classification data (32%)** reported "No row in our classification data for this
+section — not verified either way". That's on the act in force, through all three surfaces: Ask-page
+source cards, the section detail sheet, and the Arrest & bail number search. **The message asserts the
+system looked and found nothing, when it looked for the wrong key.** Name search did find the
+sub-section rows; it was the only path that did.
+
+**It was on screen in this morning's C1a (a) "after" screenshot and we both read past it.** The BNS 351
+source card on the criminal-intimidation query showed "No row in our classification data" while
+351(2), 351(3) and 351(4) were in the table. Both of us were looking at that screenshot to check the
+suppression change and took the no-data card as the expected third state. Same lesson as the rest of
+the week: a check aimed at one thing passes over a defect sitting right next to it.
+
+**The fix, two constraints.** (1) **Group at lookup, not in storage.** Storing 222(a) and 222(b)
+separately is more faithful to the statute than collapsing them, so the query groups and the data
+stays. (2) **Strip only one trailing parenthesised group of digits or lowercase letters**
+(`offence_attribute_consistency.SUBSECTION_SUFFIX_PATTERN`, `\(([0-9]+|[a-z]+)\)$`), never a general
+alphanumeric suffix, so IPC's `376AB` / `120B` numbering can never collapse into its parent. IPC has
+no parenthesised rows, so the pattern can't merge anything on that side (pinned by a test).
+`attach_offence_attributes` (source cards and detail sheet) now groups a section's sub-section rows and
+puts the group through C1a (a)'s disagreement check. `lookup_by_section` (Arrest & bail) finds the
+sub-section rows from a bare number and keeps **one card per sub-section, labelled with its own
+number**, so each classification is stated for the sub-section it belongs to. A number typed with its
+sub-section (`222(a)`) still matches exactly.
+
+**Outcomes, stated before and confirmed after.** BNS 222 displays (`222(a)`/`222(b)` agree:
+non-cognizable, bailable, Any Magistrate). BNS 351 is conditional (court differs between 351(2) and
+351(3)). BNS 125 is the one section stored under both keys (`125`, `125(a)`, `125(b)`); all three agree
+and it displays. Before the fix, Arrest & bail showed 125 as one card and silently hid 125(a)/(b).
+**Measured with the real `attach_offence_attributes` over all 358 current BNS sections**, on a local
+copy of production's corpus: **50 move from "no data" to a real value, 32 to the conditional
+message**, 276 unchanged (98 still genuinely have no row). That equals the count from the BNSS parser's
+output, which matches production's BNS rows exactly. Browser-checked in Chrome before and after on both
+render sites (Arrest & bail cards plus the detail sheet; Ask-page source cards for BNS 351, 222 and
+121). No console errors.
+
+**Tests**: `tests/test_offence_attribute_suppression.py::TestBNSSubsectionGrouping` (pattern cases
+including `376AB` and double groups; 222/351/125 outcomes and the 82 → 50 + 32 counts from the real
+parser output; no CrPC row carries a suffix) and
+`tests/integration/test_cognizability_lookup.py::TestSubsectionRowsGroupedAtLookup` (both serialisers
+against a database; 4 of its 5 fail on the pre-fix code, the fifth is the `376AB` never-collapse
+guard). Full suite 413 passed, 114 integration. backend-ci's collapse floor stays at 90, well below
+that total, by design.

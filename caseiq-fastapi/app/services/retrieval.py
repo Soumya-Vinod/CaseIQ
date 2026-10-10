@@ -33,7 +33,9 @@ from app.models.corpus import Act, JudicialStatus, SectionVersion
 from app.models.offence_attributes import OffenceAttributes
 from app.services.domain_classifier import in_scope_probability, DOMAIN_GATE_THRESHOLD
 from app.services.embeddings import embedder
-from app.services.offence_attribute_consistency import CONDITIONAL, NO_DATA, rows_disagree
+from app.services.offence_attribute_consistency import (
+    CONDITIONAL, NO_DATA, SUBSECTION_SUFFIX_PATTERN, base_section_number, rows_disagree,
+)
 
 # Hand-curated stopgap for a semantic-embedding gap, added 2026-08-30 after
 # "how do I file an FIR" / "dowry harassment" missed their correct section on
@@ -753,20 +755,29 @@ async def attach_offence_attributes(db: AsyncSession, sections: list[dict]) -> l
     classification was shown as one unconditional value. See
     app/services/offence_attribute_consistency.py. A section with no row at
     all gets `"no_data"`, so the two cases render differently.
+
+    Sub-sections grouped at lookup, 2026-10-10: a retrieved section carries
+    the bare number ("222") but BNS stores many rows per sub-section
+    ("222(a)", "222(b)"), so the match is on the row's number with one
+    trailing sub-section group stripped (offence_attribute_consistency's
+    SUBSECTION_SUFFIX_PATTERN). The section's whole group then goes through
+    the same disagreement check: BNS 222 displays (its sub-rows agree), BNS
+    351 is "conditional" (court differs between 351(2) and 351(3)).
     """
     if not sections:
         return sections
     pairs = {(s["act"], s["section"]) for s in sections}
+    base = func.regexp_replace(OffenceAttributes.section_number, SUBSECTION_SUFFIX_PATTERN, "")
     stmt = select(OffenceAttributes).where(
         or_(*[
-            and_(OffenceAttributes.act == act, OffenceAttributes.section_number == section)
+            and_(OffenceAttributes.act == act, base == section)
             for act, section in pairs
         ])
     )
     rows = (await db.execute(stmt)).scalars().all()
     by_key: dict[tuple[str, str], list[OffenceAttributes]] = {}
     for r in rows:
-        by_key.setdefault((r.act, r.section_number), []).append(r)
+        by_key.setdefault((r.act, base_section_number(r.section_number)), []).append(r)
     for s in sections:
         group = by_key.get((s["act"], s["section"]))
         if not group:
