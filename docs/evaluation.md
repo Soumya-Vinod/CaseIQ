@@ -7735,12 +7735,21 @@ golden-set failure can skip it, and its failure can't skip the golden set. Merel
 in the same job would have fixed only the first half. Seven scheduled runs remain before the 2026-10-17
 06:49 UTC crossing (10-11 → 10-17).
 
-**And it had the `pipefail` defect too, since it was first wired.** The step ran `pytest ... | tee` under
-GitHub's default bash, which has no `pipefail`, so the step saw tee's exit code, not pytest's. Its own
-check fails on a skip or on fewer than 13 passes, but "13 passed, 1 failed" satisfies both. A failing
-canary test would have gone green, with the step printing "13 passed, 0 skipped -- session-ownership
-logic verified live tonight." That's the same defect backend-ci's test step had until this afternoon.
-Fixed with `set -o pipefail`. Verified locally, running the step body under `bash -e` against the test
+**And it had the `pipefail` defect too, since it was first wired, but prospectively.** The step ran
+`pytest ... | tee` under GitHub's default bash, which has no `pipefail`, so the step saw tee's exit code,
+not pytest's. That hasn't mattered yet: the file has exactly 13 tests, so any failure today leaves 12
+passed and the >= 13 count check fails the step. **Today's "13 passed, 0 skipped" was a real signal, and
+the canary has been trustworthy every time it ran.** The count check was doing the exit code's job by
+accident, and it would have stopped the first time anyone added a test to the file. With 14 tests, "13
+passed, 1 failed" satisfies the check, and the step goes green printing "session-ownership logic
+verified live tonight". That's the same defect backend-ci's test step had until this afternoon. Fixed
+with `set -o pipefail`.
+
+**The same principle as this morning's floor lesson, from the other side.** backend-ci's integration
+floor, briefly set at the exact total (114), would have caused false failures the first time tests were
+consolidated. Here, a floor equal to the exact total created accidental correctness that growth would
+have silently removed. A count is a backstop against collapse; neither a tight floor nor an exact-match
+one is a substitute for checking the exit code. Verified locally, running the step body under `bash -e` against the test
 container:
 - as committed: 13 passed, exit 0;
 - with a deliberately failing 14th test added: "1 failed, 13 passed", **exit 1**;
