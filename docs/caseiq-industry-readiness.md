@@ -100,6 +100,74 @@ Each item moves a class of fact *out* of the model and *into* your system.
 - [ ] **C1.** ⭐ **Offence attributes table.** Extract the First Schedule (CrPC/BNSS):
   `offence_attributes(act, section, offence_description, cognizable, bailable, compoundable, triable_by, punishment_min, punishment_max, fine)`
   Cognizability, bailability and punishment become **DB joins, never LLM output**. Directly kills the "defamation is cognizable" error — which is genuinely harmful advice, since it tells someone police *must* register an FIR when they must not.
+- [ ] **C1a.** 🚩 **Ranks above E8. A conditional classification is displayed as one unconditional
+  value, picked arbitrarily.** Recorded 2026-10-10. E8 and everything else found 2026-10-09 affects
+  which correct answer ranks first. This one displays law the statute doesn't say.
+  - **The rows are correct. The display is the defect.** The First Schedule really does classify
+    many IPC sections conditionally, with one printed sub-entry per condition. IPC 222 (intentional
+    omission to apprehend) is bailable if the person is under a sentence of less than 10 years, not
+    bailable if under a life sentence, and one of its three sub-entries is triable by a Court of Session.
+    `offence_attributes` stores one row per sub-entry, which is the right contract and the one
+    `cognizability.lookup_by_section` was already fixed to respect. But
+    `attach_offence_attributes` (`app/services/retrieval.py:758`, `by_key = {(r.act,
+    r.section_number): r for r in rows}`) keeps the last row returned per section and drops the rest.
+    It feeds every source card (`semantic_search`, the `keyword_search` fallback) and the section
+    detail sheet (`retrieval.py:358`). Production right now shows IPC 222 as **"Bail: Yes"**, and
+    shows it on every load.
+  - **Severity.** A student shown "IPC 222 — Bail: Yes" sees a confident, unconditional answer where
+    the statute is conditional, and has no way to know it depends on the sentence being served.
+    Cognizable decides whether police can arrest without a warrant. Bailable decides whether bail is
+    a right. These cards go in front of the junior batches Sam is demoing to. This system has
+    abstention, grounding checks and suppress-on-mismatch (`verify_punishments`) precisely so it
+    never claims more confidence than its source supports. This path is guarded by none of them.
+  - **Counts, measured read-only against production 2026-10-10** (877 rows, 796 sections, all
+    multi-row sections IPC, BNS has none):
+    - **61** sections have more than one row.
+    - **27** of them disagree on cognizable, bailable or court (`triable_by`), with NULL counted as
+      its own value, as the UI renders it (7 differ on cognizable, 10 on bailable, 12 on court after
+      trimming trailing punctuation).
+    - **24** of the 27 show a substantively different classification depending on the row.
+    - **3** (IPC 354A, 370A, 376) differ only by a First Schedule markup artifact in the court text,
+      `Court of Session.` vs `Court of Session.]`. Tracked as C1b.
+    - **The "25" in the 2026-10-10 brief was wrong and is superseded.** It comes from treating NULL as
+      agreeing with any value. That drops IPC 120 and 221, but NULL is the "conditional" state, which
+      the UI shows as different from Yes/No.
+  - **Which row shows is stable, not random -- and that doesn't make it safe.** The lookup is a bitmap
+    heap scan, so rows come back in physical order and the last one wins. Five repeated runs picked
+    the same row every time. It changes only when rows are physically rewritten (re-ingest,
+    `VACUUM FULL`, restore, Neon branch), the same mechanism as E8. So the same section can show
+    different attributes before and after unrelated maintenance, with nothing deployed.
+  - **Why a deterministic sort is not the fix.** Picking one row deterministically still shows a
+    single unconditional value for a conditional section in all 24 cases, just consistently.
+  - **What the UI can and can't express today (checked 2026-10-10).** `OffenceAttributesBlock.tsx`
+    has a real "conditional" state, but only *inside one row*: a NULL cognizable/bailable renders
+    as `Cognizable: conditional — <schedule wording>`. Court (`triable_by`) has no such state and
+    is always one string. Conditions *across* rows are held in the data
+    (`offence_description`: "If under sentence of imprisonment for life…") but reach no consumer.
+    The field isn't in `OffenceAttributesOut`, and nothing in `caseiq-web` references it. **So (b)
+    below is a real API and UI change, not just surfacing what's already sent.** The data is
+    there. The response shape (one object per section) and the component (one row) both have to
+    change. The Cognizability page shows the same gap from the other side: `lookup_by_section`
+    returns every row and renders one card per row, but with the section's title only and no
+    condition. So IPC 222 appears as three cards with the same heading and contradictory bail pills.
+  - **Order of work:**
+    a. **Suppress the attributes wherever a section's rows disagree**, the same pattern as
+       `verify_punishments`. Render an explicit "classification depends on the circumstances — see
+       the First Schedule" state, not blank (blank reads as "checked, nothing special", which is
+       C1's own three-state rule). **Ships first, and is small**: one check in
+       `attach_offence_attributes` plus one display state.
+    b. **Decide how to display a conditional classification.** This is a product decision for Sam,
+       not a data cleanup. The original plan, "resolve against the First Schedule", mostly
+       disappears once the rows are recognised as correct.
+    c. **Restore display, conditional-aware**, per (b), on the source cards, the detail sheet and
+       the Cognizability page.
+- [ ] **C1b.** **Strip First Schedule markup artifacts from user-visible `triable_by`.** Recorded
+  2026-10-10. `Court of Session.]` carries a stray amendment bracket, the same family as the
+  `2[...]` amendment markers and the em-dash. It's user-visible text, not cosmetic. Through
+  C1a's last-row pick, production currently shows the bracketed form on **every** load for IPC 370A
+  and 376, and the clean form for 354A (5/5 repeated reads, 2026-10-10). Small fix: strip it in the
+  parser, re-check every `triable_by` value for other artifacts, and re-ingest `offence_attributes`
+  under the usual before/after. Independent of C1a's (a).
 - [ ] **C2.** ⭐ **IPC ↔ BNS mapping table.** ~500 rows, each flagged `identical | renumbered | substantively_amended | repealed | newly_added`. Kills the "BNS §499" error. This is a **data contribution**, not just a feature — no free tool handles this well, and every lawyer, student and citizen in India is currently confused by it.
 - [ ] **C3.** ⭐ **Temporal routing — the single best differentiator.** Offence date determines which law applies: before 1 July 2024 → IPC/CrPC/Evidence Act; on or after → BNS/BNSS/BSA. The system should **ask when the incident occurred** and route retrieval accordingly, showing both where relevant.
   No general-purpose chatbot does this. It requires genuine legal-domain reasoning, and it's impossible to dismiss as prompt engineering.

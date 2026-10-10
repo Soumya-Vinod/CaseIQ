@@ -7306,6 +7306,8 @@ at the latest. Until then, production has never exercised it. **The nightly has 
 10-17**, so the canary's nightly run and its loud-on-skip check are live the first time the predicate
 faces that case for real.
 
+**Backup-before-retention is accidental, not enforced (2026-10-10).** On every observed day (09-20 → 10-09), the scheduled jobs were shifted later together, about 5h20m–7h20m, keeping cron order and roughly cron spacing. db-backup (02:17) started 07:36–09:05 and retention-cleanup (04:00) started 09:05–11:15, so the backup has always run first. Nothing makes it: retention deletes data, the backup is its safety net, and if GitHub's delay ever reorders the two, retention runs against a database with no fresh backup.
+
 ## Header-fix re-ingest: landed and verified live -- and the golden set moved when it "shouldn't" have (2026-10-09)
 
 Closes the "Pending" paragraph of the row-level-fixes entry above. The deploy was confirmed first
