@@ -102,7 +102,10 @@ function SourceCard({
       )}
 
       {OFFENCE_ATTR_ACTS.has(section.act) && (
-        <OffenceAttributesBlock attrs={section.offence_attributes} />
+        <OffenceAttributesBlock
+          attrs={section.offence_attributes}
+          unavailableReason={section.offence_attributes_unavailable}
+        />
       )}
 
       <p className={styles.text}>

@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from app.services.offence_attribute_consistency import UnavailableReason
+
 
 class OffenceResultOut(BaseModel):
     act: str
@@ -47,6 +49,12 @@ class OffenceResultOut(BaseModel):
     # meaningful only on the section-number path, where the section can be
     # confirmed real (in section_versions) even with has_data=False.
     section_exists: bool = True
+    # Why no classification is shown on this card, or None when one is
+    # (C1a (a), 2026-10-10): "no_data" whenever has_data is False;
+    # "conditional" for a section whose rows disagree, returned as ONE card
+    # with has_data True and every classification field empty --
+    # app/services/offence_attribute_consistency.py.
+    unavailable_reason: UnavailableReason | None = None
 
 
 class CognizabilitySearchOut(BaseModel):

@@ -1,4 +1,4 @@
-import type { OffenceAttributesOut } from "../api/types";
+import type { OffenceAttributesOut, OffenceUnavailableReason } from "../api/types";
 import styles from "./OffenceAttributesBlock.module.css";
 
 /**
@@ -19,14 +19,34 @@ import styles from "./OffenceAttributesBlock.module.css";
  *
  * Extracted from SourcesPanel once SectionDetailSheet needed the identical
  * treatment -- one definition of the three states, not two that could drift.
+ *
+ * C1a (a), 2026-10-10: `attrs == null` now carries a reason. "no_data" is
+ * state 3 above. "conditional" means the rows exist and the First Schedule
+ * classifies the section differently for different cases (IPC 222: bailable
+ * under a sentence of less than 10 years, not under a life sentence) -- the
+ * backend sends no single value for those, because any one would be wrong for
+ * some case. That's the correct answer for the section, so it's worded as an
+ * answer, not as missing data.
  */
 export const OFFENCE_ATTR_ACTS = new Set(["IPC", "BNS"]);
 
-export function OffenceAttributesBlock({ attrs }: { attrs: OffenceAttributesOut | null | undefined }) {
+export function OffenceAttributesBlock({
+  attrs,
+  unavailableReason,
+}: {
+  attrs: OffenceAttributesOut | null | undefined;
+  unavailableReason?: OffenceUnavailableReason | null;
+}) {
   return (
     <div className={styles.offenceAttrs}>
       <p className={styles.offenceAttrsLabel}>Cognizable / bailable / court</p>
-      {attrs == null ? (
+      {attrs == null && unavailableReason === "conditional" ? (
+        <p className={styles.offenceAttrsDepends}>
+          Depends on the circumstances of the offence. The First Schedule classifies this section
+          differently for different cases, so there is no single answer to show. Read the section
+          text to see which case applies.
+        </p>
+      ) : attrs == null ? (
         <p className={styles.offenceAttrsMissing}>
           No row in our classification data for this section — not verified either way.
         </p>

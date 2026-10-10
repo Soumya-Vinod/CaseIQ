@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
+from app.services.offence_attribute_consistency import UnavailableReason
 
 
 class QueryIn(BaseModel):
@@ -76,6 +77,12 @@ class RetrievedSection(BaseModel):
     # the LLM guess this replaced). Coverage is partial by design; see
     # docs/evaluation.md for the current figure.
     offence_attributes: OffenceAttributesOut | None = None
+    # Why offence_attributes is None (C1a (a), 2026-10-10): "no_data" -- no
+    # row for this section; "conditional" -- rows exist but disagree, because
+    # the First Schedule classifies the section conditionally, so no single
+    # value is shown (app/services/offence_attribute_consistency.py). None
+    # when offence_attributes is present.
+    offence_attributes_unavailable: UnavailableReason | None = None
 
 
 class PreviousVersionOut(BaseModel):
@@ -105,6 +112,7 @@ class SectionDetailOut(BaseModel):
     # contract: a real value, a conditional with verbatim wording, or
     # explicitly absent, never blank.
     offence_attributes: OffenceAttributesOut | None = None
+    offence_attributes_unavailable: UnavailableReason | None = None  # see RetrievedSection
 
 
 class HelplineOut(BaseModel):

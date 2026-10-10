@@ -135,8 +135,13 @@ export function CognizabilityPage() {
                     cognizable/bailable is genuinely conditional. Passing
                     null (not the row) is what makes
                     OffenceAttributesBlock render THAT state rather than a
-                    resolved or conditional pill. */}
-                <OffenceAttributesBlock attrs={r.has_data ? (r as OffenceAttributesOut) : null} />
+                    resolved or conditional pill. unavailable_reason
+                    "conditional" (C1a (a)) is a real section whose rows
+                    disagree, sent as one card with no single value. */}
+                <OffenceAttributesBlock
+                  attrs={r.has_data && !r.unavailable_reason ? (r as OffenceAttributesOut) : null}
+                  unavailableReason={r.unavailable_reason}
+                />
 
                 <button
                   type="button"

@@ -62,3 +62,12 @@
   font-size: 0.68rem;
   color: var(--text-dim);
 }
+
+/* C1a (a): a conditional section's answer -- regular weight and colour, not
+   the dim italic of the missing-data state, because "it depends on the
+   circumstances" is the statute's real answer, not a gap in our data. */
+.offenceAttrsDepends {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}

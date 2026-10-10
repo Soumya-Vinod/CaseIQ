@@ -33,6 +33,7 @@ from app.models.corpus import Act, JudicialStatus, SectionVersion
 from app.models.offence_attributes import OffenceAttributes
 from app.services.domain_classifier import in_scope_probability, DOMAIN_GATE_THRESHOLD
 from app.services.embeddings import embedder
+from app.services.offence_attribute_consistency import CONDITIONAL, NO_DATA, rows_disagree
 
 # Hand-curated stopgap for a semantic-embedding gap, added 2026-08-30 after
 # "how do I file an FIR" / "dowry harassment" missed their correct section on
@@ -744,6 +745,14 @@ async def attach_offence_attributes(db: AsyncSession, sections: list[dict]) -> l
 
     One batched query for the whole page of results, not N+1 -- `top_k` is
     small (single digits) but this runs on every query.
+
+    C1a (a), 2026-10-10: a section whose rows disagree (a conditional First
+    Schedule entry, e.g. IPC 222) gets `offence_attributes: None` with
+    `offence_attributes_unavailable: "conditional"` -- this used to keep one
+    row per section, whichever Postgres returned last, so a conditional
+    classification was shown as one unconditional value. See
+    app/services/offence_attribute_consistency.py. A section with no row at
+    all gets `"no_data"`, so the two cases render differently.
     """
     if not sections:
         return sections
@@ -755,10 +764,22 @@ async def attach_offence_attributes(db: AsyncSession, sections: list[dict]) -> l
         ])
     )
     rows = (await db.execute(stmt)).scalars().all()
-    by_key = {(r.act, r.section_number): r for r in rows}
+    by_key: dict[tuple[str, str], list[OffenceAttributes]] = {}
+    for r in rows:
+        by_key.setdefault((r.act, r.section_number), []).append(r)
     for s in sections:
-        r = by_key.get((s["act"], s["section"]))
-        s["offence_attributes"] = None if r is None else {
+        group = by_key.get((s["act"], s["section"]))
+        if not group:
+            s["offence_attributes"], s["offence_attributes_unavailable"] = None, NO_DATA
+            continue
+        if rows_disagree(group):
+            s["offence_attributes"], s["offence_attributes_unavailable"] = None, CONDITIONAL
+            continue
+        # Every row agrees on what's displayed; keep the last, as before, so
+        # an agreeing section's card is byte-for-byte what it was.
+        r = group[-1]
+        s["offence_attributes_unavailable"] = None
+        s["offence_attributes"] = {
             "cognizable_raw": r.cognizable_raw, "cognizable": r.cognizable,
             "bailable_raw": r.bailable_raw, "bailable": r.bailable,
             "compoundable": r.compoundable,

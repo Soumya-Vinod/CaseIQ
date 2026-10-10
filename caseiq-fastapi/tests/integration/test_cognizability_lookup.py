@@ -15,7 +15,8 @@ from datetime import date
 import pytest
 
 from app.models.offence_attributes import OffenceAttributes
-from app.services.cognizability import coverage_note_for, lookup_by_section
+from app.services.cognizability import coverage_note_for, lookup_by_section, search_by_name
+from app.services.retrieval import attach_offence_attributes
 from tests.integration.test_corpus import _make_act, _make_version
 
 pytestmark = pytest.mark.integration
@@ -46,9 +47,13 @@ class TestLookupBySectionHandlesMultipleRows:
 
         results = await lookup_by_section(db, "999")
         ipc_results = [r for r in results if r["act"] == "IPC"]
-        assert len(ipc_results) == 2
-        assert {r["bailable"] for r in ipc_results} == {False, True}
-        assert all(r["has_data"] for r in ipc_results)
+        # CHANGED 2026-10-10 (C1a (a)): this used to assert two cards with
+        # contradictory bail values -- the defect itself. Rows that disagree
+        # now come back as ONE card with no classification.
+        assert len(ipc_results) == 1
+        assert ipc_results[0]["unavailable_reason"] == "conditional"
+        assert ipc_results[0]["has_data"] is True
+        assert ipc_results[0]["bailable"] is None and ipc_results[0]["triable_by"] == ""
 
     async def test_multi_row_section_coverage_note_still_correct(self, db):
         ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
@@ -82,3 +87,83 @@ class TestLookupBySectionHandlesMultipleRows:
         assert len(ipc_results) == 1
         assert ipc_results[0]["has_data"] is False
         assert coverage_note_for("section_number", results) != ""
+
+
+class TestConditionalSectionsSuppress:
+    """C1a (a): a section whose rows disagree on cognizable, bailable or court
+    shows no classification -- in both serialisers."""
+
+    async def test_court_only_difference_suppresses_without_normalising(self, db):
+        # The bracket-artifact case (IPC 370A/376): same classification, court
+        # strings differ only by a stray "]". Raw comparison suppresses it.
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _make_version(db, ipc, "995", "Test section text.", date(1862, 1, 1))
+        await _seed_offence_row(db, ipc, "995", cognizable=True, bailable=False,
+                                 triable_by="Court of Session.")
+        await _seed_offence_row(db, ipc, "995", cognizable=True, bailable=False,
+                                 triable_by="Court of Session.]")
+        await db.commit()
+
+        (card,) = [r for r in await lookup_by_section(db, "995") if r["act"] == "IPC"]
+        assert card["unavailable_reason"] == "conditional"
+
+    async def test_agreeing_multi_row_section_still_displays(self, db):
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _make_version(db, ipc, "994", "Test section text.", date(1862, 1, 1))
+        await _seed_offence_row(db, ipc, "994", cognizable=True, bailable=False, offence="Base.")
+        await _seed_offence_row(db, ipc, "994", cognizable=True, bailable=False, offence="Variant.")
+        await db.commit()
+
+        cards = [r for r in await lookup_by_section(db, "994") if r["act"] == "IPC"]
+        assert len(cards) == 2
+        assert all(c["unavailable_reason"] is None and c["bailable"] is False for c in cards)
+
+    async def test_name_search_checks_all_rows_not_just_the_matched_one(self, db):
+        # search_by_name's ilike can match one sub-row; the others still decide.
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _make_version(db, ipc, "993", "Test section text.", date(1862, 1, 1))
+        await _seed_offence_row(db, ipc, "993", cognizable=True, bailable=True,
+                                 offence="Zyxwv omission, lesser sentence.")
+        await _seed_offence_row(db, ipc, "993", cognizable=True, bailable=False,
+                                 offence="If under sentence of life.")
+        await db.commit()
+
+        (card,) = [r for r in await search_by_name(db, "zyxwv") if r["section_number"] == "993"]
+        assert card["unavailable_reason"] == "conditional"
+
+    async def test_no_row_section_reports_no_data_reason(self, db):
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _make_version(db, ipc, "992", "Real section, never classified.", date(1862, 1, 1))
+        await db.commit()
+
+        (card,) = [r for r in await lookup_by_section(db, "992") if r["act"] == "IPC"]
+        assert card["unavailable_reason"] == "no_data"
+
+
+class TestAttachOffenceAttributes:
+    """The source-card / section-detail serialiser."""
+
+    async def test_disagreeing_rows_suppress(self, db):
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _seed_offence_row(db, ipc, "991", cognizable=True, bailable=True)
+        await _seed_offence_row(db, ipc, "991", cognizable=True, bailable=False)
+        await db.commit()
+
+        (s,) = await attach_offence_attributes(db, [{"act": "IPC", "section": "991"}])
+        assert s["offence_attributes"] is None
+        assert s["offence_attributes_unavailable"] == "conditional"
+
+    async def test_agreeing_rows_display(self, db):
+        ipc = await _make_act(db, "IPC", commenced_on=date(1862, 1, 1))
+        await _seed_offence_row(db, ipc, "990", cognizable=True, bailable=False, offence="Base.")
+        await _seed_offence_row(db, ipc, "990", cognizable=True, bailable=False, offence="Variant.")
+        await db.commit()
+
+        (s,) = await attach_offence_attributes(db, [{"act": "IPC", "section": "990"}])
+        assert s["offence_attributes"]["bailable"] is False
+        assert s["offence_attributes_unavailable"] is None
+
+    async def test_no_row_is_no_data(self, db):
+        (s,) = await attach_offence_attributes(db, [{"act": "BNS", "section": "77"}])
+        assert s["offence_attributes"] is None
+        assert s["offence_attributes_unavailable"] == "no_data"

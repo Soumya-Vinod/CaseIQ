@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corpus import Act, SectionVersion
 from app.models.offence_attributes import OffenceAttributes
+from app.services.offence_attribute_consistency import CONDITIONAL, NO_DATA, rows_disagree
 
 # offence_attributes.act is always "IPC" or "BNS" -- never CrPC/BNSS/BSA,
 # see that model's own docstring (the classified act, not the schedule it
@@ -64,7 +65,9 @@ def _row_to_dict(act: str, section_number: str, title: str, title_source: str,
                   compoundable_with_permission: bool | None = None,
                   compoundable_by: str | None = None, triable_by: str = "",
                   source: str = "", has_data: bool = True,
-                  section_exists: bool = True) -> dict:
+                  section_exists: bool = True, unavailable_reason: str | None = None) -> dict:
+    if not has_data and unavailable_reason is None:
+        unavailable_reason = NO_DATA
     return {
         "act": act, "section_number": section_number, "title": title,
         "title_source": title_source, "cognizable": cognizable,
@@ -73,6 +76,7 @@ def _row_to_dict(act: str, section_number: str, title: str, title_source: str,
         "compoundable_with_permission": compoundable_with_permission,
         "compoundable_by": compoundable_by, "triable_by": triable_by,
         "source": source, "has_data": has_data, "section_exists": section_exists,
+        "unavailable_reason": unavailable_reason,
     }
 
 
@@ -100,9 +104,35 @@ def _heading_from_text(section_number: str, section_text: str) -> str | None:
     return None
 
 
+async def _section_rows(
+    db: AsyncSession, rows: list[OffenceAttributes],
+) -> dict[tuple[str, str], list]:
+    """Every row of every section in `rows`, not just the ones passed in --
+    search_by_name can match a single sub-row of a section (its ilike runs on
+    offence_description), and whether a section's rows disagree depends on all
+    of them."""
+    keys = {(r.act, r.section_number) for r in rows}
+    stmt = select(OffenceAttributes).where(or_(*[
+        and_(OffenceAttributes.act == act, OffenceAttributes.section_number == sec)
+        for act, sec in keys
+    ]))
+    groups: dict[tuple[str, str], list] = {}
+    for r in (await db.execute(stmt)).scalars().all():
+        groups.setdefault((r.act, r.section_number), []).append(r)
+    return groups
+
+
 async def _attach_titles(db: AsyncSession, rows: list[OffenceAttributes]) -> list[dict]:
+    """One card per row -- except a section whose rows disagree (C1a (a),
+    2026-10-10, app/services/offence_attribute_consistency.py), which gets ONE
+    card with no classification and unavailable_reason "conditional". Before,
+    a conditional section like IPC 222 showed as several cards with the same
+    heading and contradictory bail pills, with no condition on any of them."""
     if not rows:
         return []
+    groups = await _section_rows(db, rows)
+    conditional = {k for k, g in groups.items() if rows_disagree(g)}
+    emitted_conditional: set[tuple[str, str]] = set()
     pairs = {(r.act, _base_number(r.section_number)) for r in rows}
     stmt = (
         select(Act.act_code, SectionVersion.section_number, SectionVersion.marginal_note,
@@ -133,6 +163,12 @@ async def _attach_titles(db: AsyncSession, rows: list[OffenceAttributes]) -> lis
             # Safety net, not the normal path for either act -- truncated
             # so a genuinely garbled fallback can't blow out the layout.
             title, title_source = r.offence_description[:140], "schedule_description_fallback"
+        if (r.act, r.section_number) in conditional:
+            if (r.act, r.section_number) not in emitted_conditional:
+                emitted_conditional.add((r.act, r.section_number))
+                out.append(_row_to_dict(r.act, r.section_number, title, title_source,
+                                        unavailable_reason=CONDITIONAL))
+            continue
         out.append(_row_to_dict(
             r.act, r.section_number, title, title_source,
             cognizable=r.cognizable, cognizable_raw=r.cognizable_raw,

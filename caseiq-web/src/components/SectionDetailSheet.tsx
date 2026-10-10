@@ -198,7 +198,10 @@ export function SectionDetailSheet({
               )}
 
               {OFFENCE_ATTR_ACTS.has(detail.act) && (
-                <OffenceAttributesBlock attrs={detail.offence_attributes} />
+                <OffenceAttributesBlock
+                  attrs={detail.offence_attributes}
+                  unavailableReason={detail.offence_attributes_unavailable}
+                />
               )}
 
               <p className={styles.sectionLabel}>Full text</p>

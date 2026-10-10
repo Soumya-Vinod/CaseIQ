@@ -6,6 +6,9 @@ export type QueryIn = components["schemas"]["QueryIn"];
 export type QueryOut = components["schemas"]["QueryOut"];
 export type RetrievedSection = components["schemas"]["RetrievedSection"];
 export type OffenceAttributesOut = components["schemas"]["OffenceAttributesOut"];
+export type OffenceUnavailableReason = NonNullable<
+  components["schemas"]["RetrievedSection"]["offence_attributes_unavailable"]
+>;
 export type JudicialStatusOut = components["schemas"]["JudicialStatusOut"];
 export type SectionOut = components["schemas"]["SectionOut"];
 export type SectionDetailOut = components["schemas"]["SectionDetailOut"];

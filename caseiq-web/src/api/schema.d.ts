@@ -897,6 +897,8 @@ export interface components {
              * @default true
              */
             section_exists: boolean;
+            /** Unavailable Reason */
+            unavailable_reason?: ("no_data" | "conditional") | null;
         };
         /** PreviousVersionOut */
         PreviousVersionOut: {
@@ -1050,6 +1052,8 @@ export interface components {
             recently_amended: boolean;
             judicial_status?: components["schemas"]["JudicialStatusOut"] | null;
             offence_attributes?: components["schemas"]["OffenceAttributesOut"] | null;
+            /** Offence Attributes Unavailable */
+            offence_attributes_unavailable?: ("no_data" | "conditional") | null;
         };
         /**
          * SectionDetailOut
@@ -1085,6 +1089,8 @@ export interface components {
             previous_version?: components["schemas"]["PreviousVersionOut"] | null;
             judicial_status?: components["schemas"]["JudicialStatusOut"] | null;
             offence_attributes?: components["schemas"]["OffenceAttributesOut"] | null;
+            /** Offence Attributes Unavailable */
+            offence_attributes_unavailable?: ("no_data" | "conditional") | null;
         };
         /** SectionHistoryEntry */
         SectionHistoryEntry: {
