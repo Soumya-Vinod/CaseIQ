@@ -14,7 +14,11 @@ run's log and classifies it from pytest's own summary line:
 Read-only. Needs an authenticated GitHub CLI (`gh auth status`). Run from the
 repo root:
 
-    python caseiq-fastapi/scripts/audit_backend_ci_runs.py [--limit 50]
+    python caseiq-fastapi/scripts/audit_backend_ci_runs.py [--limit 20] [--timeout 120]
+
+Each run costs one full log download (`gh run view --log`), so it prints a
+progress line per run, and a gh call that exceeds --timeout seconds fails
+that run (reported as no-pytest) instead of hanging the whole audit.
 """
 from __future__ import annotations
 
@@ -32,16 +36,19 @@ _SUMMARY_RE = re.compile(
 )
 
 
-def _gh(*args: str) -> str:
+def _gh(*args: str, timeout: float | None = None) -> str:
     return subprocess.run(["gh", *args], capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", check=True).stdout
+                          errors="replace", check=True, timeout=timeout).stdout
 
 
-def _summary(run_id: int) -> str | None:
+def _summary(run_id: int, timeout: float) -> str | None:
     try:
-        log = _gh("run", "view", str(run_id), "--log")
+        log = _gh("run", "view", str(run_id), "--log", timeout=timeout)
     except subprocess.CalledProcessError:
         return None  # log expired or unavailable
+    except subprocess.TimeoutExpired:
+        print(f"  run {run_id}: gh timed out after {timeout:g}s", file=sys.stderr, flush=True)
+        return None
     found = None
     for line in log.splitlines():
         # `gh run view --log` lines are "<job>\t<step>\t<timestamp> <text>".
@@ -66,14 +73,20 @@ def _classify(summary: str | None) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--limit", type=int, default=50)
-    limit = ap.parse_args().limit
+    ap.add_argument("--limit", type=int, default=20)
+    ap.add_argument("--timeout", type=float, default=120,
+                    help="seconds allowed per gh call (default 120)")
+    args = ap.parse_args()
 
-    runs = json.loads(_gh("run", "list", "--workflow", WORKFLOW, "--limit", str(limit),
-                          "--json", "databaseId,headSha,createdAt,conclusion,status,event"))
+    runs = json.loads(_gh("run", "list", "--workflow", WORKFLOW, "--limit", str(args.limit),
+                          "--json", "databaseId,headSha,createdAt,conclusion,status,event",
+                          timeout=args.timeout))
     rows = []
-    for r in runs:
-        summary = _summary(r["databaseId"])
+    for i, r in enumerate(runs, 1):
+        # Progress to stderr, so stdout stays the table.
+        print(f"[{i}/{len(runs)}] fetching log for run {r['databaseId']} "
+              f"({r['createdAt'][:16].replace('T', ' ')})", file=sys.stderr, flush=True)
+        summary = _summary(r["databaseId"], args.timeout)
         rows.append((r["databaseId"], r["headSha"][:8], r["createdAt"][:16].replace("T", " "),
                      r["conclusion"] or r["status"], _classify(summary), summary or "-"))
 
