@@ -173,8 +173,11 @@ Each item moves a class of fact *out* of the model and *into* your system.
          `OffenceAttributesOut` has no punishment field, and `punishment_text` is empty in all
          877 rows (the punishment is inside `offence_description`). So the 79 rows whose
          description contains "Ditto" can't put it on a card through this path. "Ditto" does
-         still reach the screen through two other columns (C1c): IPC 352's `triable_by` is
-         literally `Ditto. Ditto.`, and IPC 171-I's Cognizability title ends in "Ditto".
+         still reach the screen through two other columns: IPC 352's `triable_by` is literally
+         `Ditto. Ditto.` (C1d), and IPC 171-I's Cognizability title ends in "Ditto" (C1c).
+       - **Cheaper and lower-risk than first scoped (C1c finding)**: BNSS already shows the
+         no-data state for its conditional sections, so (a) brings CrPC in line with existing
+         behaviour through an existing render path. Reuse needs one wording change only.
     b. **Decide how to display a conditional classification.** This is a product decision for Sam,
        not a data cleanup. The original plan, "resolve against the First Schedule", mostly
        disappears once the rows are recognised as correct. **It depends on C1c**: the condition
@@ -204,30 +207,9 @@ Each item moves a class of fact *out* of the model and *into* your system.
     (3) adding punctuation normalisation so a mismatch check passes is loosening a gate to get a
     green, which this project refuses everywhere else.
 - [ ] **C1c.** 🚩 **Ranks above E8. `offence_description` is column-mixed across both First Schedule
-  parses, and BNSS's classifications have no verification module behind them.** Recorded
-  2026-10-10, measured read-only against production and the source PDFs.
-  - **Headline: BNSS classifications rest on a parser whose only checkable column is broken.**
-    BNSS is the law in force. CrPC's cognizable and bailable have hand-verification modules
-    (`scripts/_crpc_cognizable_bailable_verification.py`, `_crpc_first_schedule_transcription.py`,
-    `_crpc_row_mismatch_transcription.py`). BNSS has none. The one BNSS column anyone can read
-    for sense, `offence_description`, came back garbled in essentially every row. So "the
-    adjacent columns are fine" was an assumption with nothing behind it. **First evidence, a spot
-    check, not a verification**: 24 BNS rows drawn at random (seed 20261010), across 16 pages of
-    `documents/BNSS_2023.pdf`, read directly against the printed Schedule. **Cognizable 24/24 and
-    bailable 24/24 match. Court 22/24 match**; the other two (192 and 331(3)) hold two sub-rows'
-    court values joined into one string. A mechanism explains the clean classifications:
-    `parse_bnss_schedule.complete_rows` drops any row whose merged cognizable/bailable text
-    contains both a word and its negation. So a BNSS section whose sub-rows differ (77
-    voyeurism and 78(2) stalking, each with a "Second or subsequent conviction" row; 303(2) theft
-    under 5,000 rupees; 338; 339) is **absent** and shows "No row in our classification data",
-    which is honest. Its sub-rows that agree on cognizable/bailable are kept as one row, which is
-    why BNS has no multi-row sections. **What's still open**: 24 rows is a sample, not a
-    verification module, and BNSS needs one like CrPC's. **And the merge has a court-column
-    defect of its own**: 9 BNS rows hold joined court strings, 6 of them the same value repeated
-    (`Any Magistrate. Any Magistrate.`) and **3 with different values joined without their
-    conditions** (BNS 95, 331(3), 331(4); e.g. `Any Magistrate. Magistrate of the first class.`,
-    where the Schedule gives the second only "if the offence be theft"). C1a (a) doesn't catch
-    these, because each is a single row.
+  parses.** Recorded 2026-10-10, measured read-only against production and the source PDFs.
+  (An earlier draft led with a BNSS classification risk. The spot check below retired it, so it
+  no longer leads.)
   - **The column mixing, counted.**
     - **Among C1a's 27 sections, read by hand in full: 6 garbled (13 of 64 rows)**: IPC 354A, 354C,
       354D, 363A, 370A, 505. **IPC 354C and 354D have lost "second or subsequent conviction"**,
@@ -258,8 +240,54 @@ Each item moves a class of fact *out* of the model and *into* your system.
       Neither has a matching IPC section in the corpus.
     - **Search**: `search_by_name` matches user queries against `offence_description`
       (`cognizability.py:157`), so mixed text both misses and false-matches. Not measured.
-    - **Court column**: IPC 352's `triable_by` is literally `Ditto. Ditto.`, shown as its court.
     - Not on any card otherwise: the field isn't in `OffenceAttributesOut`.
+  - **BNSS classifications: checked, and sound in the sample.** The concern was that CrPC's
+    cognizable and bailable have hand-verification modules
+    (`scripts/_crpc_cognizable_bailable_verification.py`, `_crpc_first_schedule_transcription.py`,
+    `_crpc_row_mismatch_transcription.py`) and BNSS, the law in force, has none, while its one
+    readable column came back broken. A spot check, not a verification: 24 BNS rows drawn at
+    random (seed 20261010), across 16 pages of `documents/BNSS_2023.pdf`, read directly against the
+    printed Schedule. **Cognizable 24/24 and bailable 24/24 match. Court 22/24 match**; the two
+    misses are joined strings (C1d). 24 rows is a sample, so BNSS still wants a verification
+    module like CrPC's. But the risk that columns next to a garbled one are also broken didn't
+    show up.
+  - **Finding: BNSS already does what C1a (a) is trying to make CrPC do.**
+    `parse_bnss_schedule.complete_rows` merges unlabelled sub-rows into the numbered row above. It
+    then drops any row whose merged cognizable or bailable text contains both a word and its
+    negation. So a BNSS section whose sub-rows differ in classification is **absent**, and shows
+    "No row in our classification data" instead of one branch. Examples: 77 voyeurism and 78(2)
+    stalking, each with a "Second or subsequent conviction" row; 303(2) theft under 5,000 rupees;
+    338; 339. Sub-rows that agree are kept as one row, which is why BNS has no multi-row sections.
+    - **The inversion, plainly**: on conditional sections, **CrPC confidently asserts one branch
+      and BNSS asserts nothing. BNSS, the act in force, is the honest one.**
+    - **So C1a (a) is cheaper and lower-risk than first scoped.** It makes CrPC consistent with
+      behaviour that already ships for BNSS, through a render path that already exists:
+      `offence_attributes: None` → `OffenceAttributesBlock`'s missing state, no new component
+      state needed. One wording caveat before reusing it: that state reads "No row in our
+      classification data for this section — not verified either way". That's literally false for a
+      suppressed CrPC section, whose rows exist and were verified, and it misstates the reason for
+      BNS too. The honest version is one string change covering both: classification not shown
+      because it depends on the circumstances or isn't in our data, see the First Schedule.
+  - **That BNSS behaviour is accidental and untested.** It rests on a negation heuristic written to
+    catch a merge bug (the comment above `complete_rows` describes finding it on s.303). Nobody
+    designed it as a suppression rule, and **no test imports `parse_bnss_schedule` at all**
+    (checked 2026-10-10; the `bnss` matches under `tests/` are corpus tests). Any parser change can
+    break it silently, for example a better sub-row merge or a change to `_contradictory`. That
+    would turn honest absences into one-branch assertions on the act in force. **Needs a test
+    pinning BNS 77, 78(2), 303(2), 338 and 339 to the no-data state.** Right now the one path that
+    behaves correctly is the one with nothing protecting it.
+- [ ] **C1d.** **Single-row court defects that C1a (a) can't catch.** Recorded 2026-10-10. Each is
+  one row per section, so a cross-row mismatch check never sees it. These are fixable without a
+  re-parse, as data overrides in the same pattern as the `_crpc_*` transcription modules:
+  - **IPC 352**: `triable_by` is literally `Ditto. Ditto.`, live on source cards, the detail sheet
+    and the Cognizability page. A "Ditto" with its antecedent row lost.
+  - **BNS 95, 331(3), 331(4)**: two different court values joined with their conditions lost, e.g.
+    331(3) `Any Magistrate. Magistrate of the first class.`, where the Schedule gives the second
+    only "if the offence be theft". 95's second value applies only "if offence be committed".
+    The faithful fix restores them as sub-rows. Note that this makes them multi-row sections
+    whose court differs, so C1a (a)'s raw comparison will then suppress them. That's correct.
+  - **Harmless, same item**: 6 more BNS rows join the same court value twice (e.g. 192
+    `Any Magistrate. Any Magistrate.`). The display is redundant, not wrong. Clean up alongside.
 - [ ] **C2.** ⭐ **IPC ↔ BNS mapping table.** ~500 rows, each flagged `identical | renumbered | substantively_amended | repealed | newly_added`. Kills the "BNS §499" error. This is a **data contribution**, not just a feature — no free tool handles this well, and every lawyer, student and citizen in India is currently confused by it.
 - [ ] **C3.** ⭐ **Temporal routing — the single best differentiator.** Offence date determines which law applies: before 1 July 2024 → IPC/CrPC/Evidence Act; on or after → BNS/BNSS/BSA. The system should **ask when the incident occurred** and route retrieval accordingly, showing both where relevant.
   No general-purpose chatbot does this. It requires genuine legal-domain reasoning, and it's impossible to dismiss as prompt engineering.
