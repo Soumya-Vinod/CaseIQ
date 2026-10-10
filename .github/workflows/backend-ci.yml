@@ -77,7 +77,7 @@ jobs:
 
       - name: The integration suite actually ran (0 skipped, >= 90 integration tests passed)
         # Secondary check behind REQUIRE_INTEGRATION_DB, same pattern as
-        # nightly-eval's retention-canary step. The SKIP assertion is the
+        # nightly-eval's retention-canary job. The SKIP assertion is the
         # precise guard: the suite has no legitimate skips in CI (413 passed,
         # 0 skipped, 2026-10-10), so any skip fails. The floor is only a
         # backstop against collection COLLAPSE, which is all-or-nothing -- a

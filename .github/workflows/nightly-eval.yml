@@ -339,7 +339,12 @@ jobs:
         # parses pytest's own summary line and fails the step explicitly if
         # anything was skipped, or if fewer than the known 13 tests passed --
         # a quiet skip must be loud here, not indistinguishable from success.
+        # pipefail (added 2026-10-10): without it `| tee` returns tee's exit
+        # code, and "13 passed, 1 failed" satisfies the >= 13 check below,
+        # so a failing canary test went green. GitHub's default bash has no
+        # pipefail; backend-ci's test step had the same defect.
         run: |
+          set -o pipefail
           pytest tests/integration/test_retention_cleanup.py -m integration -v -rs | tee retention_canary_output.txt
           python -c "
           import re, sys
