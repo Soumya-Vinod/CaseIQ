@@ -987,6 +987,176 @@ conversation is the same shape one step earlier.
   between the two is fine. A gap of months accumulates a long run of per-query files that answer "which
   query moved" but never "what moved it", so K-EXP5 should follow within weeks, not be left open-ended.
 
+- [ ] **K-EXP7.** **Information Technology Act, 2000 (Act 21 of 2000) -- scope, written before any ingest.**
+  Recorded 2026-10-10 on branch `feat/it-act-2000`, per the process note above and K-EXP4. Investigation
+  only; nothing is built, renamed or ingested. **Status: blocked on the source decision (1) before
+  anything else in this item can start.**
+
+  **1. Source and provenance -- the candidate PDF is not current law. BLOCKING.**
+  - Candidate: `caseiq-fastapi/documents/it_act_2000_updated.pdf` (untracked; sha256
+    `e71725fa32e892f887308816046c42275fc855b5cbb4ee1063cdbd518f165140`, 36 pages). Its metadata says
+    Microsoft Word 2010, created 2018-11-05. **The latest amendment it reflects is the Finance Act,
+    2017 (w.e.f. 26-5-2017)**; nothing later appears in any footnote. It is a consolidation as on
+    roughly 2017, not "as amended".
+  - **The Jan Vishwas (Amendment of Provisions) Act, 2023 (18 of 2023), Schedule serial 32, amends 11
+    IT Act provisions**, and the PDF reflects none of them. Verified from the gazetted Act (eGazette
+    248047) and its commencement notification, MeitY **S.O. 4745(E) of 31-10-2023: in force
+    30-11-2023** (eGazette 249809):
+    - s.33(2), s.67C(2), s.68(2), s.72 and s.72A: imprisonment replaced by a monetary penalty (72A's
+      marginal heading "Punishment" becomes "Penalty"). **These stop being offences.**
+    - s.69B(4): three years → one year or fine up to one crore. s.70B(7): fine one lakh → one crore.
+    - ss.44, 45, 46: penalty amounts and wording rewritten.
+    - **s.66A: "Section 66A shall be omitted."** (see 3).
+  - **DPDP Act, 2023, s.44(2)** omits s.43A and s.87(2)(ob) and amends s.81. **Its commencement is
+    unverified**: secondary sources disagree on whether it took effect on 2025-11-13 with the DPDP
+    Rules or comes later. Check the notification itself before deciding how 43A is stored.
+  - Not exhaustively checked: any other amendment after 2023. India Code's IT Act page says the
+    consolidation is "under updation", so there may be no official current consolidated text.
+  - **Decision needed, not made here**: either (a) a current official consolidation, if one can be
+    found and its `content_as_on` established; or (b) this PDF plus the Jan Vishwas (and, if in force,
+    DPDP) changes applied in code as a recorded, tested transformation, the same pattern as the
+    `_crpc_*` transcription modules, with each change citing its gazette source. **Ingesting the PDF
+    as-is is rejected**: it would serve 66A's operative text and five pre-2023 offences that are now
+    penalties as current law.
+  - At landing: rename to `IT_2000.pdf`, add a `provenance.json` entry (sha256, source URL,
+    `content_as_on`, `consolidation_source`), and record the Jan Vishwas/DPDP handling there too.
+
+  **2. Parser: `LegacyActParser` is the base. `GazetteParser` can't parse this file.** Both were run
+  as they stand against the PDF, in memory (no code change):
+  - The ToC lists **125** entries, counted with the boundary fixed in memory (below).
+    `LegacyActParser` returns exactly those 125, none missing and none extra, and no bracket-prefixed
+    section is a stub. Its `_extract_text` already strips a line-start `N[` (`(?<=\n)\d{1,2}\[`), the
+    IPC/CrPC reprint shape this file shares. `6[66.`, `1[66A.`, `2[69.`, `3[70A.` and `1[77.` all
+    parse as full sections.
+  - `GazetteParser` has no `N[` handling. Its optional prefix group must start with a capital letter,
+    and a bare number must sit at line start, so `6[66.` matches neither. **All 17 bracket-prefixed
+    sections (3A, 6A, 7A, 10A, 15, 40A, 43A, 60, 66, 66A, 69, 70A, 72A, 77, 81A, 82, 84A) survive only
+    as their ToC stubs, with their bodies appended to the preceding section.** That's the BNS 255 /
+    IPC 376AB shape that broke the nightly for 26 nights.
+  - **What `LegacyActParser` still needs** (each shared with IPC/CrPC, so each needs IPC and CrPC
+    re-measured byte-identical, per the v11 precedent):
+    1. **ToC boundary.** `toc.py` bounds the ToC at the second `\nCHAPTER I\n`, but this file prints
+       the operative heading as **"CHAPTER 1"** (Arabic numeral). `extract_expected_numbers` therefore
+       returns `None`, and validation silently falls back to `range_fallback` -- wrong for an act with
+       lettered sections and omitted ranges. The "clean ToC" is there, but nothing can read it yet.
+    2. **Footnote vocabulary.** p.24's footnote "1. Section 66A has been struck down by Supreme
+       Court's Order..." isn't recognised as a footnote. It becomes a 534-char candidate for "section
+       1", which **swallows 66E's clauses (e)(i)(ii) from p.25** and then loses dedupe to the real s.1,
+       so **66E's operative tail is silently dropped**. Of 93 footnote-like lines, this is the only
+       real footnote missed.
+    3. **Repealed detection.** ss.50 and 52 ("[Qualifications for appointment...] Omitted by s. 169")
+       aren't flagged `is_repealed`, because their bracketed titles exceed `_REPEALED_RE`'s 60-char
+       window. s.50's text also carries a duplicated "ibid. (w.e.f. 26-5-201" fragment.
+    4. Chapter headings bleed into the preceding section (s.2 ends "...CHAPTER II DIGITAL SIGNATURE AND
+       ELECTRONIC SIGNATURE]"). Check `trim_trailing_furniture` against the `N[CHAPTER` shape.
+    5. A version bump, and a registry entry (`"IT": LegacyActParser()` or a subclass, if any of the
+       above shouldn't touch IPC/CrPC).
+
+  **3. Section 66A -- the recommendation is recorded, amended by two facts it didn't have.**
+  - Verified against the PDF: the body carries 66A's full operative text, bracketed `1[...]` but
+    otherwise unmarked (p.24). The only status note is that page's footnote ("struck down by Supreme
+    Court's Order dated 24th March, 2015 in the Shreya Singhal vs. Union of India, AIR 2015 SC 1523").
+    The ToC lists 66A with no "[Omitted.]", unlike ss.20, 49-56 and 91-94. A naive ingest would serve
+    it as current law.
+  - **Fact 1: since 2023-11-30, 66A isn't only struck down; Parliament has omitted it** (Jan Vishwas,
+    above). The correct status is "struck down 2015-03-24; omitted from the statute w.e.f.
+    2023-11-30".
+  - **Fact 2: the schema already supports the struck-down half (K2).** `judicial_status` (`status
+    'struck_down'`, case, citation, `decided_on`, `scope_note`) exists. `judicial_status_seed.py`'s
+    docstring names 66A explicitly, and skipped it only because the IT Act had no `acts` row (NOT NULL
+    FK). Once the act exists, seeding 66A is data, not schema. The omission half is the existing
+    `is_repealed` / bitemporal model (`valid_to`, `version_no`). **No migration is needed.**
+  - **But K2's existing behaviour doesn't "display that status" everywhere.** `not_struck_down()`
+    excludes struck-down sections from every organic path: semantic, lexical and citation
+    verification. Only explicit section lookup (`get_section_with_history`, SectionLookupPage) returns
+    them, with the "Struck down" badge (IPC 497 is the precedent). So the recommendation as made gives
+    the right answer on lookup and says nothing in a `/legal/query` answer. Changing that is a change
+    to K2 for every struck-down section (IPC 497 included), and is **out of this scope**.
+  - **Recorded decision (as amended):** 66A is **not omitted from the corpus**.
+    - Its current row reflects the statute after Jan Vishwas (omitted, `is_repealed`).
+    - It carries a `judicial_status` row: `struck_down`, Shreya Singhal v. Union of India, decided
+      2015-03-24, with the citation independently verified at seed time per K2's rule (the PDF's "AIR
+      2015 SC 1523" is not verification). The `scope_note` names both the judgment and the 2023
+      omission.
+    - Optional, if the ingest can write a two-version history at first ingest: the operative text as
+      version 1 (valid to 2023-11-30), so "what did 66A say" has an answer. Otherwise defer it; don't
+      ship the operative text as a current row.
+
+  **4. Out-of-scope golden-set audit -- one query flips, one is adjacent, and the classifier is a K-EXP3
+  surface nobody listed.**
+  - None of the 13 domains is "cyber". But **#35 (banking, held-out, adversarial)**, "A hacker
+    fraudulently withdrew money from my bank account, and the bank is refusing to refund me -- what can
+    I do to get my money back?", **becomes in-scope by construction**. Unauthorised access with
+    compensation through the adjudicating officer (ss.43, 46), and identity theft or cheating by
+    personation (66C, 66D), are exactly this act. Today it abstains (ambiguous top hit plus the
+    classifier, top hit IPC 489A at 0.2741). After the ingest, abstaining is the wrong answer, so
+    **44/45 becomes wrong by construction, not by regression**.
+  - **Adjacent, judged to stay out of scope, to be re-examined after the ingest**: #33 ("dispute an
+    unauthorized transaction on my credit card", train split). The answer is the bank's
+    dispute/zero-liability process, not the IT Act, but the "unauthorised transaction" wording overlaps
+    s.43. Not affected: #2 (patent counterfeits online), #41 (fake product from an online seller), #15
+    (newspaper, not online). The current 1/45 miss (public-university expulsion, constitutional) is
+    unrelated.
+  - **The domain classifier** (`train_domain_classifier.py`) is trained on golden-set labels: 44
+    in-scope queries, none of them cyber-shaped (no in-scope query mentions online, phone, hacking,
+    email or messages), against 32 out-of-scope train queries including #33. It has never seen an
+    in-scope cyber question, and it fires on all four adjacent queries today. **Likely outcome if
+    untouched: the system abstains on the questions the IT Act was added to answer**, which is K-EXP3's
+    failure. The classifier isn't in K-EXP3's surface list, and it is one.
+  - **This is K-EXP4's gap**: it covers in-scope ranking but not out-of-scope queries becoming
+    in-scope. **Rule for this and every later expansion**: before the baseline, audit every
+    out-of-scope query against the new act, and re-label any that flip, with a four-field record
+    (query, why it flips, the section(s) that answer it, date). Reported as a separate line, so the
+    44/45 and 0.909 histories stay comparable.
+  - **Also needed**: in-scope IT Act queries. K-EXP4's after-run only measures harm to the existing
+    44. Nothing measures whether the IT Act is retrievable at all. Propose a separate block of
+    in-scope IT Act queries, written from the section text, reported separately from the 44, and
+    added to the classifier's training with the train/held-out split preserved. **The number, and
+    whether #35 moves into the 44's denominator or into the new block, are Sam's decisions.**
+
+  **5. Two-release split -- recorded as split, and the source finding strengthens it.**
+  - **Release 1**: section text only (plus 66A's status, per 3).
+  - **Release 2**: s.77B's cognizable/bailable derivation into `offence_attributes`. s.77B:
+    "Notwithstanding anything contained in the Code of Criminal Procedure, 1973... the offence
+    punishable with imprisonment of three years and above shall be cognizable and the offence
+    punishable with imprisonment of three years shall be bailable." Exactly three years is cognizable
+    *and* bailable. Above three, 77B says nothing on bail, so it falls back to the Schedule's
+    other-laws part. That's a conditional boundary of C1a's kind, and it shouldn't land inside the
+    largest ranking change this corpus has taken.
+  - **Release 2 also depends on the source decision.** Jan Vishwas moved 69B(4) from three years to
+    one, and took five provisions out of imprisonment entirely. A derivation run on the PDF's text
+    would mis-classify exactly those. And 77B still names the CrPC, which BNSS has since replaced;
+    release 2 has to state how that reference reads today.
+  - K-EXP4(4)'s C1b diff requirement applies to release 2, not release 1.
+
+  **6. K-EXP4 baseline and after runs.**
+  - **Prerequisites still open**: K-EXP5's diff script (step 2, `diff_golden_runs.py`) isn't built,
+    and E8's deterministic tiebreaker hasn't landed. Until E8 lands, a cross-database comparison isn't
+    trustworthy below the tie error bar, so **every baseline/after pair runs back-to-back on one
+    database, with no write between except the IT Act ingest**.
+  - **On the branch (evidence, not the gate)**: one local or CI database with the current five-act
+    corpus → golden set (v2 file) → ingest the IT Act → golden set → per-query, per-slot section diff,
+    with every moved rank traced to the section that displaced it. Bigamy (rank 5 of 5) is checked
+    first. Both v2 files are committed on the branch.
+  - **At merge (the gate itself)**: the same pair against production, immediately before and
+    immediately after the production ingest, with K-EXP4(3)'s floor policy and four-field additions.
+    Plus a targeted backup of the corpus tables first (`db-backup.yml` excludes them).
+  - The re-labelled out-of-scope queries from 4 and the new in-scope block are fixed **before** the
+    baseline, so baseline and after score the same question set.
+
+  **7. Branch rules.**
+  - **No production writes of any kind until merge**: no ingest, no `judicial_status` seed, no
+    re-ingest. `confirm_writable_target` / `CONFIRM_PRODUCTION_WRITE` stay the backstop, not the plan.
+  - **Before merging, run `nightly-eval.yml` manually against the branch** (`gh workflow run
+    nightly-eval.yml --ref feat/it-act-2000`): the scheduled nightly runs only on `main`. Its corpus
+    cache key covers `documents/` and the parser modules, so the run is a cache miss and a full fresh
+    ingest (~28 min). It must pass every pre-flight and the golden-set thresholds, with the
+    `retention-canary` job green.
+  - **K-EXP3 surfaces, all in the same change as the ingest**: generation prompts naming the five
+    acts, UI copy, README, model card, the domain classifier (retrained, per 4), and the five-act
+    naming found in 16 files across `app/`, `caseiq-web/src/` and the README. `is_civil_scope_mismatch`
+    was checked and needs nothing: no phrase in it overlaps cyber.
+
 ---
 
 ## Sequencing
