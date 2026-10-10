@@ -6874,10 +6874,14 @@ own writes. The user set the env var on the currently-deployed (guard-less) code
 there, before this commit is pushed -- migration-ahead-of-deploy's mirror image, sequenced correctly this
 time because it was named explicitly rather than assumed safe by timing.
 
-Full non-integration and integration backend suites both pass (the one integration failure,
-`test_grounding.py`'s own order-dependent flake, confirmed pre-existing and unrelated -- passes standalone,
-fails only interleaved with unrelated tests sharing `grounding_stats` state, untouched by anything in this
-entry).
+Full non-integration and integration backend suites both pass. **Corrected 2026-10-10:** this paragraph
+originally said the one integration failure, `test_grounding.py`'s, was "confirmed pre-existing and
+unrelated ... untouched by anything in this entry." That's wrong on both counts. It was not pre-existing:
+`test_followup_carry_forward.py` (added in `a654d370`, an hour earlier) left `grounding_stats` rows behind,
+and `test_grounding`'s first test then read `responses_total` 3 instead of 1. That is exactly backend-ci's
+failure on `a654d370`. And it was not untouched: this entry's truncate in that test's `finally` is what
+fixed it. Reproduced on current code: with the truncate, the pair passes; with it removed, `assert 3 == 1`
+returns (2026-10-10 entry, "Neither red signal caught anything").
 
 ## Follow-up continuity, carry-forward trigger scope: the browser test still abstained (2026-09-23)
 
@@ -7180,7 +7184,9 @@ positives 1/44). Nothing it imports has changed since: `app/services/retrieval.p
 only. So the gap is the missing nightly signal, not a likely unmeasured regression. **The canary, said
 precisely** (this was first overstated as "never ran"): `test_retention_cleanup.py`,
 `test_punishment_verification.py` and `test_grounding.py` all ran and passed inside backend-ci's pytest
-step on every push, `90ef8fd1` included. What never ran is their NIGHTLY re-execution against an
+step on every push, `90ef8fd1` included. **Corrected 2026-10-10, from the run logs**: `test_retention_cleanup.py`
+only exists from `18437f59` (2026-09-23), so it ran on 5 pushes over 2 days (09-23, 09-24), then on none
+until 10-09. And `test_grounding.py` failed on `a654d370` (a test-isolation leak, 2026-10-10 entry). What never ran is their NIGHTLY re-execution against an
 unchanged codebase, and the retention step's loud-on-skip parser -- the one piece built specifically
 because a skipped pytest run exits 0. backend-ci's plain `pytest -q` has no such check.
 
@@ -7241,6 +7247,11 @@ all passing." That was true of the suite and said nothing about the build, which
 runs after the failing step, so it was skipped on every one of those runs too: the ruff report it was
 made report-only to protect hasn't run since 09-20.
 
+**Checked against the run logs 2026-10-10** (`audit_backend_ci_runs.py`): the red is real on all six runs,
+and the last green was `95c48ca5`, 2026-09-19 15:08 UTC. One precision: on `a654d370` (09-23 12:28)
+pytest itself failed (1 failed, 348 passed), so the vocabulary step was skipped there rather than
+failing. It failed the other five, each with pytest fully passing.
+
 **Every flag was a false positive.** The checker flagged s.120B, 175, 225A and 511 because it ran only
 `apply_known_corrections` + `apply_known_row_replacements` -- 2 of the 5 correction passes the real
 ingest applies -- and checked 130 rows instead of the 479 that ship. All four are correct in the real
@@ -7265,7 +7276,8 @@ were red at once. Only frontend-ci was green.
 Retention's schedule has run `--delete --yes` since 2026-09-24. The nightly canary that exists to prove
 the session-ownership predicate still works was wired into `nightly-eval.yml` after the step that has
 failed every night since 09-14, so it has never run on its nightly schedule (it did run in backend-ci's
-pytest on every push -- see the corpus entry above). Checked by hand, read-only (`READ ONLY` transactions
+pytest on every push -- see the corpus entry above; corrected 2026-10-10: that was 5 pushes over 09-23
+and 09-24, then no execution at all 09-24 → 10-09). Checked by hand, read-only (`READ ONLY` transactions
 throughout; the predicate stress test rolled back), before any other work:
 
 - **Eligible right now, by the script's own `dry_run()`**: 0/0/0. `audit_logs` 1,296 rows, oldest 08-13,
@@ -7544,6 +7556,8 @@ unverified assumption and should be re-checked against those logs.
 silently.** That makes this week's backend-ci greens a weaker signal than they were treated as. That
 includes 10-09's "first green since 09-20", which was read as corpus health. Nothing is known to be
 wrong; nothing is known to be right either. The audit script below answers it run by run.
+**Answered 2026-10-10: none was partial.** 0 of 14 greens in the last 20 runs (09-17 → 10-10) skipped
+anything. See the entry below.
 
 **Fixed 2026-10-10 (built the same day, not left as a shape).** (1) **Primary**:
 `tests/integration/conftest.py`'s `_skip_if_unreachable()` raises instead of skipping when
@@ -7569,8 +7583,10 @@ CI image (`pgvector/pgvector:pg17`):
   it (floor 90).
 
 **Auditing the past**: `caseiq-fastapi/scripts/audit_backend_ci_runs.py` (needs an authenticated `gh`)
-prints, for the last 50 backend-ci runs, the run id, head SHA, date, conclusion and pytest summary
-line, plus the count of runs that were green but partial.
+prints, for the last 20 backend-ci runs by default (`--limit`), the run id, head SHA, date, conclusion
+and pytest summary line, plus the count of runs that were green but partial. Each run is a full log
+download, so it prints progress per run and times out a stuck `gh` call (`--timeout`, default 120s).
+**Run 2026-10-10: 0 partial** (result in the 2026-10-10 entry below).
 
 **The pattern: the second self-disabling check found this week.** The first was the retention canary's
 loud-on-skip parser (10-09 entries above). It was built precisely because a skipped pytest run exits 0,
@@ -7644,3 +7660,78 @@ parser output; no CrPC row carries a suffix) and
 against a database; 4 of its 5 fail on the pre-fix code, the fifth is the `376AB` never-collapse
 guard). Full suite 413 passed, 114 integration. backend-ci's collapse floor stays at 90, well below
 that total, by design.
+
+## Neither red signal caught anything: the backend-ci audit, an unobserved nightly, an absent backend-ci, and a leak recorded as a flake (2026-10-10)
+
+**The audit: 0 partial.** `audit_backend_ci_runs.py --limit 20` read every backend-ci run from 2026-09-17
+06:50 to 2026-10-10 07:22 UTC: 20 runs, 14 green, **0 green but partial**, 0 unreadable. Every run's
+pytest summary shows 0 skipped. The silent-skip path (the "dead test database reports green" entry above)
+was real and reproducible locally, but it never fired in recorded history. The new gate
+(`REQUIRE_INTEGRATION_DB=1`, the skip/floor check, `pipefail`) is prophylactic. **Nothing resting on
+those green builds needs revisiting**, including 10-09's "first green since 09-20". The gate's first CI
+run, 38034183217 (`65d96ced`), passed with the check step green.
+
+**Two red signals at once, of different kinds.** From 2026-09-20 11:05 (`f0d99e96`) to 2026-10-09 13:48
+(`35bf3e21`), about 19 days, backend-ci was broken. Red runs landed on three dates (09-20, 09-23 ×4,
+09-24), then **there were no backend-ci runs at all for ~15 days**. There were no commits at all between
+`90ef8fd1` and the 10-09 work, so nothing triggered it. Over the same stretch, the nightly failed on every
+scheduled run from 09-14 through 10-09, **26 consecutive nights**, each one red in the Actions tab.
+- **The nightly was an unobserved signal.** It reported correctly every night and nobody looked; the
+  cause was first traced on 10-09 (the "invisible for 26 nights" entry above).
+- **backend-ci was an absent signal.** A red CI you stop pushing to stops telling you it's red, so the
+  longer it sits, the quieter it gets.
+
+Neither caught anything. **The unobserved one is the worse of the two**: the machinery was working and
+reporting correctly the whole time, and the failure was entirely on the watching side. That is a
+different lesson from the ignored-red-build entry above (red, seen, and disregarded as known-wrong); this
+one is red and not seen at all.
+
+**`a654d370` (09-23 12:28): the only run in the window with a real test failure, and it was a test
+bug.** 1 failed, 348 passed:
+`test_grounding.py::TestApplyGroundingCheck::test_never_cited_confident_overview_is_suppressed_and_noted`,
+`assert 3 == 1` on `grounding_stats.responses_total`. Every other red run had pytest fully passing and a
+later step failing. `a654d370` added `test_followup_carry_forward.py`, which manages its own engine,
+bypasses the truncating `db` fixture, and left `grounding_stats` rows behind. `b42b804b`, 24 minutes
+later, added an explicit truncate to that test's `finally`, and the next run passed. **Verified on current
+code, not inferred**, against the local test container, `REQUIRE_INTEGRATION_DB=1`:
+- `test_grounding.py` alone: 4 passed.
+- the first carry-forward test, then `test_grounding.py`, with the truncate: 5 passed.
+- the same pair with `b42b804b`'s truncate removed: **`test_never_cited_...` fails, `assert 3 == 1`**,
+  identical to CI.
+- the whole carry-forward file with that truncate removed: the same leak hits a different victim (its
+  second test fails on `uq_acts_act_code`, IPC already exists). That test's own truncate, added in
+  `948bf630`, then cleans up before `test_grounding` runs, which is why the file-level pair passes.
+
+So the suite caught a real defect, but in a test, not in the app. `b42b804b`'s own entry had recorded
+the failure as "confirmed pre-existing and unrelated ... untouched by anything in this entry", which is
+wrong on both counts; it's corrected in place there.
+
+**The pattern: a record asserting more than was checked, four times this week.**
+1. `parser_version`'s stale label (10-09): "v10" read as "produced by v10's logic" when it means "last
+   written under v10".
+2. The completeness check's `0 act(s) uncheckable` (readiness B10): it claimed full coverage while
+   never checking BNSS or BSA.
+3. `b42b804b`'s "confirmed pre-existing and unrelated" (above). **This one is worse than the first two,
+   because it's in evaluation.md, the record future sessions trust to tell them the cause.**
+4. The first draft of this entry. The project owner framed the nightly as "watched and attributed to a
+   known cause", so that the explained red had crowded out the invisible one. The project owner asserted
+   both the watching and the attribution without evidence, in the same message that asked for
+   `b42b804b`'s over-claim (3, above) to be corrected. The repo has no record of either, and the
+   project owner confirmed neither happened. It's the only one of the four that originated with a
+   person rather than in the repo, and it was caught before it was written down.
+
+**The retention canary, measured.** `test_retention_cleanup.py` was added in `18437f59` (09-23) and ran
+in backend-ci's pytest on **5 pushes over 2 days** (09-23, 09-24), then not at all 09-24 → 10-09.
+Earlier entries said it ran "on every push"; they're corrected in place. On the nightly it sat after the
+corpus steps, which failed every night, so it never ran there. **Today's scheduled nightly, 38043511131
+(10-10 10:02 UTC, `65d96ced`), logged "Retention canary: 13 passed, 0 skipped"**: the first scheduled
+run ever to reach it.
+
+**Moved into its own job, before the 10-17 deadline.** The canary has no corpus dependency:
+`tests/integration/conftest.py` creates and migrates its own `caseiq_integration_test` database. It's
+now a separate `retention-canary` job in `nightly-eval.yml`, with its own `pgvector/pgvector:pg17` service.
+The step body is unchanged, including its loud-on-skip and 13-passed check. As its own job, no corpus or
+golden-set failure can skip it, and its failure can't skip the golden set. Merely moving the step earlier
+in the same job would have fixed only the first half. Verified locally: the step body under `bash -e`
+against the test container gives 13 passed, 0 skipped, exit 0. Seven scheduled runs remain before the
+2026-10-17 06:49 UTC crossing (10-11 → 10-17).
