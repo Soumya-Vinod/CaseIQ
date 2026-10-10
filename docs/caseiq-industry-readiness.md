@@ -288,9 +288,36 @@ Highest-leverage work in the project. Most student RAG projects have zero measur
     deterministic tiebreaker on a **content-derived** key, `(act_code, section_number, version_no)`,
     applied identically in three places: `_lexical_candidates` (`ORDER BY rank DESC, <key>`),
     `_vector_candidates` (`ORDER BY distance, <key>`), and the RRF fusion sort (fused score, then the
-    same key). That makes ranking a function of content and query only. Putting it in the SQL
+    key decided 2026-10-10 below, which ends in the same content key). That makes ranking a function of content and query only. Putting it in the SQL
     `ORDER BY`, not only after the fetch, also settles ties straddling the candidate-pool `LIMIT`,
     which decide which rows enter the pool at all.
+    - **Decided 2026-10-10: the fusion sort's key is not the content key alone.** It is, in order:
+      (1) fused RRF score, descending; (2) vector before lexical -- a key found by the vector ranker
+      (alone or by both) before a lexical-only key; (3) rank within that key's own list -- vector rank
+      for vector keys, lexical rank for lexical-only keys; (4) the content key
+      `(act_code, section_number, version_no)`, by plain Python string comparison. The two SQL
+      queries end in the content key with `COLLATE "C"`, as above.
+      - **What this buys is determinism, not retrieval quality.** (2) and (3) are exactly today's
+        behaviour, written down: `semantic_search` builds `scores` vector list first, then lexical-only
+        keys, and Python's `sorted` is stable, so tied fused scores already come out in that
+        insertion order. Per the 2026-10-09 ordering audit (not re-measured 2026-10-10), 58/89 golden queries have a fused-score tie in the top 10, 56 of them
+        between a vector-only and a lexical-only row. Those are stable today, and this key keeps them
+        where they are. Because no two keys share both an origin and a within-list rank, (4) can't
+        be reached at the fusion stage. It's there so the sort is total on its own, not because any
+        tie reaches it. The fusion sort changes no result. The only output change in the fix commit
+        comes from the SQL `ORDER BY`s, which decide what the input lists are. That keeps the
+        commit's per-query before/after attributable to the one real nondeterminism
+        (`_lexical_candidates`: ties in 68/89 queries inside the pool, 41/89 across the `LIMIT 20`
+        cutoff).
+      - **Rejected: content key directly after fused score.** That would reorder roughly the 56
+        vector-vs-lexical ties in the same commit as the fix. About 56 queries would move, and
+        nothing would separate fix from churn: an unattributable delta, self-inflicted, the same
+        problem the company-law investigation ran into.
+      - **"Vector before lexical" is arbitrary. It is not a retrieval decision.** Under rank fusion,
+        nothing makes a semantic hit better than a keyword hit at equal fused score. It's kept
+        because it's what the code already does, it's stable, and it keeps the fix's diff readable.
+        Don't cite it as a considered ranking choice. If lexical-first turns out to retrieve better,
+        that's a quality change, with its own golden-set before/after and its own commit.
     - **Rejected: `section_versions.id`** (or any surrogate: `ctid`, an insert sequence). It's
       deterministic within one database, which is exactly why it's tempting, and every local test
       would pass. But IDs are assigned at insert, so CI's fresh database and production get different
@@ -625,7 +652,15 @@ conversation is the same shape one step earlier.
   spec: `version_no` and `lexical_hit` per top-k entry, the abstention signals' underlying values
   (`top_hit_margin`, `classifier_in_scope_prob`), and `git_dirty`. That last one matters: the first
   baseline was produced by uncommitted emitter code, so its `git_sha` alone would have named a commit
-  that didn't produce it. Step (2), the diff script, is **not built**. Size estimate corrected: 274.6
+  that didn't produce it. **Provenance repaired 2026-10-10**: that dirty baseline was committed in
+  `162c09f5` (emitter alone in `9b95941d`, no code change between them). It was re-run read-only
+  against production from the clean tree at `162c09f5` (`git_dirty: false`, 2026-10-10T04:49:23Z).
+  Run as a test, not bookkeeping: every byte outside the run header matched the committed file,
+  including totals, all 890 top-k slots across 89 queries, and every signal. The content hash
+  (`5745346906fa...`), packages and Postgres version were unchanged. So `9b95941d` is the code that
+  produced the baseline, and the regenerated file replaces it as the first v2 snapshot. This shows
+  production's tie order didn't move in the ~11 hours between the two runs. It doesn't show it
+  can't (E8). Step (2), the diff script, is **not built**. Size estimate corrected: 274.6
   KB per run, not ~100 KB (indented JSON, 89 × 10 entries plus signals).
   **What it would take** (original estimate, kept for the record): (1) in `eval_golden_set.py`, keep the full `sections`
   list each query already gets back from `semantic_search` and write it out per query, plus the
