@@ -144,21 +144,42 @@ Each item moves a class of fact *out* of the model and *into* your system.
     as `Cognizable: conditional — <schedule wording>`. Court (`triable_by`) has no such state and
     is always one string. Conditions *across* rows are held in the data
     (`offence_description`: "If under sentence of imprisonment for life…") but reach no consumer.
-    The field isn't in `OffenceAttributesOut`, and nothing in `caseiq-web` references it. **So (b)
-    below is a real API and UI change, not just surfacing what's already sent.** The data is
-    there. The response shape (one object per section) and the component (one row) both have to
-    change. The Cognizability page shows the same gap from the other side: `lookup_by_section`
-    returns every row and renders one card per row, but with the section's title only and no
-    condition. So IPC 222 appears as three cards with the same heading and contradictory bail pills.
+    The field isn't in `OffenceAttributesOut`, and nothing in `caseiq-web` references it.
+    **One defect, seen from two directions, one cause.** The query card shows one branch with
+    full confidence. The Cognizability page (`lookup_by_section` returns every row, one card per
+    row, section title only) shows IPC 222 as three cards with the same heading and
+    contradictory bail pills. Both happen because `offence_description` reaches no consumer.
+    **The plumbing is small**: one field in `OffenceAttributesOut`, filled in by the two
+    serialisers (`attach_offence_attributes` and `cognizability._row_to_dict`). That fully fixes
+    the Cognizability page, whose rows are already a list. Don't defer it as expensive. **But the
+    field's content isn't fit to show** (C1c), so it can't be plumbed until C1c's re-parse lands.
   - **Order of work:**
     a. **Suppress the attributes wherever a section's rows disagree**, the same pattern as
        `verify_punishments`. Render an explicit "classification depends on the circumstances — see
        the First Schedule" state, not blank (blank reads as "checked, nothing special", which is
        C1's own three-state rule). **Ships first, and is small**: one check in
        `attach_offence_attributes` plus one display state.
+       - **Compare raw values, deliberately**: `cognizable`, `bailable` (NULL counted as its own
+         value) and `triable_by` as stored, with no normalisation. That suppresses all 27, including
+         the 3 bracket-artifact sections (C1b), because their court strings disagree. So one
+         small change removes both the arbitrary branch and the visible `Court of Session.]`,
+         with no data touched. C1b's before/after diff then becomes a safety net, not the
+         primary control. Once C1b strips the bracket, IPC 370A and 376 stop disagreeing and
+         their court display comes back on its own. There's no normalisation rule to write or
+         maintain. **Cost, accepted**: those 3 sections show no court until C1b lands (354A
+         longer, see C1b). For a legal tool, suppressing a correct value is the right direction
+         of error.
+       - **Punishment needs no comparison here, because this path displays none.**
+         `OffenceAttributesOut` has no punishment field, and `punishment_text` is empty in all
+         877 rows (the punishment is inside `offence_description`). So the 79 rows whose
+         description contains "Ditto" can't put it on a card through this path. "Ditto" does
+         still reach the screen through two other columns (C1c): IPC 352's `triable_by` is
+         literally `Ditto. Ditto.`, and IPC 171-I's Cognizability title ends in "Ditto".
     b. **Decide how to display a conditional classification.** This is a product decision for Sam,
        not a data cleanup. The original plan, "resolve against the First Schedule", mostly
-       disappears once the rows are recognised as correct.
+       disappears once the rows are recognised as correct. **It depends on C1c**: the condition
+       text it needs is the column C1c re-parses. The one-field plumbing above can't start until
+       then.
     c. **Restore display, conditional-aware**, per (b), on the source cards, the detail sheet and
        the Cognizability page.
 - [ ] **C1b.** **Strip First Schedule markup artifacts from user-visible `triable_by`.** Recorded
@@ -167,7 +188,78 @@ Each item moves a class of fact *out* of the model and *into* your system.
   C1a's last-row pick, production currently shows the bracketed form on **every** load for IPC 370A
   and 376, and the clean form for 354A (5/5 repeated reads, 2026-10-10). Small fix: strip it in the
   parser, re-check every `triable_by` value for other artifacts, and re-ingest `offence_attributes`
-  under the usual before/after. Independent of C1a's (a).
+  under the usual before/after.
+  - **Ordering rule: C1a (a) lands first.** That's the primary path, not one of two options. C1b's fix
+    re-runs `scripts/ingest_offence_attributes.py`, which deletes and re-inserts every CrPC row:
+    a physical rewrite of the whole table. Under C1a's last-row pick, that can flip which row
+    displays for any of the 24, changing a displayed cognizable, bailable or court value with no
+    code change, no migration and no review. With (a) in place, those 24 are suppressed and the
+    flip can't reach a user. C1b's re-ingest must still diff the displayed cognizable / bailable /
+    court values for all 61 multi-row sections before and after, as the safety net. (The corpus
+    ingest, `ingest_sections.py`, never touches this table. Only the two schedule ingests do.)
+  - **IPC 354A stays suppressed after C1b. C1b's scope does not widen.** Its two court values are
+    `Any Magistrate` and `Any Magistrate.`, a missing full stop, not a bracket, so stripping the
+    bracket doesn't reconcile them. Reasons not to widen C1b: (1) it rewrites the whole table,
+    which makes it the worst place to add scope; (2) C1c's full re-parse fixes the full stop anyway;
+    (3) adding punctuation normalisation so a mismatch check passes is loosening a gate to get a
+    green, which this project refuses everywhere else.
+- [ ] **C1c.** 🚩 **Ranks above E8. `offence_description` is column-mixed across both First Schedule
+  parses, and BNSS's classifications have no verification module behind them.** Recorded
+  2026-10-10, measured read-only against production and the source PDFs.
+  - **Headline: BNSS classifications rest on a parser whose only checkable column is broken.**
+    BNSS is the law in force. CrPC's cognizable and bailable have hand-verification modules
+    (`scripts/_crpc_cognizable_bailable_verification.py`, `_crpc_first_schedule_transcription.py`,
+    `_crpc_row_mismatch_transcription.py`). BNSS has none. The one BNSS column anyone can read
+    for sense, `offence_description`, came back garbled in essentially every row. So "the
+    adjacent columns are fine" was an assumption with nothing behind it. **First evidence, a spot
+    check, not a verification**: 24 BNS rows drawn at random (seed 20261010), across 16 pages of
+    `documents/BNSS_2023.pdf`, read directly against the printed Schedule. **Cognizable 24/24 and
+    bailable 24/24 match. Court 22/24 match**; the other two (192 and 331(3)) hold two sub-rows'
+    court values joined into one string. A mechanism explains the clean classifications:
+    `parse_bnss_schedule.complete_rows` drops any row whose merged cognizable/bailable text
+    contains both a word and its negation. So a BNSS section whose sub-rows differ (77
+    voyeurism and 78(2) stalking, each with a "Second or subsequent conviction" row; 303(2) theft
+    under 5,000 rupees; 338; 339) is **absent** and shows "No row in our classification data",
+    which is honest. Its sub-rows that agree on cognizable/bailable are kept as one row, which is
+    why BNS has no multi-row sections. **What's still open**: 24 rows is a sample, not a
+    verification module, and BNSS needs one like CrPC's. **And the merge has a court-column
+    defect of its own**: 9 BNS rows hold joined court strings, 6 of them the same value repeated
+    (`Any Magistrate. Any Magistrate.`) and **3 with different values joined without their
+    conditions** (BNS 95, 331(3), 331(4); e.g. `Any Magistrate. Magistrate of the first class.`,
+    where the Schedule gives the second only "if the offence be theft"). C1a (a) doesn't catch
+    these, because each is a single row.
+  - **The column mixing, counted.**
+    - **Among C1a's 27 sections, read by hand in full: 6 garbled (13 of 64 rows)**: IPC 354A, 354C,
+      354D, 363A, 370A, 505. **IPC 354C and 354D have lost "second or subsequent conviction"**,
+      the exact condition separating each one's bailable row from its non-bailable row. The rows
+      read "conviction. Imprisonment of not 3 years but which may 7 years and with" and
+      "conviction. Imprisonment up to and with fine for second". 370A mixes the child and adult
+      cases ("Exploitation of a trafficked years and with fine. person."). Of the 21 readable
+      sections, 6 have a row whose punishment is only "Ditto", which means something only in
+      sequence.
+    - **Across all 877 rows (479 CrPC, stored `act='IPC'`; 398 BNSS, stored `act='BNS'`)**: a
+      heuristic (mid-phrase start, trailing function word, broken punishment phrases, two
+      "Imprisonment" fragments, repeated trigrams) flags **72 CrPC and 96 BNSS rows. Those are a
+      FLOOR, not a count.** Validated on the 27: it catches all 6 garbled sections, with 2 false
+      positives (IPC 222 and 376, both from the trigram check). Hand-read random samples: flagged
+      CrPC rows 11/14 garbled, **unflagged CrPC 6/15 garbled, unflagged BNSS 15/15 garbled**.
+      Estimate: **BNSS essentially all garbled, CrPC badly garbled, ~45% (rough, small samples).**
+      The heuristic misses **number loss**, which is common: "Imprisonment for and fine" (BNS 96,
+      316(4)), "Imprisonment for years" (IPC 384).
+  - **What it is**: a parser defect, column mixing from the PDF's table layout, in the same
+    family as the gazette em-dash and the 63 mid-sentence page numbers. The 27 are where it
+    shows, not where it is. **The fix is re-parsing the description column for both schedules,
+    not repairing strings.** C1a (b) depends on it.
+  - **Where it reaches users now** (measured 2026-10-10 with the app's own `_attach_titles`
+    over all 877 rows):
+    - **Title fallback** (`cognizability.py:135`): **2 of 877 rows**, both IPC, and **neither is
+      garbled**. IPC 164 is cut mid-phrase ("…Imprisonment for 3 years, or") by the code's own
+      140-character slice. IPC 171-I's title is "Failure to keep election accounts. Ditto".
+      Neither has a matching IPC section in the corpus.
+    - **Search**: `search_by_name` matches user queries against `offence_description`
+      (`cognizability.py:157`), so mixed text both misses and false-matches. Not measured.
+    - **Court column**: IPC 352's `triable_by` is literally `Ditto. Ditto.`, shown as its court.
+    - Not on any card otherwise: the field isn't in `OffenceAttributesOut`.
 - [ ] **C2.** ⭐ **IPC ↔ BNS mapping table.** ~500 rows, each flagged `identical | renumbered | substantively_amended | repealed | newly_added`. Kills the "BNS §499" error. This is a **data contribution**, not just a feature — no free tool handles this well, and every lawyer, student and citizen in India is currently confused by it.
 - [ ] **C3.** ⭐ **Temporal routing — the single best differentiator.** Offence date determines which law applies: before 1 July 2024 → IPC/CrPC/Evidence Act; on or after → BNS/BNSS/BSA. The system should **ask when the incident occurred** and route retrieval accordingly, showing both where relevant.
   No general-purpose chatbot does this. It requires genuine legal-domain reasoning, and it's impossible to dismiss as prompt engineering.
@@ -661,6 +753,11 @@ conversation is the same shape one step earlier.
        query breaking (the reason the floor was kept at 0.909 on 2026-10-09).
      The fragile point already on record (bigamy, correct answer at rank 5 of 5, see
      `docs/evaluation.md`) is the likeliest first casualty and should be checked first.
+  4. **If an expansion re-runs a schedule ingest, C1b's diff requirement applies.** This gate measures
+     retrieval rankings. Attribute display is outside it, and the golden set never touches it.
+     Inert until then: the corpus ingest doesn't write `offence_attributes`. It's likely to come up
+     eventually, because the IT Act's s.77B governs cognizable and bailable, so an IT Act
+     schedule ingest is plausible.
 
 - [ ] **K-EXP5.** **BLOCKS K-EXP4: the golden-set results file must record sections, not just scores,
   before any expansion baseline is taken.** Recorded 2026-10-09; **not to be started until that
