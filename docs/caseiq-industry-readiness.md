@@ -989,8 +989,10 @@ conversation is the same shape one step earlier.
 
 - [ ] **K-EXP7.** **Information Technology Act, 2000 (Act 21 of 2000) -- scope, written before any ingest.**
   Recorded 2026-10-10 on branch `feat/it-act-2000`, per the process note above and K-EXP4. Investigation
-  only; nothing is built, renamed or ingested. **Status: blocked on the source decision (1) before
-  anything else in this item can start.**
+  only; nothing is built, renamed or ingested. **Status: the source policy is decided (1), but the
+  source itself isn't found. India Code's served PDF is stale, and its handle-1999 copy couldn't be
+  downloaded. Nothing downstream starts until the source is fixed: the query set (4) and the
+  suppression list both depend on it.**
 
   **1. Source and provenance -- the candidate PDF is not current law. BLOCKING.**
   - Candidate: `caseiq-fastapi/documents/it_act_2000_updated.pdf` (untracked; sha256
@@ -1012,18 +1014,72 @@ conversation is the same shape one step earlier.
     Rules or comes later. Check the notification itself before deciding how 43A is stored.
   - Not exhaustively checked: any other amendment after 2023. India Code's IT Act page says the
     consolidation is "under updation", so there may be no official current consolidated text.
-  - **Decision needed, not made here**: either (a) a current official consolidation, if one can be
-    found and its `content_as_on` established; or (b) this PDF plus the Jan Vishwas (and, if in force,
-    DPDP) changes applied in code as a recorded, tested transformation, the same pattern as the
-    `_crpc_*` transcription modules, with each change citing its gazette source. **Ingesting the PDF
-    as-is is rejected**: it would serve 66A's operative text and five pre-2023 offences that are now
-    penalties as current law.
+  - **Decided 2026-10-10: the most current official consolidation, with suppression for the residual
+    gap. Never hand-edit statute text.** Use the most current official consolidated text available.
+    Any section affected by an amendment that text doesn't reflect is **suppressed** (not served)
+    rather than served stale -- suppress-on-uncertainty, as in `verify_punishments`, C1a (a) and the
+    BNSS merge. **Rejected: applying the eleven amendments to the text in code.** That would be this
+    week's pattern (knowledge living in an edit rather than in a verifiable source) with higher stakes,
+    and no way to verify the result; the DPDP s.44(2) omission of 43A is already unconfirmed.
+    **Ingesting the PDF as-is is rejected**: it would serve 66A's operative text, and five provisions
+    that stopped being offences in 2023, as current law.
+  - **India Code, checked 2026-10-10: the government's own consolidation portal serves 2017-current
+    text.** The bitstream India Code serves for the Act,
+    `indiacode.nic.in/bitstream/123456789/13116/1/it_act_2000_updated.pdf`, downloaded fresh, is
+    **byte-identical to the candidate (sha256 `e71725fa32e892f887308816046c42275fc855b5cbb4ee1063cdbd518f165140`)**.
+    This is the important part of the finding: **the candidate isn't a bad or old download; it's
+    exactly what the official portal serves today**, nearly three years after Jan Vishwas came into
+    force. s.66A carries its full operative text, and ss.33(2), 67C(2), 68(2), 72 and 72A still read
+    as imprisonment, not penalty.
+  - **One unverified lead, being checked by Sam in a browser**: a second India Code item, handle 1999
+    (`bitstream/123456789/1999/1/A2000-21 (1).pdf`), is described in one search snippet as showing
+    66A "Omitted by the Jan Vishwas (Amendment of Provisions) Act, 2023". From here, five download
+    attempts returned HTTP 504 and the fetch tool got 403, so its contents weren't seen. If it is a
+    post-2023 consolidation, it's the source, and the suppression list below shrinks to whatever it
+    still doesn't reflect. **If it doesn't pan out, there may be no official consolidation reflecting
+    Jan Vishwas at all, and suppression becomes the primary path for release 1, not the fallback.**
+  - **Suppression list, if no current consolidation is found** -- every section the candidate states
+    wrongly today:
+    - **Jan Vishwas, in force 30-11-2023, verified from the gazette (10 sections, suppressed)**:
+      33, 44, 45, 46, 67C, 68, 69B, 70B, 72, 72A. MeitY's own notice also counts 11 IT Act sections,
+      the 10 above plus 66A; the notice's other cited serial, 42, is the Aadhaar Act.
+    - **66A**: handled by its own decision (3), not by suppression.
+    - **DPDP s.44(2), commencement unverified, so suppressed on uncertainty**: 43A (omitted if in
+      force), 81 (proviso amended) and 87 (clause (2)(ob) omitted). Suppressing 87 loses only a
+      rule-making clause.
+    - Section 2's definitions aren't on either list; neither amendment touches them.
+  - **The cost of release 1 under suppression, stated as a known limitation.** 13 sections suppressed,
+    plus 66A, which is kept but never served as live law: **14 of 125 not served as current text, 111
+    served.**
+    - **The core offence set survives**: 43, 65, 66, 66B-66F, 67, 67A, 67B, 77B, 78, 79.
+    - **Lost: 43A, 72 and 72A**, which is where "a company leaked my data" and "someone disclosed my
+      personal information" questions land. That's a real hole in a cyber-crime corpus, and release 1
+      ships with it named in the UI's coverage note, not silently. Partly an artifact of the
+      uncertainty: 43A is suppressed only because DPDP s.44(2)'s commencement is unconfirmed, and 72/72A
+      are suppressed because no official consolidation carries their post-2023 penalty text (the
+      gazette states the substitution, but applying it by hand is what (1) rejects).
+    - **Also lost: 44-46, the penalty and adjudication machinery.** s.46 (adjudicating officer) is the
+      compensation route for a s.43 claim, so cyber-block query #35 ("get my money back") can be
+      answered from s.43 and 66C/66D, but not from its procedural half. Its acceptable sections are
+      written accordingly, never against suppressed text.
+  - **The error behind this: a verification that didn't test the claim being made.** Sam uploaded the
+    file. The advisory session examined it, confirmed it was a consolidation (amendment footnotes,
+    bracketed insertions, "updated" in the name), and recommended it on that basis without checking
+    how current it was. The claim in play was "the consolidated as-amended Act", i.e. current law; the
+    check tested only "consolidated". Same shape as the rest of the week (`parser_version`'s label,
+    the completeness check's "0 act(s) uncheckable", `b42b804b`'s "pre-existing and unrelated"): a
+    true statement about something narrower than what was being asserted. This one would have shipped
+    wrong law, not wrong formatting. It was caught because the scope asked "is this current?" before
+    ingest -- the process note above working as intended.
   - At landing: rename to `IT_2000.pdf`, add a `provenance.json` entry (sha256, source URL,
     `content_as_on`, `consolidation_source`), and record the Jan Vishwas/DPDP handling there too.
 
   **2. Parser: `LegacyActParser` is the base. `GazetteParser` can't parse this file.** Both were run
   as they stand against the PDF, in memory (no code change):
-  - The ToC lists **125** entries, counted with the boundary fixed in memory (below).
+  - The ToC lists **125** entries, counted with the boundary fixed in memory (below). **The section
+    count is 125, not the ~94 that had been repeated in discussion.** 94 is the highest section
+    *number*; the other 31 are lettered sections (3A, 6A, 43A, 52A-52D, 66A-66F, 67A-67C, 69A, 69B,
+    77A, 77B, 84A-84C and others). That's IPC's "511" mistake again (`toc.py`'s docstring).
     `LegacyActParser` returns exactly those 125, none missing and none extra, and no bracket-prefixed
     section is a stub. Its `_extract_text` already strips a line-start `N[` (`(?<=\n)\d{1,2}\[`), the
     IPC/CrPC reprint shape this file shares. `6[66.`, `1[66A.`, `2[69.`, `3[70A.` and `1[77.` all
@@ -1043,7 +1099,15 @@ conversation is the same shape one step earlier.
        Court's Order..." isn't recognised as a footnote. It becomes a 534-char candidate for "section
        1", which **swallows 66E's clauses (e)(i)(ii) from p.25** and then loses dedupe to the real s.1,
        so **66E's operative tail is silently dropped**. Of 93 footnote-like lines, this is the only
-       real footnote missed.
+       real footnote missed. **Not the first time in this corpus; at least the fifth.** Earlier cases
+       of a footnote or amendment marker eating or hiding operative text, all in `LegacyActParser`'s
+       own history: CrPC s.57 (the last footnote in a run swallowed real text, v3/v4), IPC s.1 (a
+       footnote won dedupe against the real section, v5), IPC s.17 (an amendment bracket hid the
+       header, v4), and IPC 174A/376AB (amendment brackets hid the headers, bodies merged into
+       174/376A, v11). It was proposed as "the third, after BNS 255 and CrPC 185"; checked, neither
+       fits. BNS 255 was an em-dash header shape (`255.—`), not a footnote. CrPC 185 was the reverse
+       case: a footnote left *glued onto* the section, "Nothing operative removed"
+       (`docs/evaluation.md`, 2026-10-09).
     3. **Repealed detection.** ss.50 and 52 ("[Qualifications for appointment...] Omitted by s. 169")
        aren't flagged `is_repealed`, because their bracketed titles exceed `_REPEALED_RE`'s 60-char
        window. s.50's text also carries a duplicated "ibid. (w.e.f. 26-5-201" fragment.
@@ -1072,15 +1136,28 @@ conversation is the same shape one step earlier.
     them, with the "Struck down" badge (IPC 497 is the precedent). So the recommendation as made gives
     the right answer on lookup and says nothing in a `/legal/query` answer. Changing that is a change
     to K2 for every struck-down section (IPC 497 included), and is **out of this scope**.
-  - **Recorded decision (as amended):** 66A is **not omitted from the corpus**.
-    - Its current row reflects the statute after Jan Vishwas (omitted, `is_repealed`).
-    - It carries a `judicial_status` row: `struck_down`, Shreya Singhal v. Union of India, decided
-      2015-03-24, with the citation independently verified at seed time per K2's rule (the PDF's "AIR
-      2015 SC 1523" is not verification). The `scope_note` names both the judgment and the 2023
-      omission.
-    - Optional, if the ingest can write a two-version history at first ingest: the operative text as
-      version 1 (valid to 2023-11-30), so "what did 66A say" has an answer. Otherwise defer it; don't
-      ship the operative text as a current row.
+  - **Decided 2026-10-10:** 66A is **kept, as its historical version, with both `is_repealed` and a
+    `judicial_status` row set**. It is not omitted from the corpus, and its operative text is never
+    served as live law.
+    - `is_repealed` records the 2023 statutory omission.
+    - `judicial_status`: `struck_down`, Shreya Singhal v. Union of India, decided 2015-03-24, with the
+      citation independently verified at seed time per K2's rule (the PDF's "AIR 2015 SC 1523" is not
+      verification). The `scope_note` names both the judgment and the 2023 omission.
+  - **Named follow-up, out of this scope: K2 serves two needs with one mechanism.** Hiding struck-down
+    sections from retrieval is **right** for not citing void law as live, and **wrong** for answering
+    "was this struck down?" -- the question for which "struck down in 2015, omitted in 2023" is the
+    most useful answer this Act can give. Today K2 only answers it on explicit section lookup. Fixing
+    it needs the two separated (exclude from citation-as-authority, but allow retrieval with the
+    status shown). It affects **IPC 497** (Joseph Shine) the same way, so it's a K2 change, not an IT
+    Act one.
+    **Direct consequence for (4), decided 2026-10-10: the "struck down and later omitted" golden query
+    is scored through `/legal/query` like every other query, as a recorded known failure.** Not
+    through section lookup. Scoring one query through a different code path from the other 88 would
+    make the number non-comparable, and it would hide the K2 gap at exactly the moment it most needs
+    to be visible. A known failure in the cyber block is a standing reminder that flips to a pass when
+    the K2 follow-up lands. The cyber block's floor is set one query below its total to account for it,
+    with this query named as the expected miss. **Any other miss trips the floor, and when the K2
+    follow-up lands the floor rises by one in the same change.**
 
   **4. Out-of-scope golden-set audit -- one query flips, one is adjacent, and the classifier is a K-EXP3
   surface nobody listed.**
@@ -1108,11 +1185,26 @@ conversation is the same shape one step earlier.
     out-of-scope query against the new act, and re-label any that flip, with a four-field record
     (query, why it flips, the section(s) that answer it, date). Reported as a separate line, so the
     44/45 and 0.909 histories stay comparable.
-  - **Also needed**: in-scope IT Act queries. K-EXP4's after-run only measures harm to the existing
-    44. Nothing measures whether the IT Act is retrievable at all. Propose a separate block of
-    in-scope IT Act queries, written from the section text, reported separately from the 44, and
-    added to the classifier's training with the train/held-out split preserved. **The number, and
-    whether #35 moves into the 44's denominator or into the new block, are Sam's decisions.**
+  - **Decided 2026-10-10, #35: removed from the out-of-scope set (45 → 44) and moved into a new cyber
+    block. Not promoted into the in-scope 44.** Reason: promoting it would change the divisor of every
+    Recall@5 and MRR figure ever recorded. Keeping the in-scope 44 untouched keeps the whole history
+    comparable, and the cyber block is reported alongside as its own number. Record the move with the
+    four fields (query, why it flips -- the IT Act now answers it through ss.43, 46, 66C, 66D -- the
+    answering sections, date).
+    **Coupled change, same commit**: nightly-eval's out-of-scope threshold is the absolute
+    `oos_num < 44` (floor "44/45"). #35 is currently caught, so removing it leaves **43/44**, and the
+    unchanged check would fail the nightly with nothing regressed. The floor becomes 43/44 (the same
+    one miss, the public-university query), stated as such in the workflow and here, not quietly
+    loosened.
+  - **Decided 2026-10-10, the cyber block: 10-12 new in-scope IT Act queries plus #35**, written from
+    the section text of whichever source is chosen (1), so their acceptable sections can't be written
+    yet. **At least one must have the correct answer "this provision was struck down and later
+    omitted"** (66A). Nothing in the existing 44 tests that shape, and for this Act it's the most
+    valuable answer the system can give; see (3) for why it can't pass through `/legal/query` yet.
+    Queries whose answer lies in a suppressed section (1) are scored against the suppression, i.e.
+    the system declining to state that section, never against the stale text. The block is reported
+    as its own Recall@5/MRR, split train/held-out like the rest, and its train half is added to the
+    classifier's in-scope training.
 
   **5. Two-release split -- recorded as split, and the source finding strengthens it.**
   - **Release 1**: section text only (plus 66A's status, per 3).
