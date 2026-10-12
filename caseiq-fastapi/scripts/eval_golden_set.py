@@ -45,6 +45,19 @@ content-only corpus hash (no database-generated IDs, unlike
 corpus_versions.checksum -- see K-EXP5), package / Postgres / locale
 versions, and a timestamp. stdout is unchanged: nightly-eval.yml's
 threshold check parses it.
+
+EXTENDED 2026-10-11: with settings.RELEVANCE_GATE_ENABLED on, would_abstain
+comes from app.services.answer_gate.decide -- the same call /legal/query
+makes -- over the first settings.RAG_TOP_K of the TOP_K rows (production gates
+on RAG_TOP_K; the first RAG_TOP_K of a TOP_K fusion are the same rows in the
+same order). That makes one Groq call per query, and a verdict that can't be
+obtained becomes a "relevance_unavailable" refusal inside answer_gate -- so
+any such refusal here exits non-zero: it would otherwise count as a correct
+out-of-scope refusal (or an in-scope false refusal) that no verdict made. Flag off: behaviour and stdout byte-identical to before.
+With the flag on, stdout gains a "Relevance gate in-scope refusals" line;
+nightly-eval.yml's false-positive check parses the Option E line, which is
+not a veto under this gate, and must move to the new line before the flag is
+turned on there.
 """
 from __future__ import annotations
 
@@ -60,7 +73,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.db.base import SessionLocal
+from app.services.answer_gate import decide as decide_gate
 from app.services.embeddings import embedder
 from app.services.retrieval import (
     _CANDIDATE_POOL, _RRF_K, has_ambiguous_top_hit, has_classifier_flag, is_abstention,
@@ -167,6 +182,18 @@ def _top_k_record(sections: list[dict]) -> list[dict]:
             for i, s in enumerate(sections, 1)]
 
 
+async def _relevance_gate(question: str, sections: list[dict]) -> dict | None:
+    """None with the flag off. Otherwise production's decision, with the
+    verdict behind it, on the rows production would actually gate on."""
+    if not settings.RELEVANCE_GATE_ENABLED:
+        return None
+    if touches_violence_or_harm(question):
+        return {"abstained": False, "gate": "violence_bypass", "fired": [], "verdict": None}
+    d = await decide_gate(question, sections[:settings.RAG_TOP_K])
+    return {"abstained": d.abstained, "gate": d.gate, "fired": [sig.signal for sig in d.fired],
+            "verdict": d.verdict}
+
+
 async def main(out_path: str) -> None:
     with open("../docs/golden_set.json", encoding="utf-8") as f:
         golden_set = json.load(f)
@@ -194,6 +221,9 @@ async def main(out_path: str) -> None:
                                            if first_scored else None),
                 "signals": _signals(question, sections),
             }
+            relevance = await _relevance_gate(question, sections)
+            if relevance is not None:
+                record["relevance_gate"] = relevance
             if not item.get("out_of_scope"):
                 acceptable_list = [list(s) for s in item["sections"]]
                 acceptable_set = {tuple(s) for s in item["sections"]}
@@ -223,6 +253,9 @@ async def main(out_path: str) -> None:
                     else "similarity" if would_abstain
                     else None
                 )
+                if relevance is not None:
+                    would_abstain = relevance["abstained"]
+                    caught_by = ",".join(relevance["fired"]) or None
                 oos_results.append({
                     "question": question, "would_abstain": would_abstain,
                     "caught_by": caught_by,
@@ -253,6 +286,8 @@ async def main(out_path: str) -> None:
                 # generalisation estimate.
                 "ambiguous_top_hit_false_positive": has_ambiguous_top_hit(sections),
                 "classifier_false_positive": has_classifier_flag(sections),
+                **({"relevance_gate_false_positive": relevance["abstained"]}
+                   if relevance is not None else {}),
             })
 
     n = len(in_scope_results)
@@ -273,6 +308,11 @@ async def main(out_path: str) -> None:
     print(f"Option B false positives (in-training-set self-check, not the LOO number): {len(fps_b)}/{n}")
     for q in fps_b:
         print(f"  - {q['question']}")
+    if settings.RELEVANCE_GATE_ENABLED:
+        fps_r = [q for q in in_scope_results if q["relevance_gate_false_positive"]]
+        print(f"Relevance gate in-scope refusals: {len(fps_r)}/{n}")
+        for q in fps_r:
+            print(f"  - {q['question']}")
     print()
     print(f"Misses (not in top {TOP_K}), {len(misses)}:")
     for q in misses:
@@ -319,6 +359,9 @@ async def main(out_path: str) -> None:
                   f"({q['domain']}/{q['split']}{adv_tag}, {q['caught_by'] or 'n/a'}, "
                   f"top_sim={q['top_similarity']}) {q['question']}")
 
+    fallbacks = [r["question"] for r in query_records
+                 if r.get("relevance_gate", {}).get("gate") == "relevance_unavailable"]
+
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({
             # v2 additions first; every v1 key below is unchanged in name and meaning.
@@ -331,7 +374,17 @@ async def main(out_path: str) -> None:
                 sum(1 for q in oos_results if q["would_abstain"]) / len(oos_results) if oos_results else None
             ),
             "out_of_scope": oos_results,
+            **({"relevance_gate_enabled": True} if settings.RELEVANCE_GATE_ENABLED else {}),
         }, f, indent=2)
+
+    if fallbacks:
+        print()
+        print(f"FAILED: relevance verdict unavailable on {len(fallbacks)} queries (call failed "
+              f"or unusable -- GROQ_API_KEY set? rate-limited?). Those rows were refused without "
+              f"a verdict; these numbers are not the relevance gate's.")
+        for q in fallbacks:
+            print(f"  - {q}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

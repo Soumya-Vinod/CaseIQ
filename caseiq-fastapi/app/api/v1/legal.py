@@ -1,8 +1,10 @@
 import time
+from dataclasses import asdict
 from datetime import date
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from app.api.deps import DB, OptionalUser, client_ip
@@ -23,6 +25,7 @@ from app.services.citation_verification import (
     scan_free_text_for_citations,
     verify_citations,
 )
+from app.services.answer_gate import CIVIL_SCOPE, GateDecision, decide as decide_gate
 from app.services.directive_language import (
     detect_directive_language,
     record_stats as record_directive_language_stats,
@@ -51,6 +54,7 @@ from app.services.retrieval import (
     touches_violence_or_harm,
 )
 from app.services.safety import screen_query
+from app.services.section_lookup import lookup_sections, merge as merge_lookup, start_identification
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
@@ -380,9 +384,18 @@ async def process_query(
             corpus_version_id=None, helplines=select_helplines(payload.query),
         )
 
+    # Readiness E12, behind SECTION_LOOKUP_ENABLED: sections the model names for
+    # this question, fetched exactly and PREPENDED to the hybrid results -- never
+    # fused into RRF. The relevance gate below still judges the combined list.
+    # The model call starts first so it overlaps hybrid retrieval.
+    identification = start_identification(payload.query) if settings.SECTION_LOOKUP_ENABLED else None
     sections = await semantic_search(
         db, payload.query, as_of=as_of, incident_date=payload.incident_date
     )
+    lookup = None
+    if identification is not None:
+        lookup = await lookup_sections(db, payload.query, as_of, payload.incident_date, identification)
+        sections = merge_lookup(lookup.sections, sections)
     sims = [s["similarity"] for s in sections if s["similarity"] is not None]
     retrieval_strength = max(sims) if sims else 0.0
     # Two independent, both-imperfect signals, OR'd together: similarity alone
@@ -499,10 +512,16 @@ async def process_query(
     # both missed. See app.services.domain_classifier's own docstring for
     # the embedder-identity assertion this depends on -- a mismatch there
     # crashes startup rather than silently serving wrong verdicts.
-    abstained = (
-        is_abstention(sections) or civil_scope_mismatch
-        or has_ambiguous_top_hit(sections) or has_classifier_flag(sections)
-    ) and not touches_violence_or_harm(payload.query)
+    #
+    # Moved into app.services.answer_gate (docs/retrieval-fix-brief.md): same four
+    # signals, same thresholds, now each carrying the value it read so a refusal
+    # can say which one fired. settings.RELEVANCE_GATE_ENABLED swaps in the
+    # LLM-verdict gate instead; see that module.
+    if touches_violence_or_harm(payload.query):
+        gate = GateDecision(abstained=False, gate="violence_bypass")
+    else:
+        gate = await decide_gate(payload.query, sections)
+    abstained = gate.abstained
     # Default True -- QueryOut's own field docstring: nothing to be
     # "ungrounded" about on the abstained/incident-date-prompt short-circuit
     # paths, which render through their own distinct UI regardless of this
@@ -519,6 +538,9 @@ async def process_query(
                    session_id=payload.session_id, ip_hash=hash_ip(client_ip(request)))
     db.add(q)
     await db.flush()
+    gate.log(q.id)
+    if lookup is not None:
+        lookup.log(q.id)
 
     if abstained:
         # Short-circuit BEFORE the LLM call -- letting it free-associate over
@@ -529,7 +551,10 @@ async def process_query(
         # Fixed, non-user-supplied text -- no PII possible, so no redaction
         # map needed; restore_text/restore_deep are no-ops against {} anyway.
         result = {
-            "conversational_summary": _CIVIL_SCOPE_MESSAGE if civil_scope_mismatch else _ABSTENTION_MESSAGE,
+            "conversational_summary": (
+                _CIVIL_SCOPE_MESSAGE if any(sig.signal == CIVIL_SCOPE for sig in gate.fired)
+                else _ABSTENTION_MESSAGE
+            ),
             "structured_data": {},
             # Same formula as llm.py's confidence, computed here since the LLM
             # (and therefore that function) is never called on this path.
@@ -683,6 +708,7 @@ async def process_query(
         sections_carried_forward=sections_carried_forward,
         as_of=as_of, corpus_version_id=latest_corpus_version_id,
         citations_grounded=citations_grounded,
+        abstention_signals=[asdict(sig) for sig in gate.fired] if abstained else [],
         # FIXED 2026-09-06 (checklist item 4): the abstention path used to
         # show the full five-number table unconditionally -- noise, not
         # help, per instruction ("we show all five on every abstention...
@@ -717,6 +743,30 @@ async def _fetch_section_text_for_timeline(db: DB, act: str, section: str, as_of
         .limit(1)
     )
     return (await db.execute(stmt)).scalar_one_or_none()
+
+
+_LOCAL_DB_HOSTS = {"localhost", "127.0.0.1"}
+
+
+def _debug_routes_allowed() -> bool:
+    """All three, or the route doesn't exist. The host check is on the
+    resolved DATABASE_URL, same reasoning as scripts.lib.production_guard:
+    ENV is a label and can sit next to production credentials."""
+    return (
+        settings.ENV == "development"
+        and urlsplit(settings.DATABASE_URL).hostname in _LOCAL_DB_HOSTS
+        and settings.ENABLE_DEBUG_ROUTES
+    )
+
+
+@router.get("/debug/retrieval", include_in_schema=False)
+async def debug_retrieval(q: str, db: DB) -> dict:
+    """Dev-only retrieval trace (docs/retrieval-fix-brief.md, step 1) -- see
+    app.services.retrieval_debug. 404 unless _debug_routes_allowed()."""
+    if not _debug_routes_allowed():
+        raise HTTPException(404)
+    from app.services.retrieval_debug import trace_retrieval
+    return await trace_retrieval(db, q)
 
 
 @router.post("/timeline", response_model=TimelineOut)

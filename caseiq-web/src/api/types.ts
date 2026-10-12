@@ -18,6 +18,7 @@ export type ComplaintIn = components["schemas"]["ComplaintIn"];
 export type ComplaintOut = components["schemas"]["ComplaintOut"];
 export type ComplaintType = components["schemas"]["ComplaintType"];
 export type HelplineOut = components["schemas"]["HelplineOut"];
+export type AbstentionSignalOut = components["schemas"]["AbstentionSignalOut"];
 export type OffenceResultOut = components["schemas"]["OffenceResultOut"];
 export type CognizabilitySearchOut = components["schemas"]["CognizabilitySearchOut"];
 export type UserOut = components["schemas"]["UserOut"];

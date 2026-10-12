@@ -334,6 +334,7 @@ function TurnBlock({
               <AbstentionCard
                 message={result.conversational_summary}
                 confidence={result.confidence_score}
+                signals={result.abstention_signals}
                 helplines={result.helplines}
               />
             </section>

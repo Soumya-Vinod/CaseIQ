@@ -123,6 +123,18 @@ class HelplineOut(BaseModel):
     verified_on: str
 
 
+class AbstentionSignalOut(BaseModel):
+    """One signal that caused a refusal (app.services.answer_gate.GateSignal).
+    `signal` is one of low_similarity, civil_scope, ambiguous_top_hit,
+    domain_classifier, similarity_floor, relevance_verdict, relevance_unavailable. `value`/`threshold`
+    are what it compared (null where it compares no number); `detail` carries
+    the verdict or a note."""
+    signal: str
+    value: float | None = None
+    threshold: float | None = None
+    detail: str | None = None
+
+
 class QueryOut(BaseModel):
     query_id: UUID
     original_query: str
@@ -184,6 +196,10 @@ class QueryOut(BaseModel):
     # is computed; see app.api.v1.legal's handling right after
     # verify_citations.
     citations_grounded: bool = True
+    # Only on `abstained` responses: which gate signal(s) refused, with the value
+    # each read. `confidence_score` is the best retrieved similarity, which is
+    # usually NOT what refused (docs/retrieval-fix-brief.md step 1).
+    abstention_signals: list[AbstentionSignalOut] = []
 
 
 class ConversationTurnOut(BaseModel):

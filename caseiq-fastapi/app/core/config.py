@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "CaseIQ"
     ENV: Literal["development", "staging", "production"] = "development"
     DEBUG: bool = True
+    # Dev-only diagnostic routes (GET /legal/debug/retrieval). Also requires
+    # ENV=development AND a localhost DATABASE_URL -- see
+    # app.api.v1.legal._debug_routes_allowed. ENV alone isn't enough: a local
+    # .env can say "development" while pointing at production Neon.
+    ENABLE_DEBUG_ROUTES: bool = False
     API_V1_PREFIX: str = "/api/v1"
     ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
@@ -399,6 +404,36 @@ class Settings(BaseSettings):
     # negative examples -- a real gap, named in docs/evaluation.md, not
     # silently worked around here).
     ABSTENTION_SIMILARITY_THRESHOLD: float = 0.35
+
+    # docs/retrieval-fix-brief.md step 3 (app.services.answer_gate.relevance_gate):
+    # gate on an LLM verdict over the retrieved sections instead of the four-signal
+    # OR above. Off by default. The step-1 trace found the domain classifier
+    # (not ABSTENTION_SIMILARITY_THRESHOLD) refused every traced natural-language
+    # question; with this on, the classifier and top-hit margin are logged only.
+    RELEVANCE_GATE_ENABLED: bool = False
+    # Gibberish short-circuit only, read against the same max-similarity value
+    # the UI shows. Titan's methane question measured 0.1469 (see above); the
+    # lowest real query in the step-1 trace was 0.362.
+    RELEVANCE_GATE_SIMILARITY_FLOOR: float = 0.20
+    # Readiness E12 (app.services.section_lookup): before retrieval, one Groq call
+    # names the sections a question's situation falls under; each is looked up
+    # exactly (act + number, in force) and prepended ahead of the hybrid results --
+    # never fused into RRF. Off by default. Goes on only together with
+    # RELEVANCE_GATE_ENABLED (validated below): the verdict gate is this path's
+    # safety net, and the classifier gate was never measured against its rows.
+    SECTION_LOOKUP_ENABLED: bool = False
+    SECTION_LOOKUP_MAX_SECTIONS: int = 6
+
+    @model_validator(mode="after")
+    def _section_lookup_needs_relevance_gate(self) -> "Settings":
+        """Both flags on, or neither (decided 2026-10-12, readiness E12)."""
+        if self.SECTION_LOOKUP_ENABLED != self.RELEVANCE_GATE_ENABLED:
+            raise ValueError(
+                "SECTION_LOOKUP_ENABLED and RELEVANCE_GATE_ENABLED must be set together: "
+                f"got SECTION_LOOKUP_ENABLED={self.SECTION_LOOKUP_ENABLED}, "
+                f"RELEVANCE_GATE_ENABLED={self.RELEVANCE_GATE_ENABLED}"
+            )
+        return self
 
     # --- Audit log retention (M2 hygiene) ---
     # Unbounded audit-log growth was flagged as a defect (D6); rows older than

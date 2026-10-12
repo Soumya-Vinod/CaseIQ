@@ -388,6 +388,17 @@ _RRF_K = 60  # standard RRF constant (Cormack et al.) -- not tuned for this corp
 _CANDIDATE_POOL = 20  # each ranker's own top-N feeding the fusion, before top_k is taken
 
 
+def _content_key_order():
+    """Readiness E8: the deterministic tiebreaker, on a content-derived key --
+    never section_versions.id, which differs between databases for the same
+    row and so breaks the same tie in opposite directions in CI and
+    production. COLLATE "C" so the order doesn't depend on the database's
+    locale either. In the SQL ORDER BY, not only after the fetch, so ties
+    straddling the candidate-pool LIMIT are settled too."""
+    return (Act.act_code.collate("C"), SectionVersion.section_number.collate("C"),
+            SectionVersion.version_no)
+
+
 def _judicial_cols():
     return (JudicialStatus.status, JudicialStatus.case_name, JudicialStatus.citation,
             JudicialStatus.court, JudicialStatus.decided_on, JudicialStatus.scope_note)
@@ -414,7 +425,7 @@ async def _vector_candidates(
     )
     if incident_date is not None:
         stmt = stmt.where(Act.act_code.in_(acts_for_incident_date(incident_date)))
-    stmt = stmt.order_by(distance).limit(k)
+    stmt = stmt.order_by(distance, *_content_key_order()).limit(k)
     rows = (await db.execute(stmt)).all()
 
     out = []
@@ -480,7 +491,7 @@ async def _lexical_candidates(
     )
     if incident_date is not None:
         stmt = stmt.where(Act.act_code.in_(acts_for_incident_date(incident_date)))
-    stmt = stmt.order_by(rank.desc()).limit(k)
+    stmt = stmt.order_by(rank.desc(), *_content_key_order()).limit(k)
     rows = (await db.execute(stmt)).all()
 
     out = []
@@ -621,16 +632,32 @@ async def semantic_search(
     # facts must not be allowed to overwrite each other.
     lexical_hit_keys: set = set()
 
+    vector_rank: dict[tuple, int] = {}
+    lexical_rank: dict[tuple, int] = {}
     for rank, (key, sv, act_code, similarity, js) in enumerate(vector_hits, start=1):
         scores[key] = scores.get(key, 0.0) + 1.0 / (_RRF_K + rank)
         rows[key] = (sv, act_code, similarity, js)  # vector row: carries a real similarity
+        vector_rank[key] = rank
 
     for rank, (key, sv, act_code, js) in enumerate(lexical_hits, start=1):
         scores[key] = scores.get(key, 0.0) + 1.0 / (_RRF_K + rank)
         rows.setdefault(key, (sv, act_code, None, js))  # lexical-only: no cosine number
         lexical_hit_keys.add(key)
+        lexical_rank[key] = rank
 
-    ordered_keys = sorted(scores, key=lambda k: scores[k], reverse=True)[:top_k]
+    def _fusion_order(key: tuple) -> tuple:
+        # Readiness E8, decided 2026-10-10: fused score; then vector-found
+        # before lexical-only; then rank within that key's own list; then the
+        # content key. (2) and (3) are the order a stable sort already gave
+        # tied scores -- written down, not a ranking decision. (4) makes the
+        # sort total; no tie reaches it.
+        sv, act_code = rows[key][0], rows[key][1]
+        from_vector = key in vector_rank
+        own_rank = vector_rank[key] if from_vector else lexical_rank[key]
+        return (-scores[key], 0 if from_vector else 1, own_rank,
+                act_code, sv.section_number, sv.version_no)
+
+    ordered_keys = sorted(scores, key=_fusion_order)[:top_k]
     results = [
         _serialise(*rows[key][:2], rows[key][2], as_of, rows[key][3],
                    lexical_hit=key in lexical_hit_keys)

@@ -159,6 +159,78 @@ field rather than fill it from general expectation."""
 # app.services.timeline_verification afterward; this prompt's own "RULES"
 # section is what keeps the REJECTION rate low, not what makes rejection
 # safe to skip.
+# docs/retrieval-fix-brief.md step 3, behind settings.RELEVANCE_GATE_ENABLED:
+# the answer/refuse decision asked of the model directly, instead of read off
+# a similarity score or a classifier trained on statutory-phrased questions.
+# app.services.answer_gate validates the output -- this only asks.
+#
+# The model names the person's need BEFORE judging coverage. The earlier
+# yes/partial/no form let a criminal provision somewhere in the retrieved text
+# carry a question whose actual need it didn't meet, even when the model's own
+# reason said so. Deliberately no worked examples: none may be drawn from the
+# golden set or the must-answer list (docs/golden_set.json, scripts/
+# eval_answer_gate.py), and invented ones would be tuned against them anyway.
+_ANSWERABILITY_PROMPT = """You decide whether CaseIQ can answer a question from the statutory \
+sections retrieved for it. CaseIQ explains Indian criminal law and criminal procedure (BNS, BNSS, \
+BSA, IPC, CrPC) and may use ONLY the sections listed below.
+
+Work in this order.
+
+1. asks_for: one short phrase, in your own words, for what this person actually wants to know or \
+get done. Name the need itself, not the topic or offence the question mentions.
+
+2. answerable: true only if the listed sections themselves provide that -- the rule, offence, \
+punishment, procedure, power or remedy the person is asking for. A criminal provision merely being \
+present in the list, or an offence being involved somewhere in the person's situation, is not \
+sufficient: the question as asked must be answerable from the text below. If what the person wants \
+comes from some other body of law, answerable is false.
+
+3. sections: the listed sections you would actually use to answer, written "<act> <section>". \
+Empty if answerable is false.
+
+4. missing: if answerable is false, one short phrase for what the listed sections lack. Empty \
+string otherwise.
+
+The question may use everyday words rather than statutory ones. Judge what it means, not whether \
+it shares the statute's vocabulary.
+
+SECTIONS:
+{sections_block}
+
+QUESTION: {query}
+
+Reply with JSON only, no other text:
+{{"asks_for": "...", "answerable": true or false, "sections": ["<act> <section>", ...], "missing": "..."}}"""
+
+
+_SECTION_LOOKUP_PROMPT = """You map a person's question about Indian criminal law to the statutory \
+sections that govern it. The corpus holds five Acts only: IPC (Indian Penal Code, 1860), CrPC \
+(Code of Criminal Procedure, 1973), BNS (Bharatiya Nyaya Sanhita, 2023), BNSS (Bharatiya Nagarik \
+Suraksha Sanhita, 2023) and BSA (Bharatiya Sakshya Adhiniyam, 2023).
+
+Identify what the question is about in legal terms -- the offence it describes, or the procedure, \
+power, remedy or rule of evidence it asks about -- and name the specific sections that apply. The \
+person may describe their situation in everyday words that the statute never uses; classify the \
+situation, do not match words.
+
+Rules:
+- Name a section only if you are confident it exists and applies. Fewer correct sections beat \
+many guesses. At most 6 entries.
+- Give the old-code and new-code equivalent where both exist (IPC with BNS, CrPC with BNSS). \
+Evidence questions: BSA only. The 2023 codes RENUMBERED everything: BNS, BNSS and BSA section \
+numbers are not the IPC, CrPC or Evidence Act numbers. Name a new-code section only if you know \
+its own number in that code; never carry an old number across.
+- For every entry give the section's title: its heading as printed in that Act.
+- If a specific sub-section is what answers the question, include it, e.g. "12(2)".
+- If the question is not about Indian criminal law or criminal procedure, return an empty list.
+
+QUESTION: {query}
+
+Reply with JSON only, no other text:
+{{"sections": [{{"act": "<IPC|CrPC|BNS|BNSS|BSA>", "section": "<number, optional sub-section>", \
+"title": "<the section's printed heading>", "reason": "<one line>"}}]}}"""
+
+
 _TIMELINE_PROMPT = """You are CaseIQ, generating a procedural timeline for an Indian criminal-law \
 situation. You may ONLY use the numbered section excerpts below -- never use sequencing, stage \
 names, or time limits from your own training data, even ones you believe are correct. Each excerpt \
@@ -766,5 +838,36 @@ class LLMService:
             return [], session.mapping
         return (stages if isinstance(stages, list) else []), session.mapping
 
+    async def judge_answerability(self, query: str, sections: list[dict]) -> dict:
+        """Raw verdict JSON for app.services.answer_gate.relevance_gate -- that
+        caller validates it and owns the fallback, so failures raise here."""
+        session = RedactionSession()
+        redacted_query = session.redact(query)
+        if session.had_redactions:
+            logger.info("pii_redacted", endpoint="answerability_gate", counts=session.counts)
+        sections_block = "\n\n".join(
+            f"{s['act']} {s['section']} -- {s['title']}:\n{s['snippet']}" for s in sections
+        )
+        raw = await self._call(
+            [{"role": "user", "content": _ANSWERABILITY_PROMPT.format(
+                sections_block=sections_block, query=redacted_query,
+            )}],
+            temperature=0.0, max_tokens=600,
+        )
+        return self._parse_json(raw)
+
+    async def identify_sections(self, query: str) -> Any:
+        """Raw JSON for app.services.section_lookup -- that caller parses and
+        validates every entry and owns the fallback, so failures raise here."""
+        session = RedactionSession()
+        redacted_query = session.redact(query)
+        if session.had_redactions:
+            logger.info("pii_redacted", endpoint="section_lookup", counts=session.counts)
+        raw = await self._call(
+            [{"role": "user", "content": _SECTION_LOOKUP_PROMPT.format(query=redacted_query)}],
+            # Room for _call's low-effort reasoning (~450 tokens measured) plus the JSON.
+            temperature=0.0, max_tokens=1200,
+        )
+        return self._parse_json(raw)
 
 llm_service = LLMService()

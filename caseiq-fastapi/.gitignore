@@ -7,6 +7,7 @@ venv/
 .pytest_cache/
 media/
 *.log
+docs/
 
 # scripts/check_observability_thresholds.py's last-observed-counters state --
 # only ever meant to live inside the observability-alerts.yml workflow's own

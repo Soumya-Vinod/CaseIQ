@@ -458,11 +458,38 @@ Highest-leverage work in the project. Most student RAG projects have zero measur
 - [ ] **E3.** **Hybrid search** — Postgres `tsvector` alongside pgvector, fused with Reciprocal Rank Fusion. Legal queries are full of exact terms ("Section 498A", "grievous hurt") where lexical beats embeddings outright. **Expect the biggest single jump in the ablation table.**
 - [ ] **E4.** **Cross-encoder reranking** — retrieve top-50, rerank to top-6 (`bge-reranker-base` or Cohere Rerank). ~30 lines, large precision gain.
 - [ ] **E5.** **Query expansion** — map lay phrasing ("landlord won't return my deposit") to legal terminology before embedding.
+  - **Measured and rejected 2026-10-11, in this form** (`docs/retrieval-fix-brief.md`, "Fix B"): one
+    LLM call turning the question into 3 "statutory-vocabulary" phrases, the question plus each phrase
+    retrieved by both rankers, all 8 lists fused by plain RRF. On Neon, on top of E8, 89/89 queries on
+    the generated path: **Recall@5 0.909 → 0.886, MRR 0.740 → 0.679**, 19/44 correct-answer ranks
+    moved, top 6 changed in 43/44. None of the targeted sections reached a top 6 (IPC 498A / BNS 85
+    for "My husband is asking for dowry", CrPC 154 / BNSS 173 for the police-refusal and theft-victim
+    questions, CrPC 265A / BNSS 289, BSA 148). The FIR control question lost CrPC 154 from its top 6.
+    Why: (1) **the phrases aren't the statutes' wording** ("lodgement of FIR", "hostile witness";
+    neither Act says "FIR" or "hostile"), so under E9's all-terms match most phrases find zero
+    full-text candidates. Full-text candidates before → after: dowry 0 → 6 (none correct), police
+    refusal 0 → 0, hostile witness 0 → 0, plea bargaining 6 → 6, theft victim 20 → 20 (**corrected
+    2026-10-12, E11**: 20 is the `_CANDIDATE_POOL` cap, not the count; the question's real full-text
+    candidate count is 123). (2) **The
+    phrases' vector lists outvote the question**: 6 of the 8 fused lists come from model text, each
+    weighted equally with the user's own question. Untried routes, each needing its own before/after:
+    weight the question's lists above the phrases'; or use phrases for vector retrieval only. Code not
+    kept in the repo; the curated `_SYNONYM_EXPANSIONS` list is still what runs.
 - [ ] **E6.** **HyDE or multi-query retrieval** — generate a hypothetical answer, embed that. Works well when queries and documents use different vocabularies, which is exactly your situation.
 - [ ] **E7.** **Vector index tuning** — you have no ANN index. Add HNSW and benchmark recall/latency against exact search.
 - [ ] **E8.** 🚩 **Retrieval has uncontrolled inputs, in a system with 0.0027 margins.** Recorded
   2026-10-09; full measurement in K-EXP5's MRR note. The live margins: IPC 494 led IPC 376AB by 0.0027
   on the bigamy query before the re-ingest, and bigamy's answer now leads 6th place by 0.0057.
+  - **Status 2026-10-11: the tiebreaker is implemented and measured -- in the working tree, not yet
+    committed.** Built exactly to the key decided below: `_content_key_order()` (`act_code`,
+    `section_number` with `COLLATE "C"`, then `version_no`) ends both SQL `ORDER BY`s, and the fusion
+    sort uses the decided four-part key. Measured against Neon on its own, before any other retrieval
+    change, corpus content hash `5745346906fa…` (2,155 rows, identical to the 2026-10-10 baseline):
+    Recall@5 0.909 → 0.909; **MRR 0.7287 → 0.7400 (+0.0113)**; **one correct-answer rank change**:
+    "counterfeiting currency" 2 → 1, the IPC 489A / 489B tie predicted below. Top-6 contents changed
+    in 7/44 in-scope queries with no other rank change; out-of-scope 44/45 unchanged. **0.7400 is now
+    the MRR baseline**, not 0.729. Still open from this item: pin CI's Postgres major version to
+    production's, and lock the Python dependency set.
   - **Neon's Postgres version is an uncontrolled input -- true regardless of what caused the
     2026-10-09 gap.** A managed upgrade can change rankings with no commit, no gate and no
     notification. Measured, not assumed: under the same UTF-8 locale class, PG17.2's `to_tsvector`
@@ -557,6 +584,282 @@ Highest-leverage work in the project. Most student RAG projects have zero measur
     cross-database check.** Don't gate a metric with a coin flip in it. The existing Recall@5 floor
     carries the same exposure at its boundary: a tie at rank 5/6 moves Recall by 1/44, and bigamy's
     answer sits at exactly rank 5.
+- [x] **E9.** 🚩 **Don't remove the full-text all-terms requirement. Measured and rejected
+  2026-10-11 -- do not retry it as plain OR matching.** (`docs/retrieval-fix-brief.md`, "Fix A".)
+  Short questions AND every term (`websearch_to_tsquery`), so one absent word gives zero lexical
+  candidates: "My husband is asking for dowry", "The police won't register my complaint" and "What is
+  a hostile witness?" all get none. Removing the requirement was measured on Neon, on top of E8:
+  - Any term matches, ranked by distinct terms matched, then length-normalized `ts_rank_cd`:
+    **Recall@5 0.909 → 0.750, MRR 0.740 → 0.613**, top-6 changed in 44/44 queries, five correct
+    answers out of the top 10 entirely. None of the targeted sections reached a top 6.
+  - The same without length normalization: Recall@5 0.841, MRR 0.699.
+  - All-terms first, any-term only when all-terms finds nothing: Recall@5 0.841, MRR 0.720. Lost
+    bigamy, anticipatory bail, legitimacy of a child and hostile witness from the top 5.
+  - **Mechanism -- why no ranking of partial matches fixes it under this fusion.** RRF weights the
+    two lists equally, so any row in both lists (about 2/61) beats any row in one (about 1/61). The
+    all-terms requirement was the lexical list's only quality filter. Without it, queries whose
+    lexical list used to be empty get 20 sections sharing one common word ("child", "punishment",
+    "bail", "witness"); the ones the vector pool also holds then outrank correct vector-only answers.
+    IPC 494 doesn't even contain the word "bigamy". Routes not tried, each needing its own
+    before/after: weight the lexical contribution by terms matched, or allow a partial match only
+    when it contains a rare term. Code for the measured variant is not kept in the repo.
+- [ ] **E10.** **Answer/refuse gate (`app/services/answer_gate.py`).** Recorded 2026-10-11, from
+  `docs/retrieval-fix-brief.md`. Traced first: the refusals on natural-language questions came from the
+  domain classifier (`domain_gate_v1.json`), not the similarity the UI showed. Its 44 positive
+  training examples are all templated "What is (the punishment for) X?" questions, and 30 of its 32
+  negatives are first-person, so it learned "first person means out of scope". The refusal card now
+  shows which signal refused and the value it read.
+  - **Relevance gate, behind `RELEVANCE_GATE_ENABLED`, default off.** A 0.20 similarity floor, the
+    civil-phrase check, then an LLM verdict (`asks_for` / `answerable` / `sections` / `missing`).
+    Classifier and top-hit margin are logged only. **Fails acceptance as of 2026-10-11** (Neon):
+    out-of-scope 41/45 (needs 44), must-answer 3/5, must-refuse 2/3 (the road-accident question
+    answers via CrPC 357/357A), in-scope 42/44. Three of the six failures were retrieval missing the
+    correct section, which is why retrieval work (E9, query expansion) comes before judging the gate.
+  - **Decided 2026-10-11 (the brief's "Fix C"): a verdict that can't be obtained refuses honestly.**
+    A rate limit, Groq error or unusable output returns a `relevance_unavailable` refusal ("couldn't
+    check this question against the statutes just now"), never a fall back to the classifier. The
+    fallback used to be the classifier gate, which meant production under load would silently restore
+    the first-person refusals this gate exists to remove. Rejected alternative: the similarity floor
+    alone, because a failed verdict most likely means the answer call fails too, and an unusable verdict
+    would then reach an unchecked answer. `eval_golden_set.py` and `eval_answer_gate.py` treat a
+    `relevance_unavailable` row as a measurement failure, not a correct refusal.
+  - **Before the flag can go on in the nightly**: `nightly-eval.yml` has no Groq key (deliberately
+    secret-free), and its false-positive check parses the Option E line, which doesn't apply under
+    this gate. Options costed 2026-10-11, none built: a key as a workflow secret (about 89 calls a
+    night, rate limits, verdicts not guaranteed identical between nights); recorded verdicts replayed
+    nightly (deterministic, no API calls, blind to model drift, re-recorded on every prompt or
+    retrieval change); a separate weekly job with the key. Recommended: recorded verdicts nightly
+    plus the weekly job.
+- [ ] **E11.** 🚩 **The embedder sees only the first 128 tokens of each row, and the failing queries
+  don't share one cause.** Measured 2026-10-12 against Neon, read-only (`SET TRANSACTION READ ONLY`,
+  rolled back), with `scripts/debug_retrieval.py --targets` (`retrieval_debug.trace_targets` /
+  `window_coverage`). Each ranker was searched over the whole in-force corpus, through
+  retrieval.py's own `_vector_candidates` / `_lexical_candidates` with k = 2,154, so deep ranks use
+  production's ordering; fused rank is over production's 20 + 20 pool with the E8 key.
+  - **The window.** The vendored all-MiniLM-L6-v2 tokenizer truncates (and pads) every input to
+    **128 tokens**, read off the loaded model (`tokenizer.truncation["max_length"]`), not from
+    config. Proof that nothing past it counts: embedding a section's full input and embedding only
+    its in-window prefix give **cosine 1.0000**. In characters, a cut section keeps 294–730 of its
+    text.
+  - **Dead limit, misleading as written.** `section_text[:2000]` at `app/legal_corpus/ingest.py:104`,
+    `:137` and `scripts/reembed_corpus.py:57` never binds: the window ends by 730 characters, so
+    anyone reading those lines would believe sections are indexed to 2,000 characters.
+  - **Corpus coverage** (all 2,155 rows; in-force 2,154 is the same to 3 d.p.): **1,241 rows (57.6%)
+    have text beyond the window**; the median row has **85.4%** of its text embedded (mean 72.6%);
+    only **45.4% of all corpus characters are embedded**, so 54.6% of the text is invisible to vector
+    search. Median row 628 characters, 484 of them inside the window. 222 rows exceed 2,000
+    characters.
+  - **Per query** (vector rank and cosine; rank-1 cosine; lexical rank and full-text candidate count;
+    fused rank; length; characters inside the window; the answering passage):
+
+    | Query | Target | Vec | Cos (rank 1) | Lex (cands) | Fused | Chars | In window | Answer passage |
+    |---|---|---|---|---|---|---|---|---|
+    | My husband is asking for dowry | IPC 498A | 60 | 0.2558 (BNS 80, 0.5498) | — (0) | — | 822 | 490 | Expl. (b) "unlawful demand" at 683: outside |
+    | | BNS 85 | 31 | 0.2858 | — | — | 286 | 286 | no "dowry" in the text |
+    | The police won't register my complaint | CrPC 154 | 374 | 0.2256 (CrPC 210, 0.4719) | — (0) | — | 3,079 | 455 | (3) at 2,098: outside |
+    | | BNSS 173 | 258 | 0.2454 | — | — | 4,018 | 553 | (4) at 3,310: outside |
+    | What should I do if I am a victim of theft? | CrPC 154 | 887 | 0.1807 (BNS 305, 0.5763) | — (123) | — | 3,079 | 455 | (1) duty to record information: inside |
+    | | BNSS 173 | 758 | 0.1952 | 86 | — | 4,018 | 553 | (1) duty to record information: inside |
+    | What is plea bargaining? | CrPC 265A | 273 | 0.3328 (CrPC 265B, 0.7358) | — (6) | — | 1,247 | 501 | "plea bargaining" not in the text |
+    | | BNSS 289 | 239 | 0.3397 | — | — | 1,607 | 614 | same |
+    | What is a hostile witness? | BSA 148 | 10 | 0.5148 (CrPC 315, 0.5733) | — (0) | 10 | 406 | 406 | "hostile" not in the text |
+    | *control:* punishment for defamation | IPC 500 / BNS 356 / IPC 499 | 1 / 3 / 4 | 0.83 / 0.68 / 0.65 | 1 / 3 / — (9) | 1 / 3 / 5 | 168 / 8,667 / 8,643 | 168 / 580 / 482 | |
+    | *control:* punishment for cheating | BNS 318 / IPC 420 / IPC 415 | 3 / 5 / 7 | 0.62 / 0.61 / 0.59 | 3 / 16 / — (22) | 3 / 6 / 10 | 3,739 / 486 / 2,787 | 516 / 486 / 431 | |
+    | *control:* punishment for murder | IPC 302 / BNS 103 | 1 / 2 | 0.77 / 0.75 | 1 / 5 (39) | 1 / 3 | 140 / 455 | all | |
+    | *control:* punishment for dowry harassment | IPC 498A / BNS 85 | 4 / 5 | 0.64 / 0.62 | 1 / 2 (9) | 1 / 3 | 822 / 286 | 490 / 286 | |
+
+    The cheating control is "What is the punishment for cheating?" (the brief's wording, not a
+    golden-set question), scored against the golden set's cheating answers. Every target's embedding
+    is healthy: 384-dim, norm 1.0000, no NaN, not all-zero, 384 distinct values, and identical to a
+    fresh embed of its own text (cosine 1.00000). Its nearest other row is always its IPC↔BNS /
+    CrPC↔BNSS counterpart, at 0.90–0.96.
+  - **Verdict.** Hypotheses as posed: A = target deep in the vector list (beyond about 30), fix is a
+    model swap; B = target high in vector but fused out of the top 6, fix is fusion weighting;
+    C = failing targets markedly longer than working ones, fix is chunking.
+    - **B has no support.** No failing target sits high in the vector list and is then lost in
+      fusion. Hostile witness has zero full-text candidates, so its fused order is its vector order
+      (10 → 10) and there is nothing to reweight. In the controls, fusion only helps (IPC 498A goes
+      from vector 4 to fused 1).
+    - **C as posed is not supported**: the two longest sections compared (BNS 356, IPC 499, about
+      8,650 characters, 6–7% embedded) are working controls. What matters is whether the passage the
+      question needs is inside the first ~500 characters. **That explains only the police query.**
+      The prediction held: CrPC 154's window ends inside sub-section (1), so (3) at 2,098 and BNSS
+      173(4) at 3,310 are both cut. Embedding the cut passage alone, in memory only, moves BNSS 173
+      from 258 to 13–14 and CrPC 154 from 374 to 30 (114 with its heading prefixed). Even fully
+      visible, neither reaches the top 6, so A remains underneath. These ranks are indicative, since
+      chunking would move every other row too.
+    - **A**: theft victim (answer inside the window, vector ranks 758 / 887) and dowry. For dowry the
+      same two rows rank 4 / 5 on the dowry-harassment control, whose curated expansion adds
+      "cruelty" and finds 9 full-text candidates. "Asking for dowry" finds none, and neither statute
+      says "dowry". 498A's cut Explanation (b), embedded alone, ranks worse (602).
+    - **None of A/B/C**: plea bargaining. Neither target contains "plea bargaining"; it is in the
+      chapter title (CrPC Chapter XXIA), which no row stores. Vector rank 1 is CrPC 265B
+      ("Application for plea bargaining", 0.7358), arguably a right answer.
+  - **Embedding-input defects found on the way** (counts over all 2,155 rows):
+    - **Marginal notes empty on all 1,059 BNS / BNSS / BSA rows** (358 / 531 / 170), so their input
+      begins ". ". BNS text carries the heading inline ("306. Theft by clerk….—"). In BNSS text the
+      PDF's margin-column note is interleaved word by word into the body ("…to take Health and
+      reasonable care…"). In BSA text (PyMuPDF) the heading is mostly absent. BSA 148's heading text
+      sits inside BSA 149's row and BSA 157's inside BSA 158's.
+    - **IPC / CrPC notes duplicate the start of the text**: 508 / 563 IPC and 524 / 533 CrPC notes
+      run past the heading into the body's opening words ("Information in cognizable cases.—(1) Every
+      information relating to the commission of a cognizable"). The text then starts with the same
+      heading, so the window spends that budget twice.
+    - **No row stores its chapter or part title**: the parsers drop chapter headings as page
+      furniture (`parsing/section_boundary.py`).
+    - **Page residue in text**: Gazette mastheads with long underscore rules in 105 BNSS and 31 BSA
+      rows.
+  - **Golden-set label question, open (the user's call).** "What is a hostile witness?" accepts only
+    BSA 148 (cross-examination as to previous written statements). BSA 157 ("the Court may … permit
+    the person who calls a witness to put any question to him which might be put in
+    cross-examination by the adverse party") is the Adhiniyam's hostile-witness provision, the
+    successor of Evidence Act s.154. It sits at vector rank 8, with cosine 0.5240.
+  - **Decided 2026-10-12, next pass (the user): fix the embedding INPUT only.** No model change, no
+    retrieval or fusion change, no chunking. (1) Populate marginal_note for the 1,059 BNS / BNSS / BSA
+    rows. (2) Stop IPC / CrPC notes duplicating the text's own opening heading. (3) Store each row's
+    chapter title and include it in the embedding input. (4) Replace the dead `[:2000]` with the
+    real token-based truncation. Then re-embed on a Neon branch, never production, and measure
+    against E8 (Recall@5 0.909, MRR 0.7400) per query, tracing any move of more than one place. Also
+    report the five failing targets' new cosines: the question is whether they leave the 0.18–0.34
+    band. If they don't, the embedder swap is next.
+  - **Superseded the same day (the user): measure first, cheaply; the parser waits.** The parser
+    work got ahead of any measurement. It is preserved outside the repo, not in the tree:
+    `parsing/headings.py`, reading BNSS / BSA margin notes and all five acts' chapter titles from the
+    PDFs by position. Unrun against the database, it recovered 531/531 BNSS and 170/170 BSA notes,
+    including BSA 148's and BSA 157's, which do exist in the PDF margin. It also recovered every
+    chapter title, apart from four IPC titles where a glued word remains (e.g. "RELATIVESOF"). Worth
+    finishing later: it is the real fix for the mangled BNSS text. Two facts for that later pass:
+    (1) `search_vector` is a generated column over `marginal_note || section_text`, so writing
+    marginal_note also changes the full-text index, and the measurement must separate the lexical
+    effect from the embedding effect; (2) adding a `chapter_title` column needs a migration, and the
+    app's startup Alembic-head check then refuses to run against an unmigrated database.
+    **Instead**: a throwaway script, no production code touched, re-embeds every row on a Neon
+    branch with `<heading>. <section_text minus a leading duplicate of that heading>`. The heading
+    is the first sentence of marginal_note, or of section_text where the note is empty. No chapter
+    titles, so plea bargaining is expected to stay broken. Decisive row: BSA 148 on "What is a
+    hostile witness?" (vector rank 10, cosine 0.5148). Into the top 6, and the heading hypothesis
+    holds; barely moved, and the embedder swap is next. marginal_note is not written, so the
+    full-text side is unchanged.
+  - **Result 2026-10-12, closed (the user): headings are not the lever.** Measured as a vector-only
+    preview: every row embedded locally both ways and ranked in memory, nothing written. The preview
+    reproduces production's vector ranks and cosines exactly on the old inputs (e.g. IPC 498A
+    60 / 0.2558, BSA 148 10 / 0.5148), so its new-input figures are like for like. It needed no
+    branch run.
+    - **Failing targets, old → new rank / cosine; none leaves the 0.18–0.34 band** (largest move
+      0.03): IPC 498A 60 / 0.2558 → 64 / 0.2509; BNS 85 31 / 0.2858 → 38 / 0.2706; CrPC 154
+      (police) 374 / 0.2256 → 518 / 0.1985; BNSS 173 (police) 258 / 0.2454 → 224 / 0.2476; CrPC 154
+      (theft) 887 / 0.1807 → 859 / 0.1951; BNSS 173 (theft) 758 / 0.1952 → 681 / 0.2169; CrPC 265A
+      273 / 0.3328 → 213 / 0.3498; BNSS 289 239 / 0.3397 → 259 / 0.3384.
+    - **BSA 148: 10 → 6 (0.5409), but not because of a heading.** Under the rule, its "heading" is
+      its own first sentence, nearly the whole section, so the input only lost "148.". The move is
+      that change plus BSA 157 dropping 8 → 11. **With the heading the Act actually prints**
+      ("Cross-examination as to previous statements in writing."), it falls to **rank 30, cosine
+      0.4655**. BSA 157 with its printed heading ("Question by party to his own witness.") lands at
+      rank 24.
+    - Controls, vector side: defamation unchanged (1 / 3 / 4). Cheating: BNS 318 3 → 5, IPC 420
+      5 → 3. Murder: IPC 302 and BNS 103 swap at 1 / 2. Dowry harassment: IPC 498A 4 → 5, BNS 85
+      5 → 2.
+    - Not run: the fused golden set. The vector side already settled the question. The parser
+      (scratchpad `parser-wip/`) stays the fix for mangled BNSS text, **not a retrieval fix**.
+  - **Next, decided 2026-10-12 (the user): the embedder swap**, the last candidate standing; fusion
+    weighting, chunking, headings and query expansion are each eliminated by measurement. The swap is
+    all-MiniLM-L6-v2 → BAAI/bge-small-en-v1.5, also 384-dim. Fallback: intfloat/e5-small-v2, with
+    "query: " / "passage: " prefixes at both index and query time. The embedding input stays exactly
+    as production builds it, one variable at a time. Re-embed on a Neon branch; measure the failing
+    targets (absolute cosine and distance from each query's rank-1 cosine), the golden set via the
+    unchanged `eval_golden_set.py`, per-query moves, and the four controls. Report the model's max
+    sequence length as loaded.
+  - **Result 2026-10-12, vector-side preview only, closed (the user): bge is not the fix.** Every row
+    was embedded locally with each model on production's unchanged input and ranked in memory. The
+    MiniLM side reproduces production exactly. No branch was created and nothing was re-embedded in
+    any database; the fused golden set was never run under bge.
+    - **Window:** bge as loaded truncates at **512 tokens**. Rows with unembedded text: 57.6% →
+      12.5%. Corpus characters embedded: 45.4% → 80.9%. Production's `[:2000]` then binds before the
+      model does (167 rows against 102), and it still cuts CrPC 154(3), which starts at character
+      2,098.
+    - **Failing targets, MiniLM → bge vector rank (gap below rank-1 cosine):** IPC 498A 60 (0.294) →
+      31 (0.071); BNS 85 31 → 24; CrPC 154 (police) 374 → 556; BNSS 173 (police) 258 → 97; CrPC 154
+      (theft) 887 → 1,695; BNSS 173 (theft) 758 → 1,571; CrPC 265A 273 → 1,162; BNSS 289 239 → 423;
+      BSA 148 10 → 7. None reaches the top 6.
+    - **Controls regress, vector side:** BNS 356 3 → 8, IPC 499 4 → 11, BNS 318 3 → 16, IPC 415
+      7 → 24. Murder is unchanged; dowry harassment improves to 1 / 2.
+    - Adopting any new embedder would also need the domain classifier retrained, since its artifact
+      is stamped with MiniLM's model id and startup refuses a mismatch. The MiniLM-calibrated
+      thresholds would need re-measuring too.
+- [ ] **E12.** 🚩 **Section lookup: classify first, then fetch exactly.** Decided 2026-10-12 (the user),
+  for the next day's presentation. The five retrieval-similarity attempts (E5, E9, E11's headings,
+  chunking and bge) moved no failing query into the top 6. Those queries need legal classification,
+  not text similarity: BNS 85 never says "dowry", and CrPC 154(3), the remedy when police won't
+  register an FIR, isn't phrased the way a user would phrase it. **No more retrieval-similarity
+  fixes.**
+  - **Built, behind `SECTION_LOOKUP_ENABLED`, default off** (`app/services/section_lookup.py`, one
+    hook in `app/api/v1/legal.py`):
+    1. One Groq call (`llm_service.identify_sections`) names the sections for the question as JSON:
+       act, section, the section's printed title, and a one-line reason.
+    2. Robust parsing normalises act names and strips sub-sections for lookup ("154(3)" → 154),
+       keeping them for display.
+    3. Each section is fetched by **exact** act + number from the in-force corpus.
+    4. The found sections are **prepended** to the hybrid results, de-duplicated. They are **not
+       fused into RRF**, the way E9 and E5 failed.
+    
+    The relevance gate and the citation / grounding checks stay the safety net, unchanged.
+    `semantic_search` is untouched: flag off, the unchanged `eval_golden_set.py` gives 0.9091 /
+    0.7400 with 0 / 89 top-k differences and the same corpus hash.
+  - **Both flags on together, or neither (the user).** The settings validator refuses
+    `SECTION_LOOKUP_ENABLED != RELEVANCE_GATE_ENABLED`. Consequence: running a script with only
+    `RELEVANCE_GATE_ENABLED=true` in the environment now fails at settings load.
+  - **Existence is not identity; found on the first run.** The model carries IPC / CrPC numbers into
+    the renumbered 2023 codes, and many of those numbers exist as **different** sections: BNS 302
+    is wounding religious feelings, not murder; BNSS 154 / 156 are public-nuisance orders; BSA 154 is
+    indecent questions. On the first run the murder control's answer cited only "BNS 302": the
+    violence bypass skips the gate, so nothing caught it. Fixed two ways. The prompt says the new
+    codes were renumbered and asks for each section's printed title. A found section is then kept
+    only if at least 60% of that title's content words appear in the row's own opening text (BSA:
+    its whole text, since its parse lost most headings, E11). Otherwise it is dropped as
+    `title_mismatch` and counted as a hallucination.
+  - **Snippets for looked-up rows** are the passage that answers: up to 1,500 characters, or the
+    opening plus the cited sub-section when it starts later. Retrieval's punishment-clause snippet
+    stops before IPC 498A's "unlawful demand" explanation, and the gate refused the dowry question on
+    it.
+  - Latency: the call starts before hybrid retrieval and overlaps it. The lookup measured
+    1.4–10.8 s per query on `openai/gpt-oss-120b`.
+  - **Measured 2026-10-12 against Neon, read-only (Groq calls only).** The measurement
+    (`measure_lookup.py`, scratchpad) runs the functions `legal.py` calls, in its order, minus the
+    DB writes. The HTTP endpoint itself was not exercised end to end: the write guard blocks
+    local writes to Neon.
+    - **Flag off, nothing moves:** unchanged `eval_golden_set.py` gives 0.9091 / 0.7400, 0 / 89
+      top-k differences, same corpus hash. The hybrid list inside the measurement reproduces 0.9091
+      / 0.7400 too.
+    - **Failing queries, flag on.** Off, the first three are refused by the domain classifier. On:
+      - "My husband is asking for dowry": **answers** from IPC 498A. Lookup found it in 5/5
+        stability runs plus 1 of 2 full runs; the other returned nothing, and the gate refused.
+      - "The police won't register my complaint": **answers**, citing CrPC 154 (5/5 runs).
+        Sub-section (3) is not named.
+      - "What should I do if I am a victim of theft?": **answers**. IPC 378 + CrPC 154 were found in
+        5/5 runs. One synthesis cited only BNS 303.
+      - "What is plea bargaining?": **answers from hybrid retrieval** (CrPC 265B, BNSS 290, CrPC
+        265H, 265K). The lookup finds nothing: the model names CrPC/BNSS "265"; once it named
+        265A, under the chapter's title, and the title check dropped it.
+      - "What is a hostile witness?": **refuses** (relevance verdict: no definition in the listed
+        sections). Off, it answers from CrPC 315 and other off-target sections. The lookup names
+        BSA 154 (wrong) every time, and the title check drops it.
+    - **Controls, flag on:** all four answer with correct citations. Defamation: IPC 500 / 499 + BNS
+      356. Cheating: IPC 420 / 417 / 419. Murder: IPC 302 + BNS 103 / 104 (after the title-check
+      fix). Dowry harassment: IPC 498A + BNS 85.
+    - **Merged-list ranks over the 44 in-scope golden queries** (lookup head + hybrid top 10;
+      informational, not a retrieval metric): Recall@5 0.9091 → 0.9318, MRR 0.7400 → 0.8143.
+      9 / 44 ranks change: 6 improve (assault None → 1; arrest without warrant 4 → 1; search warrant
+      5 → 1; charge sheet 5 → 1; relevance of facts 4 → 1; acid attack 3 → 1) and 3 drop 1 → 2, a
+      different on-point section ahead (culpable homicide IPC 299, dowry harassment IPC 498A, expert
+      opinion BSA 45).
+    - **Hallucination, 48 queries:** 57 sections named. 5 don't exist (8.8%: new-code numbers such
+      as BNS 405 / 406 / 326A / 354A, BNSS 265A). 12 exist but are different sections, caught by the
+      title check (21%: e.g. IPC 395 named as robbery is dacoity; IPC 464 as punishment for forgery
+      is making a false document; IPC 354A as voyeurism; BSA 154 / 32 / 101 / 112). Of those 12,
+      two are false drops: CrPC 438, named "Anticipatory bail" against its printed "Direction for
+      grant of bail to person apprehending arrest", and CrPC 265A, named by its chapter's title.
+      **About 26% of named sections are wrong. None of the 40 kept is wrong**: every kept section
+      outside the golden answers is on point (IPC 299, 304B, 396, 426; BSA 45).
 
 ---
 

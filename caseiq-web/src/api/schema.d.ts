@@ -535,6 +535,24 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AbstentionSignalOut
+         * @description One signal that caused a refusal (app.services.answer_gate.GateSignal).
+         *     `signal` is one of low_similarity, civil_scope, ambiguous_top_hit,
+         *     domain_classifier, similarity_floor, relevance_verdict. `value`/`threshold`
+         *     are what it compared (null where it compares no number); `detail` carries
+         *     the verdict or a note.
+         */
+        AbstentionSignalOut: {
+            /** Signal */
+            signal: string;
+            /** Value */
+            value?: number | null;
+            /** Threshold */
+            threshold?: number | null;
+            /** Detail */
+            detail?: string | null;
+        };
         /** ApproveIn */
         ApproveIn: {
             /** Effective From */
@@ -992,6 +1010,11 @@ export interface components {
              * @default true
              */
             citations_grounded: boolean;
+            /**
+             * Abstention Signals
+             * @default []
+             */
+            abstention_signals: components["schemas"]["AbstentionSignalOut"][];
         };
         /** RefreshIn */
         RefreshIn: {
