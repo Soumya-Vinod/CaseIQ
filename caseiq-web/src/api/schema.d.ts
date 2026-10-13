@@ -994,6 +994,11 @@ export interface components {
              */
             needs_incident_date: boolean;
             /**
+             * Safety Response
+             * @description Readiness E13: set when a fixed safety response answered the query before retrieval -- "crisis_support" (crisis helplines only) or "evasion_refused" (emergency services and legal aid only).
+             */
+            safety_response?: ("crisis_support" | "evasion_refused") | null;
+            /**
              * As Of
              * Format: date
              */

@@ -31,7 +31,7 @@ from app.services.directive_language import (
     record_stats as record_directive_language_stats,
 )
 from app.services.grounding import apply_grounding_check
-from app.services.helplines import select_helplines
+from app.services.helplines import crisis_helplines, evasion_refusal_helplines, select_helplines
 from app.services.llm import llm_service
 from app.services.punishment_verification import (
     record_stats as record_punishment_stats,
@@ -53,7 +53,7 @@ from app.services.retrieval import (
     semantic_search,
     touches_violence_or_harm,
 )
-from app.services.safety import screen_query
+from app.services.safety import detects_self_harm, requests_evasion, screen_query
 from app.services.section_lookup import lookup_sections, merge as merge_lookup, start_identification
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
@@ -106,6 +106,20 @@ _INCIDENT_DATE_PROMPT = (
     "1 July 2024 -- IPC/CrPC applied before that date, BNS/BNSS on or after -- so knowing when "
     "this happened lets me cite the law that actually applied, not just the current one. If you "
     "know the date, please share it. If you don't, let me know and I'll check both."
+)
+# Readiness E13: fixed, non-generated text for the two safety responses. No
+# statute, no steps, no rights list -- the numbers come from the verified
+# helpline table (app.services.helplines), never from here or an LLM.
+_CRISIS_MESSAGE = (
+    "I'm really sorry you're going through this. You don't have to face it alone, and you "
+    "deserve support right now. Please call Tele-MANAS on 14416 (or 1-800-891-4416) or KIRAN "
+    "on 1800-599-0019. Both are free, confidential, and open 24 hours a day. If you are in "
+    "immediate danger, call 112."
+)
+_EVASION_REFUSAL_MESSAGE = (
+    "CaseIQ can't help with hiding a crime, avoiding the police, destroying evidence, or "
+    "pressuring a witness. If anyone is hurt or in danger, call 112 now. If you need advice "
+    "about your own legal position, NALSA's free legal aid helpline is 15100."
 )
 _SKIPPED_DATE_NOTE = (
     " (No incident date was given, so this searched across both the pre-2024 (IPC/CrPC) and "
@@ -249,6 +263,34 @@ async def _last_retrieved_sections(
     return []
 
 
+async def _safety_response(db: DB, request: Request, payload: QueryIn, user, stored_query: str, *,
+                           kind: str, message: str, helplines: list[dict]) -> QueryOut:
+    """Readiness E13: a fixed safety response, persisted like any other turn
+    (same shape as the incident-date short-circuit) and returned without
+    retrieval, generation, or language detection."""
+    as_of = payload.as_of or date.today()
+    flagged = kind == "evasion_refused"
+    q = LegalQuery(user_id=user.id if user else None, original_query=stored_query,
+                   detected_language=payload.language, status=QueryStatus.PROCESSED,
+                   is_flagged=flagged, flag_reason=kind if flagged else None,
+                   session_id=payload.session_id, ip_hash=hash_ip(client_ip(request)))
+    db.add(q)
+    await db.flush()
+    db.add(QueryResponse(
+        query_id=q.id, conversational_summary=message, structured_data={}, retrieved_sections=[],
+        confidence_score=0.0, response_language=payload.language, processing_time_ms=0,
+        is_followup=False, as_of=as_of, corpus_version_id=None,
+    ))
+    logger.info("safety_response", kind=kind, query_id=str(q.id))
+    return QueryOut(
+        query_id=q.id, original_query=payload.query, conversational_summary=message,
+        structured_data={}, confidence_score=0.0, legal_sections=[], language=payload.language,
+        related_questions=[], is_followup=False, processing_time_ms=0, abstained=False,
+        needs_incident_date=False, as_of=as_of, corpus_version_id=None, helplines=helplines,
+        safety_response=kind,
+    )
+
+
 @router.post("/query", response_model=QueryOut)
 # FIXED 2026-09-08 (docs/evaluation.md): the one endpoint this project's
 # whole shared Groq TPM budget runs through, and nothing capped how much
@@ -305,6 +347,26 @@ async def process_query(
     stored_query = _query_redaction.redact(payload.query)
     if _query_redaction.had_redactions:
         logger.info("pii_redacted", endpoint="legal_query_storage", counts=_query_redaction.counts)
+
+    # Readiness E13: two fixed safety responses, decided on the query's own
+    # text before anything else runs -- no language-detection call, no
+    # retrieval, no statutes. Self-harm is checked BEFORE screen_query on
+    # purpose: "how to kill myself" also matches its "how to kill" pattern,
+    # and a person in crisis must never get a "flagged as potentially
+    # harmful ... logged" 403.
+    if detects_self_harm(payload.query):
+        return await _safety_response(
+            db, request, payload, user, stored_query, kind="crisis_support",
+            message=_CRISIS_MESSAGE, helplines=crisis_helplines(),
+        )
+    if requests_evasion(payload.query):
+        # Logged for abuse review the same way a deny-listed query is.
+        db.add(AuditLog(user_id=user.id if user else None, action="evasion_request_refused",
+                        details={"query": payload.query}, ip_hash=hash_ip(client_ip(request))))
+        return await _safety_response(
+            db, request, payload, user, stored_query, kind="evasion_refused",
+            message=_EVASION_REFUSAL_MESSAGE, helplines=evasion_refusal_helplines(),
+        )
 
     blocked, pattern = screen_query(payload.query)
     if blocked:

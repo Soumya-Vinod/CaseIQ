@@ -860,6 +860,48 @@ Highest-leverage work in the project. Most student RAG projects have zero measur
       grant of bail to person apprehending arrest", and CrPC 265A, named by its chapter's title.
       **About 26% of named sections are wrong. None of the 40 kept is wrong**: every kept section
       outside the golden answers is on point (IPC 299, 304B, 396, 426; BSA 45).
+- [ ] **E13.** 🚩 **Safety responses, and provisions that are not operative.** Decided and built
+  2026-10-13 (the user). Always on, not behind the E12 flags.
+  - **Self-harm → crisis support only.** "I want to kill myself" used to retrieve IPC 309 and say
+    that attempting suicide is punishable: harmful, and wrong law (MHA 2017 s.115(1)). Worse, "how
+    to kill myself" matched `screen_query`'s "how to kill" pattern, and the person got a 403 saying
+    the incident was logged. Now `safety.detects_self_harm` runs **before** `screen_query` and
+    before retrieval. It triggers on first-person intent only, so "What is abetment of suicide?"
+    is still answered. The response is fixed text plus Tele-MANAS 14416 / 1-800-891-4416, KIRAN
+    1800-599-0019, and 112 labelled "Immediate danger". No statutes, no steps; the frontend shows
+    `SafetyCard` only. Numbers verified 2026-10-13: Tele-MANAS from a PIB (MoHFW) release dated
+    11 Feb 2026; KIRAN from DEPwD's own helpline page and the 2020 PIB launch release.
+  - **Evading justice → refusal.** `safety.requests_evasion` requires both a concealment, escape,
+    destruction or intimidation request and crime context, so "I was arrested for theft, what are
+    my rights" is still answered. The response is fixed refusal text plus 112 and NALSA 15100,
+    audit-logged.
+  - **New `judicial_status` value `not_operative`:** the provision is still in the statute but
+    not operative as written, because a later Act overrode it or a court holds it in abeyance.
+    Returned like `read_down`, with its reason injected into the answer prompt by
+    `build_rag_context`, not only shown on the badge. `stayed` shows a badge only, which is why it
+    couldn't hold IPC 124A.
+  - **Seeded on Neon 2026-10-13**, after a backup at
+    `D:\BCA\MCA\CASEIQ\corpus-row-backups\2026-10-13-judicial-status\`:
+    - IPC 309 `not_operative`: MHA 2017 s.115(1), Gazette text.
+    - IPC 124A `not_operative`: S.G. Vombatkere, interim order of 11 May 2022, referred to a
+      larger bench on 12 Sept 2023.
+    - IPC 303 `struck_down`: Mithu v. State of Punjab, decided 7 April 1983, (1983) 2 SCC 277 /
+      AIR 1983 SC 473.
+    - CrPC 198 `read_down`: Joseph Shine, para 56, as far as adultery complaints go.
+    
+    Every citation was read from the judgment or Act text, not from summaries.
+  - **Retrieval impact, measured:** golden set 0.9091 / 0.7400 before and after, same corpus
+    hash. 1 / 89 queries changed: murder lost IPC 303 at rank 2, the rows below moved up, and IPC
+    108 entered at rank 10. The correct answer stayed at rank 1.
+  - **Scroll fixed (2026-10-13).** The page used to scroll to the end of the thread when an answer
+    arrived. On a phone that left the SafetyCard's last button in view and the message scrolled
+    away under the sticky header. It now settles at the top of the newest answer, with
+    `scroll-margin-top` clearing the mobile bar, and respects reduced motion. Measured in headless
+    Chromium at 390px and 1366px: the answer's top lands below the bar every time.
+  - **Unknown statuses render safely.** The frontend badge maps known statuses and gives any other
+    value a warning badge with a readable label and "check this section's current legal status
+    before relying on it". `not_operative` reached Neon before the code that understands it, and
+    every future status will do the same.
 
 ---
 

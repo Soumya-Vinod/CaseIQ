@@ -7,7 +7,8 @@ the incident. This module is what putting it back honestly looks like.
 
 Every number below was checked directly against the stated official source
 (fetched 2026-09-02) before being entered here -- none filled in from
-memory. Kept deliberately small: five numbers, not a directory. A number
+memory. Kept deliberately small: seven numbers (two of them crisis lines used only
+on the self-harm path), not a directory. A number
 this project could not independently verify against an official source is
 left out entirely rather than included on the strength of being
 "well-known" -- see the module's own history for what "well-known" got
@@ -88,6 +89,34 @@ HELPLINES: tuple[Helpline, ...] = (
         when_to_use="A child in need of care, protection, or facing abuse",
         source_url="https://www.childlineindia.org",
         verified_on="2026-09-02",
+    ),
+    # Crisis lines (readiness E13), shown ONLY on the self-harm path -- see
+    # crisis_helplines(). Verified 2026-10-13:
+    #   - Tele-MANAS: PIB release by the Ministry of Health & Family Welfare,
+    #     posted 11 Feb 2026, states "Launched on October 10, 2022, as a 24x7
+    #     toll-free helpline (14416 or 1-800-891-4416)". telemanas.mohfw.gov.in
+    #     itself failed TLS certificate verification on the day, so the PIB
+    #     release is the cited source.
+    #   - KIRAN: the Department of Empowerment of Persons with Disabilities
+    #     (Ministry of Social Justice & Empowerment), which runs it, lists
+    #     "KIRAN | 1800-5990019 | Mental health support & rehabilitation" on
+    #     its helpline page, separately from Tele-MANAS; the 2020 PIB launch
+    #     release gives the same number as 1800-599-0019. (One secondary
+    #     source claims it merged into Tele-MANAS; the owning department's own
+    #     page still lists it, so it stays.)
+    Helpline(
+        name="Tele-MANAS (mental health, 24x7)",
+        number="14416",
+        when_to_use="Free, confidential mental-health support at any hour -- also on 1-800-891-4416",
+        source_url="https://www.pib.gov.in/PressReleasePage.aspx?PRID=2226319",
+        verified_on="2026-10-13",
+    ),
+    Helpline(
+        name="KIRAN mental health helpline",
+        number="1800-599-0019",
+        when_to_use="Free mental-health support and rehabilitation, 24x7, in 13 languages",
+        source_url="https://depwd.gov.in/en/others-helplines/",
+        verified_on="2026-10-13",
     ),
 )
 
@@ -171,3 +200,18 @@ def select_helplines(query: str, *, fallback_on_empty: str | None = None) -> lis
         selected.append(_helpline(fallback_on_empty))
 
     return selected[:2]
+
+
+def crisis_helplines() -> list[dict]:
+    """The self-harm path's only content (readiness E13): Tele-MANAS, KIRAN,
+    then 112 relabelled for immediate danger -- the same verified number,
+    named for what it's for on this screen."""
+    emergency = {**_helpline("112"), "name": "Immediate danger",
+                 "when_to_use": "If you or someone else is in immediate danger right now"}
+    return [_helpline("14416"), _helpline("1800-599-0019"), emergency]
+
+
+def evasion_refusal_helplines() -> list[dict]:
+    """A request for help evading justice gets emergency services and legal
+    aid -- nothing else (readiness E13)."""
+    return [_helpline("112"), _helpline("15100")]

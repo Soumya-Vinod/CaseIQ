@@ -14,39 +14,59 @@ import styles from "./JudicialStatusBadge.module.css";
  * GET /knowledge/sections/{act}/{section}. `read_down` is the one normal
  * retrieval is allowed to return, always with a scope_note.
  */
+type Kind = "struck" | "readdown" | "neutral";
+
+/**
+ * Every status the backend is known to send. A value missing from here is
+ * NOT an error: the database can hold a status before the frontend that
+ * understands it is deployed (readiness E13 -- `not_operative` was written to
+ * Neon ahead of this code). Unknown values fall back to `fallback()` below.
+ */
+const KNOWN: Record<string, { label: string; kind: Kind; icon: string; subLabel?: string }> = {
+  struck_down: { label: "Struck down", kind: "struck", icon: "✕",
+                 subLabel: "— not live law, do not cite as in force" },
+  // Readiness E13: still in the statute but not operative as written -- a later
+  // Act overrode it, or a court holds it in abeyance. Same warning treatment as
+  // read_down: it must be impossible to read as plain live law.
+  not_operative: { label: "Not operative", kind: "readdown", icon: "⚠",
+                   subLabel: "— in the statute, but not in operation as written" },
+  read_down: { label: "Read down", kind: "readdown", icon: "⚠" },
+  stayed: { label: "Stayed", kind: "neutral", icon: "ℹ" },
+  referred: { label: "Referred to larger bench", kind: "neutral", icon: "ℹ" },
+  valid: { label: "Upheld", kind: "neutral", icon: "ℹ" },
+};
+
+/** An unrecognised status still means the backend flagged this section, so
+ *  it gets the cautious (warning) treatment, a readable label made from the
+ *  raw value, and a sub-label telling the reader to check -- never a blank,
+ *  never the bare machine string. */
+function fallback(raw: string | null | undefined) {
+  const text = String(raw ?? "").replace(/[_-]+/g, " ").trim();
+  const label = text ? text.charAt(0).toUpperCase() + text.slice(1) : "Legal status note";
+  return { label, kind: "readdown" as Kind, icon: "⚠",
+           subLabel: "— check this section's current legal status before relying on it" };
+}
+
 export function JudicialStatusBadge({ status }: { status: JudicialStatusOut }) {
-  const isStruckDown = status.status === "struck_down";
-  const isReadDown = status.status === "read_down";
-
-  const label = isStruckDown
-    ? "Struck down"
-    : isReadDown
-      ? "Read down"
-      : status.status === "stayed"
-        ? "Stayed"
-        : status.status === "referred"
-          ? "Referred to larger bench"
-          : status.status;
-
-  const kind = isStruckDown ? "struck" : isReadDown ? "readdown" : "neutral";
+  const view = KNOWN[status.status] ?? fallback(status.status);
 
   return (
-    <div className={`${styles.badge} ${styles[kind]}`} role="note">
+    <div className={`${styles.badge} ${styles[view.kind]}`} role="note">
       <span className={styles.icon} aria-hidden="true">
-        {isStruckDown ? "✕" : isReadDown ? "⚠" : "ℹ"}
+        {view.icon}
       </span>
       <div className={styles.body}>
         <p className={styles.label}>
-          {label}
-          {isStruckDown && (
-            <span className={styles.subLabel}>— not live law, do not cite as in force</span>
-          )}
+          {view.label}
+          {view.subLabel && <span className={styles.subLabel}>{view.subLabel}</span>}
         </p>
-        <p className={styles.citation}>
-          {status.case_name}
-          {status.citation ? `, ${status.citation}` : ""}
-          {status.court ? ` (${status.court}${status.decided_on ? `, ${status.decided_on}` : ""})` : ""}
-        </p>
+        {(status.case_name || status.citation || status.court) && (
+          <p className={styles.citation}>
+            {status.case_name}
+            {status.citation ? `${status.case_name ? ", " : ""}${status.citation}` : ""}
+            {status.court ? ` (${status.court}${status.decided_on ? `, ${status.decided_on}` : ""})` : ""}
+          </p>
+        )}
         {status.scope_note && <p className={styles.scopeNote}>{status.scope_note}</p>}
       </div>
     </div>

@@ -935,6 +935,12 @@ def build_rag_context(sections: list[dict]) -> str:
         if js and js["status"] == "read_down":
             line += (f"\n[JUDICIAL NOTE: read down by {js['case_name']} ({js['citation']}) -- "
                      f"{js['scope_note']}]")
+        elif js and js["status"] == "not_operative":
+            # Readiness E13: in the statute, but not operative as written -- the
+            # model must not state it as live law, so the reason goes in here.
+            line += (f"\n[NOT OPERATIVE: this provision is not in operation as written -- "
+                     f"{js['case_name']} ({js['citation']}). {js['scope_note']} Do not present "
+                     f"this section as current, enforceable law.]")
         parts.append(line)
     parts.append("--- END RETRIEVED SECTIONS ---")
     return "\n\n".join(parts)

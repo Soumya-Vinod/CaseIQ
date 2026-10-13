@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { api } from "../api/client";
 import type { QueryOut } from "../api/types";
 import { AbstentionCard } from "../components/AbstentionCard";
+import { SafetyCard } from "../components/SafetyCard";
 import { AnswerBriefing } from "../components/AnswerBriefing";
 import { HelplineStrip } from "../components/HelplineStrip";
 import { IncidentDatePrompt } from "../components/IncidentDatePrompt";
@@ -52,10 +53,24 @@ export function QueryPage() {
   // answer, so the thread itself is the record.
   const [turns, setTurns] = useState<Turn[]>([]);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const newestTurnRef = useRef<HTMLElement | null>(null);
+  const newestTurnId = turns.length > 0 ? turns[turns.length - 1].id : null;
 
+  // While a query runs, keep the "Searching…" line in view. When an answer
+  // arrives (or replaces the last turn, e.g. after the incident-date
+  // prompt), settle at the TOP of that answer so reading starts at its
+  // beginning -- this used to scroll to the end of the thread, which on a
+  // phone left a person looking at the last button of the SafetyCard with
+  // its message scrolled away. `.turn`'s scroll-margin-top keeps the sticky
+  // mobile bar from covering the heading.
+  const scrollBehavior = (): ScrollBehavior =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [turns.length, loading]);
+    if (loading) threadEndRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "end" });
+  }, [loading]);
+  useEffect(() => {
+    if (newestTurnId) newestTurnRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+  }, [newestTurnId]);
 
   async function runQuery(
     text: string,
@@ -214,6 +229,7 @@ export function QueryPage() {
               key={turn.id}
               turn={turn}
               isNewest={i === turns.length - 1}
+              articleRef={i === turns.length - 1 ? newestTurnRef : undefined}
               loading={loading}
               onSubmitIncidentDate={(d) =>
                 void runQuery(turn.query, { incidentDate: d, replaceLastTurn: true })
@@ -275,6 +291,7 @@ export function QueryPage() {
 function TurnBlock({
   turn,
   isNewest,
+  articleRef,
   loading,
   onSubmitIncidentDate,
   onSkipIncidentDate,
@@ -282,6 +299,7 @@ function TurnBlock({
 }: {
   turn: Turn;
   isNewest: boolean;
+  articleRef?: Ref<HTMLElement>;
   loading: boolean;
   onSubmitIncidentDate: (date: string) => void;
   onSkipIncidentDate: () => void;
@@ -299,7 +317,7 @@ function TurnBlock({
   const expanded = isNewest || (expandOverride ?? false);
 
   return (
-    <article className={styles.turn}>
+    <article className={styles.turn} ref={articleRef}>
       {isNewest ? (
         <p className={styles.turnQuery}>{turn.query}</p>
       ) : (
@@ -318,7 +336,17 @@ function TurnBlock({
 
       {expanded && (
         <>
-          {result.needs_incident_date && (
+          {result.safety_response && (
+            <section className={styles.sourcesSection}>
+              <SafetyCard
+                kind={result.safety_response}
+                message={result.conversational_summary}
+                helplines={result.helplines}
+              />
+            </section>
+          )}
+
+          {!result.safety_response && result.needs_incident_date && (
             <section className={styles.sourcesSection}>
               <IncidentDatePrompt
                 message={result.conversational_summary}
@@ -329,7 +357,7 @@ function TurnBlock({
             </section>
           )}
 
-          {!result.needs_incident_date && result.abstained && (
+          {!result.safety_response && !result.needs_incident_date && result.abstained && (
             <section className={styles.sourcesSection}>
               <AbstentionCard
                 message={result.conversational_summary}
@@ -340,7 +368,7 @@ function TurnBlock({
             </section>
           )}
 
-          {!result.needs_incident_date && !result.abstained && (
+          {!result.safety_response && !result.needs_incident_date && !result.abstained && (
             <>
               {/* Briefing left, sources right at wide viewports -- the two
                   halves of an answer someone reads together, not one after

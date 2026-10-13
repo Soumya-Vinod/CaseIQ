@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any
+from typing import Literal, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -164,6 +164,13 @@ class QueryOut(BaseModel):
     # stay empty; the frontend's job is to show the date prompt, get an
     # answer, and resubmit -- see QueryPage's handling of this flag.
     needs_incident_date: bool = False
+    # Readiness E13: set when the query was answered by a fixed safety response
+    # before retrieval -- "crisis_support" (self-harm or suicidal intent: crisis
+    # helplines only) or "evasion_refused" (a request for help concealing a
+    # crime, evading arrest, destroying evidence or intimidating a witness:
+    # emergency services and legal aid only). No statutes, no steps, no rights
+    # list on either; the frontend renders only the message and `helplines`.
+    safety_response: Literal["crisis_support", "evasion_refused"] | None = None
     # Part K / K7: the date retrieval was filtered as-of -- an answer must be
     # able to state what date it was computed against.
     as_of: date

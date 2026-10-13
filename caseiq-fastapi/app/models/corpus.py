@@ -130,7 +130,11 @@ class JudicialStatus(UUIDPk, Timestamped, Base):
     that it isn't enforceable. This is what closes D7 -- see
     docs/m1-verification.md's IPC 497 finding, which is exactly the case this
     table exists for. Retrieval MUST exclude 'struck_down' entirely and MUST
-    attach scope_note to any 'read_down' result (K2's hard rule).
+    attach scope_note to any 'read_down' result (K2's hard rule). 'not_operative'
+    (readiness E13): still in the statute but not operative as written -- overridden
+    by a later Act (IPC 309, Mental Healthcare Act 2017 s.115) or held in abeyance
+    by a court (IPC 124A) -- is returned like 'read_down', and its reason must reach
+    the answer prompt, not only the badge (build_rag_context).
     """
     __tablename__ = "judicial_status"
     __table_args__ = (Index("ix_judicial_status_lookup", "act_id", "section_number"),)
@@ -139,7 +143,7 @@ class JudicialStatus(UUIDPk, Timestamped, Base):
         PgUUID(as_uuid=True), ForeignKey("acts.id", ondelete="CASCADE"), index=True
     )
     section_number: Mapped[str] = mapped_column(String(20), index=True)
-    status: Mapped[str] = mapped_column(String(20))  # valid | struck_down | read_down | stayed | referred
+    status: Mapped[str] = mapped_column(String(20))  # valid | struck_down | read_down | not_operative | stayed | referred
     case_name: Mapped[str] = mapped_column(String(500))
     citation: Mapped[str] = mapped_column(String(255), default="")
     # Explicit, queryable "not yet confirmed against a primary source" flag --

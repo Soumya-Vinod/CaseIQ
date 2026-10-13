@@ -57,6 +57,101 @@ JUDICIAL_STATUS_SEED: list[dict] = [
         ),
         "source_url": "https://indiankanoon.org/doc/168671544/",
     },
+    {
+        # Readiness E13. Not a court decision: a later Act bars the section's
+        # use, so "not_operative", not "read_down" (no court read it down).
+        # Returned by retrieval with its reason injected into the prompt
+        # (build_rag_context), so s.309 is never served as plain live law.
+        # s.115 text verified 2026-10-13 against the Gazette of India
+        # Extraordinary, Part II Section 1, 7 April 2017 (Act No. 10 of 2017),
+        # via PRS's copy of the Gazette text; India Code's own copy timed out.
+        "act_code": "IPC",
+        "section_number": "309",
+        "status": "not_operative",
+        "case_name": "Mental Healthcare Act, 2017, section 115(1)",
+        "citation": "Act No. 10 of 2017",
+        "citation_verified": True,
+        "court": "Parliament of India (statute)",
+        "decided_on": date(2017, 4, 7),
+        "scope_note": (
+            "Mental Healthcare Act 2017 s.115(1): \"Notwithstanding anything contained in "
+            "section 309 of the Indian Penal Code any person who attempts to commit suicide shall "
+            "be presumed, unless proved otherwise, to have severe stress and shall not be tried and "
+            "punished under the said Code.\" s.115(2) puts a duty on the appropriate Government to "
+            "provide care, treatment and rehabilitation. Do not present attempted suicide as "
+            "punishable. The BNS has no general equivalent: BNS 226 covers only an attempt to "
+            "commit suicide to compel or restrain a public servant's lawful exercise of power."
+        ),
+        "source_url": "https://www.indiacode.nic.in/handle/123456789/2249",
+    },
+    {
+        # Readiness E13. Order text verified 2026-10-13 (Indian Kanoon's copy of
+        # the 11 May 2022 order, W.P.(C) No. 682/2021). Not struck down: held in
+        # abeyance "till further orders"; on 12 Sept 2023 the challenge was
+        # referred to a bench of at least five Judges (also verified).
+        "act_code": "IPC",
+        "section_number": "124A",
+        "status": "not_operative",
+        "case_name": "S.G. Vombatkere v. Union of India",
+        "citation": "W.P.(C) No. 682 of 2021, interim order dated 11 May 2022",
+        "citation_verified": True,
+        "court": "Supreme Court of India",
+        "decided_on": date(2022, 5, 11),
+        "scope_note": (
+            "Interim order, 11 May 2022: the Court said it hoped and expected that the State and "
+            "Central Governments would \"restrain from registering any FIR, continuing any "
+            "investigation or taking any coercive measures by invoking Section 124A of IPC while "
+            "the aforesaid provision of law is under consideration\", and directed that \"all "
+            "pending trials, appeals and proceedings with respect to the charge framed under "
+            "Section 124A of IPC be kept in abeyance\", till further orders. On 12 September 2023 "
+            "the challenge was referred to a bench of at least five Judges. Sedition has no "
+            "counterpart in the BNS by that name."
+        ),
+        "source_url": "https://indiankanoon.org/doc/134384639/",
+    },
+    {
+        # Readiness E13, approved option A (hide). Judgment verified 2026-10-13
+        # (Indian Kanoon's copy): date of judgment 07/04/1983, five-Judge bench,
+        # headnote "s. 303, I.P.C. is unconstitutional and void".
+        "act_code": "IPC",
+        "section_number": "303",
+        "status": "struck_down",
+        "case_name": "Mithu v. State of Punjab",
+        "citation": "(1983) 2 SCC 277; AIR 1983 SC 473",
+        "citation_verified": True,
+        "court": "Supreme Court of India",
+        "decided_on": date(1983, 4, 7),
+        "scope_note": (
+            "Section 303 (mandatory death sentence for murder by a person under sentence of "
+            "imprisonment for life) declared unconstitutional and void as violative of Articles 14 "
+            "and 21 (5-judge bench). Murder by a life convict falls under section 302, with "
+            "discretion in sentencing; BNS 104 is the current provision."
+        ),
+        "source_url": "https://indiankanoon.org/doc/590378/",
+    },
+    {
+        # Readiness E13. Joseph Shine (judgment verified 2026-10-13, Indian
+        # Kanoon's copy), para 56 (Misra CJ): "it is appropriate to declare
+        # Section 198 CrPC which deals with the procedure for filing a complaint
+        # in relation to the offence of adultery as unconstitutional." s.198
+        # still governs the other offences against marriage, so this is
+        # read_down (narrowed by a court), not struck_down.
+        "act_code": "CrPC",
+        "section_number": "198",
+        "status": "read_down",
+        "case_name": "Joseph Shine v. Union of India",
+        "citation": "AIR 2018 SC 4898",
+        "citation_verified": True,
+        "court": "Supreme Court of India",
+        "decided_on": date(2018, 9, 27),
+        "scope_note": (
+            "Declared unconstitutional insofar as it provides the procedure for a complaint of "
+            "adultery (sub-section (2), the husband as the person aggrieved), alongside IPC 497. "
+            "Adultery is no longer an offence. The section continues to govern complaints for the "
+            "other offences against marriage."
+        ),
+        "source_url": "https://indiankanoon.org/doc/42184625/",
+    },
 ]
 
 

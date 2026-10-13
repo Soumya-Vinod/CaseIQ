@@ -182,6 +182,18 @@
 
 .turn {
   min-width: 0;
+  /* Scrolled-to on arrival (QueryPage's newest-turn effect): leave room above
+     it so the top of the answer isn't flush against the viewport edge. */
+  scroll-margin-top: 1rem;
+}
+
+/* Below 860px the sticky mobile bar (Sidebar.module.css .mobileBar, ~4rem)
+   sits over the top of the page -- without this the scrolled-to answer's
+   heading lands underneath it. */
+@media (max-width: 859px) {
+  .turn {
+    scroll-margin-top: 5rem;
+  }
 }
 
 .turnQuery {

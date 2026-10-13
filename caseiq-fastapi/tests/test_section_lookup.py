@@ -116,3 +116,24 @@ def test_snippet_reaches_a_cited_subsection_past_the_cap():
 
 def test_snippet_without_subsection_is_the_capped_text():
     assert _snippet_for("abc " * 1000, "85", "85") == ("abc " * 1000)[:1500]
+
+
+def test_not_operative_reason_reaches_the_prompt():
+    from app.services.retrieval import build_rag_context
+    ctx = build_rag_context([{
+        "act": "IPC", "section": "309", "title": "Attempt to commit suicide.", "snippet": "309. ...",
+        "judicial_status": {"status": "not_operative", "case_name": "Mental Healthcare Act, 2017, section 115(1)",
+                            "citation": "Act No. 10 of 2017", "scope_note": "shall not be tried and punished"},
+    }])
+    assert "NOT OPERATIVE" in ctx and "Mental Healthcare Act" in ctx and "shall not be tried and punished" in ctx
+
+
+def test_judicial_seed_rows_are_well_formed():
+    from app.legal_corpus.judicial_status_seed import JUDICIAL_STATUS_SEED
+    by = {(e["act_code"], e["section_number"]): e for e in JUDICIAL_STATUS_SEED}
+    assert by[("IPC", "309")]["status"] == "not_operative"
+    assert by[("IPC", "124A")]["status"] == "not_operative"
+    assert by[("IPC", "303")]["status"] == "struck_down"
+    assert by[("CrPC", "198")]["status"] == "read_down"
+    for e in JUDICIAL_STATUS_SEED:
+        assert len(e["status"]) <= 20 and e["citation_verified"] and e["scope_note"]
